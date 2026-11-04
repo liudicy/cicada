@@ -101,6 +101,14 @@ final class AppSettings: ObservableObject {
     @Published var aiModel: String {
         didSet { save() }
     }
+    /// Custom OpenAI-compatible chat providers the user added (Ling itself is built in).
+    @Published var aiProviders: [AIProvider] {
+        didSet { save() }
+    }
+    /// Which provider translation and notes use: "ling" or a custom provider's id.
+    @Published var aiActiveProvider: String {
+        didSet { save() }
+    }
 
     /// End the meeting when the meeting app it was heard through hangs up.
     @Published var endWithApp: Bool {
@@ -159,6 +167,9 @@ final class AppSettings: ObservableObject {
         talkKey = Shortcut(stored: defaults.string(forKey: "talkKey")) ?? .defaultTalk
         toggleKey = Shortcut(stored: defaults.string(forKey: "toggleKey")) ?? .defaultToggle
         aiModel = defaults.string(forKey: "aiModel") ?? "Ling-3.1-flash"
+        aiProviders = (defaults.data(forKey: "aiProviders")
+            .flatMap { try? JSONDecoder().decode([AIProvider].self, from: $0) }) ?? []
+        aiActiveProvider = defaults.string(forKey: "aiActiveProvider") ?? "ling"
         listenSource = defaults.string(forKey: "listenSource") ?? "system"
         listenSourceChosen = defaults.bool(forKey: "listenSourceChosen")
         displayMode = defaults.string(forKey: "displayMode") ?? "notes"
@@ -193,6 +204,8 @@ final class AppSettings: ObservableObject {
         defaults.set(talkKey.stored, forKey: "talkKey")
         defaults.set(toggleKey.stored, forKey: "toggleKey")
         defaults.set(aiModel, forKey: "aiModel")
+        defaults.set(try? JSONEncoder().encode(aiProviders), forKey: "aiProviders")
+        defaults.set(aiActiveProvider, forKey: "aiActiveProvider")
         defaults.set(listenSource, forKey: "listenSource")
         defaults.set(listenSourceChosen, forKey: "listenSourceChosen")
         defaults.set(displayMode, forKey: "displayMode")

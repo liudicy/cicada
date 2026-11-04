@@ -151,7 +151,8 @@ final class AppModel: ObservableObject {
         }
         ling.onCall = { [weak self] in self?.diagnostics.record($0) }
 
-        ling.model = { [weak self] in self?.settings.aiModel ?? "Ling-3.1-flash" }
+        ling.provider = { [weak self] in self?.activeAIProvider ?? .ling }
+        ling.model = { [weak self] in self?.activeAIProvider.model ?? "Ling-3.1-flash" }
         listen.translator = translator
         translator.glossary = { [weak self] in self?.notes.glossary ?? [] }
         notes.language = { [weak self] id in
@@ -742,6 +743,43 @@ final class AppModel: ObservableObject {
         return nil
     }
 
+    // MARK: - Chat provider
+
+    /// The provider translation and notes use. Ling takes its model choice from `settings.aiModel`;
+    /// custom providers carry their own.
+    var activeAIProvider: AIProvider {
+        if settings.aiActiveProvider == "ling" {
+            var ling = AIProvider.ling
+            ling.model = settings.aiModel
+            return ling
+        }
+        return settings.aiProviders.first { $0.id == settings.aiActiveProvider } ?? .ling
+    }
+
+    func setActiveProvider(_ id: String) {
+        guard id == "ling" || settings.aiProviders.contains(where: { $0.id == id }) else { return }
+        settings.aiActiveProvider = id
+        Task { await ling.check() }
+    }
+
+    /// Adds (or, with the same id, replaces) a custom OpenAI-compatible provider and switches to it.
+    func saveProvider(_ provider: AIProvider) {
+        guard !provider.isLing, !provider.name.isEmpty, provider.base != nil, !provider.model.isEmpty else { return }
+        if let i = settings.aiProviders.firstIndex(where: { $0.id == provider.id }) {
+            settings.aiProviders[i] = provider
+        } else {
+            settings.aiProviders.append(provider)
+        }
+        setActiveProvider(provider.id)
+    }
+
+    func removeProvider(_ id: String) {
+        guard id != "ling" else { return }
+        settings.aiProviders.removeAll { $0.id == id }
+        AIKey.remove(id)
+        if settings.aiActiveProvider == id { setActiveProvider("ling") }
+    }
+
     /// The room hears the voice chosen for its language (looked up each time it speaks).
     func applyVoice() {
         speak.route = { [weak self] language in
@@ -753,21 +791,21 @@ final class AppModel: ObservableObject {
     /// The chosen voice for a language, or its default (Ming's first with a key, else the Mac's).
     func voiceID(for language: String) -> String? {
         if let id = settings.speakVoices[VoiceCatalog.key(for: language)] {
-            if id == "clone" && !VoiceReference.exists { return VoiceCatalog.defaultID(for: language, hasKey: ling.usable) }
+            if id == "clone" && !VoiceReference.exists { return VoiceCatalog.defaultID(for: language, hasKey: ling.speechCapable) }
             return id
         }
-        return VoiceCatalog.defaultID(for: language, hasKey: ling.usable)
+        return VoiceCatalog.defaultID(for: language, hasKey: ling.speechCapable)
     }
 
     func setVoice(_ id: String, for language: String) {
         settings.speakVoices[VoiceCatalog.key(for: language)] = id
     }
 
-    /// Ming's voices need a working key; without one the Mac's voice speaks.
+    /// Ming's voices need a working Ling key; without one the Mac's voice speaks.
     func voiceRoute(id: String?, language: String) -> SpeakEngine.VoiceRoute {
         guard let id else { return .system(nil) }
         if id.hasPrefix("system:") { return .system(String(id.dropFirst("system:".count))) }
-        guard ling.usable else { return .system(nil) }
+        guard ling.speechCapable else { return .system(nil) }
         let lang = VoiceCatalog.mingLanguage(for: language)
         if id == "clone" {
             guard let ref = VoiceReference.reference() else { return .system(nil) }
@@ -1256,7 +1294,18 @@ final class AppModel: ObservableObject {
             // aiHide:<on|off>: the key file stays; the app behaves as if there were none (for screenshots).
             ling.hideKey = arg != "off"
             Task { await ling.check() }
-        case "aiState": debugLog("ai state=\(ling.keyState) hasKey=\(ling.hasKey) model=\(settings.aiModel)")
+        case "aiState": debugLog("ai state=\(ling.keyState) hasKey=\(ling.hasKey) provider=\(activeAIProvider.id) model=\(activeAIProvider.model)")
+        case "aiProvider":
+            // aiProvider:add:name|base|model adds a provider and switches to it; aiProvider:<id> switches.
+            if arg.hasPrefix("add:") {
+                let parts = arg.dropFirst(4).split(separator: "|").map(String.init)
+                if parts.count == 3 {
+                    saveProvider(AIProvider(id: "debug-" + parts[0], name: parts[0], baseURL: parts[1], model: parts[2]))
+                }
+            } else {
+                setActiveProvider(arg)
+            }
+            debugLog("ai provider=\(activeAIProvider.id) model=\(activeAIProvider.model) hasKey=\(ling.hasKey)")
         case "subtitles": setSubtitles(arg)
         case "meetingSubtitles": setSubtitles(arg, meetingOnly: true)
         case "notesLang": setNotesLanguage(arg)

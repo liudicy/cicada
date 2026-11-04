@@ -29,7 +29,7 @@ struct VoiceSection: View {
                 chip
             }
             .padding(.horizontal, 16).padding(.vertical, 8).frame(minHeight: 46)
-            if !ling.usable { keyNudge }
+            if !ling.speechCapable { keyNudge }
             if model.voicePickerOpen { picker.padding(.horizontal, 16).padding(.bottom, 14) }
         }
         .sheet(isPresented: $recording) {
@@ -131,7 +131,7 @@ struct VoiceSection: View {
 
     private func row(_ v: VoiceOption) -> some View {
         let selected = chosen == v.id
-        let usable = !v.needsKey || ling.usable
+        let usable = !v.needsKey || ling.speechCapable
         return Button { if usable { model.setVoice(v.id, for: language) } } label: {
             HStack(spacing: 10) {
                 playButton(v.id, highlighted: selected, enabled: usable) { model.previewVoice(v.id, language: language) }
@@ -178,7 +178,7 @@ struct VoiceSection: View {
         let selected = chosen == "clone"
         HStack(spacing: 10) {
             if has {
-                playButton("clone", highlighted: selected, enabled: ling.usable) { model.previewVoice("clone", language: language) }
+                playButton("clone", highlighted: selected, enabled: ling.speechCapable) { model.previewVoice("clone", language: language) }
             } else {
                 ZStack {
                     Circle().fill(Palette.accentPale)
@@ -207,11 +207,11 @@ struct VoiceSection: View {
             }
             Spacer(minLength: 6)
             if has {
-                Button { if ling.usable { model.setVoice("clone", for: language) } } label: { Radio(on: selected) }
-                    .buttonStyle(.plain).disabled(!ling.usable)
+                Button { if ling.speechCapable { model.setVoice("clone", for: language) } } label: { Radio(on: selected) }
+                    .buttonStyle(.plain).disabled(!ling.speechCapable)
                     .accessibilityLabel(L("用我自己的声音"))
             } else {
-                SoftButton(L("录制")) { recording = true }.disabled(!ling.usable)
+                SoftButton(L("录制")) { recording = true }.disabled(!ling.speechCapable)
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
@@ -224,7 +224,7 @@ struct VoiceSection: View {
     }
 
     private var footnote: String {
-        ling.usable ? L("Ling 不可用时自动换成本机声音") : L("填入 Ling key 后可用 Ming 声音和你自己的声音")
+        ling.speechCapable ? L("Ling 不可用时自动换成本机声音") : L("填入 Ling key 后可用 Ming 声音和你自己的声音")
     }
 }
 
@@ -351,7 +351,7 @@ struct VoiceCloneSheet: View {
                 }
             }
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.line, lineWidth: 1))
-            if !model.ling.usable {
+            if !model.ling.speechCapable {
                 Text("需先在“AI 服务”中填入 Ling key，才能使用你自己的声音。").font(.system(size: 12)).foregroundStyle(Palette.error)
             }
             Text("听起来不像或有杂音？换个安静的地方重录一次。录音仅保存在本机，可随时删除。")
@@ -404,7 +404,7 @@ struct VoiceCloneSheet: View {
     }
 
     private func playClone() {
-        guard model.ling.usable, let data = try? Data(contentsOf: recorder.url) else { return }
+        guard model.ling.speechCapable, let data = try? Data(contentsOf: recorder.url) else { return }
         clonePlaying = true
         let ref = (audio: "data:audio/wav;base64," + data.base64EncodedString(), text: recorder.transcript)
         let lang = VoiceCatalog.mingLanguage(for: language)

@@ -1,9 +1,32 @@
 import Foundation
 import Security
 
+// MARK: - Provider
+
+/// A chat provider for translation and notes: Ling (built-in) or any OpenAI-compatible endpoint
+/// the user adds. Custom providers persist in UserDefaults (no secrets there — keys live in
+/// per-provider files, see `AIKey`).
+struct AIProvider: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    /// e.g. "https://api.ant-ling.com/v1" (with or without the trailing slash).
+    var baseURL: String
+    var model: String
+
+    /// The built-in provider keeps the id "ling": its key file and Ming voices are Ling-only.
+    var isLing: Bool { id == "ling" }
+
+    var base: URL? {
+        URL(string: baseURL.hasSuffix("/") ? baseURL : baseURL + "/")
+    }
+
+    static let ling = AIProvider(id: "ling", name: "Ling",
+                                 baseURL: "https://api.ant-ling.com/v1", model: "Ling-3.1-flash")
+}
+
 // MARK: - API key (local file)
 
-/// The user's Ling API key, in a file only this user can read (0600, folder 0700) under
+/// API keys, one file per provider, only this user can read (0600, folder 0700) under
 /// Application Support, left out of backups. Never written to UserDefaults, logs or exports.
 ///
 /// Not the Keychain for now: the app is signed ad hoc, so the Keychain only trusts one exact build
@@ -11,43 +34,48 @@ import Security
 /// once builds are signed with a Developer ID (a stable team id). Keys saved there by earlier
 /// builds are moved over once.
 enum AIKey {
-    private static var cached: String??
+    private static var cached: [String: String??] = [:]
 
     private static var folder: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(DevBuild.supportFolder)
     }
-    private static var file: URL { folder.appendingPathComponent("ling-api-key") }
+    private static func file(_ provider: String) -> URL {
+        // Ling keeps its original file name so existing installs just work.
+        folder.appendingPathComponent(provider == "ling" ? "ling-api-key" : "ai-key-\(provider)")
+    }
 
-    static func read() -> String? {
-        if let cached { return cached }
-        var value = (try? String(contentsOf: file, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+    static func read(_ provider: String = "ling") -> String? {
+        if let hit = cached[provider] { return hit! }
+        var value = (try? String(contentsOf: file(provider), encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if value?.isEmpty ?? true { value = nil }
-        if value == nil, let old = LegacyKeychain.take() {
+        if value == nil, provider == "ling", let old = LegacyKeychain.take() {
             // One last Keychain prompt, then the key lives in the file.
             value = old
-            write(old)
+            write(old, provider)
         }
-        cached = .some(value)
+        cached[provider] = .some(value)
         return value
     }
 
     @discardableResult
-    static func save(_ key: String) -> Bool {
-        let ok = write(key)
-        cached = .some(ok ? key : nil)
+    static func save(_ key: String, provider: String = "ling") -> Bool {
+        let ok = write(key, provider)
+        cached[provider] = .some(ok ? key : nil)
         return ok
     }
 
-    static func remove() {
-        try? FileManager.default.removeItem(at: file)
-        LegacyKeychain.delete()
-        cached = .some(nil)
+    static func remove(_ provider: String = "ling") {
+        try? FileManager.default.removeItem(at: file(provider))
+        if provider == "ling" { LegacyKeychain.delete() }
+        cached[provider] = .some(nil)
     }
 
     @discardableResult
-    private static func write(_ key: String) -> Bool {
+    private static func write(_ key: String, _ provider: String) -> Bool {
         let fm = FileManager.default
+        let file = file(provider)
         do {
             try fm.createDirectory(at: folder, withIntermediateDirectories: true)
             try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
@@ -108,11 +136,12 @@ enum AIKey {
 
 // MARK: - Ling client
 
-/// Ling (ant-ling.com), OpenAI-compatible. One shared instance for the whole app: the account
-/// allows about 2 requests per second across every model, so request *starts* go through one
+/// Talks to the active chat provider (see `provider`): Ling by default, or any OpenAI-compatible
+/// endpoint the user added. One shared instance for the whole app: request *starts* go through one
 /// gate (≥ 0.6 s apart, overlapping is fine) in priority order: speak-back, translation, notes.
 ///
-/// Two quirks found in testing shape every call:
+/// Two quirks found in testing shape every call to Ling (`provider().isLing`); other providers get
+/// a plain OpenAI request instead:
 /// - `thinking` is on by default: always disable it (otherwise +2.6 s and billed reasoning).
 /// - When the user message reads like a factual question, the gateway answers it with a search
 ///   essay instead of following the prompt. So the content always goes in the system message and
@@ -138,11 +167,15 @@ final class LingClient: ObservableObject {
     }
 
     static let models = ["Ling-3.1-flash", "Ling-3.0-flash"]
-    private static let base = URL(string: "https://api.ant-ling.com/v1/")!
+    /// Ming voices and the `audio/speech` endpoint are Ling-only, whatever provider is active.
+    private static let lingBase = URL(string: "https://api.ant-ling.com/v1/")!
     private static let hijackPrefixes = ["根据现有检索证据", "暂未找到足够可靠的信息", "根据检索"]
 
     @Published private(set) var keyState: KeyState
     @Published private(set) var rateLimitedAt: Date?
+    /// The provider chat calls go to. AppModel keeps this in sync with the user's choice; the
+    /// default is Ling. A closure so switching providers needs no client rebuild.
+    var provider: () -> AIProvider = { .ling }
     var model: () -> String = { "Ling-3.1-flash" }
 
     /// Debug control only: make every chat call fail this way.
@@ -152,9 +185,11 @@ final class LingClient: ObservableObject {
     var hideKey = false
 
     var hasKey: Bool { key != nil }
-    var key: String? { hideKey ? nil : AIKey.read() }
+    var key: String? { hideKey ? nil : AIKey.read(provider().id) }
     /// The key is known to work (or at least not known to be bad).
     var usable: Bool { hasKey && keyState != .invalid }
+    /// Ming speech (and so speak-back and voice cloning) only exists with a usable Ling key.
+    var speechCapable: Bool { provider().isLing && usable }
 
     init() {
         keyState = AIKey.read() == nil ? .none : .unchecked
@@ -162,30 +197,32 @@ final class LingClient: ObservableObject {
 
     // MARK: Key
 
-    /// Saves the key and checks it with the cheapest possible request.
+    /// Saves the key for the active provider and checks it with the cheapest possible request.
     func setKey(_ raw: String) async {
         let k = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !k.isEmpty else { return }
         if hideKey { debugLog("ai key: not saved while hidden (debug)"); keyState = .invalid; return }
-        AIKey.save(k)
+        AIKey.save(k, provider: provider().id)
         await check()
     }
 
     func removeKey() {
-        AIKey.remove()
+        AIKey.remove(provider().id)
         keyState = .none
     }
 
+    /// The keyState belongs to the active provider; call this after switching providers.
     func check() async {
         guard let key else { keyState = .none; return }
         keyState = .checking
         let started = Date()
-        let body: [String: Any] = [
-            "model": "Ling-3.0-tiny",
+        let ling = provider().isLing
+        var body: [String: Any] = [
+            "model": ling ? "Ling-3.0-tiny" : provider().model,
             "messages": [["role": "user", "content": "hi"]],
             "max_tokens": 1,
-            "thinking": ["type": "disabled"],
         ]
+        if ling { body["thinking"] = ["type": "disabled"] }
         do {
             _ = try await post("chat/completions", body: body, key: key, timeout: 15)
             keyState = .ok(seconds: Date().timeIntervalSince(started))
@@ -194,7 +231,7 @@ final class LingClient: ObservableObject {
         } catch Failure.rateLimited {
             keyState = .ok(seconds: Date().timeIntervalSince(started))
         } catch {
-            keyState = .unreachable(L("连不上 Ling，检查网络或代理"))
+            keyState = .unreachable(L("连不上 %@，检查网络或代理").replacingOccurrences(of: "%@", with: provider().name))
         }
         debugLog("ling: key check → \(keyState)")
     }
@@ -214,6 +251,7 @@ final class LingClient: ObservableObject {
             if simulate == .rateLimited { rateLimitedAt = Date() }
             throw simulate
         }
+        let ling = provider().isLing
         var body: [String: Any] = [
             "model": model ?? self.model(),
             "messages": [
@@ -225,9 +263,9 @@ final class LingClient: ObservableObject {
             ],
             "max_tokens": maxTokens,
             "temperature": 0.2,
-            "thinking": ["type": "disabled"],
             "stream": false,
         ]
+        if ling { body["thinking"] = ["type": "disabled"] }
         if json { body["response_format"] = ["type": "json_object"] }
         let attempts = priority == .notes ? 4 : 1
         var delay = 1.0
@@ -244,7 +282,7 @@ final class LingClient: ObservableObject {
                       let text = message["content"] as? String else { throw Failure.parse }
                 let finish = choice["finish_reason"] as? String
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if finish == nil || Self.hijackPrefixes.contains(where: { trimmed.hasPrefix($0) }) {
+                if finish == nil || (ling && Self.hijackPrefixes.contains(where: { trimmed.hasPrefix($0) })) {
                     debugLog("ling: \(priority) search-style reply dropped (finish=\(finish ?? "nil"))")
                     throw Failure.hijacked
                 }
@@ -291,13 +329,14 @@ final class LingClient: ObservableObject {
     /// Streams Ming's voice for `text` as raw 24 kHz mono 16-bit PCM chunks: a built-in `voice`, or
     /// a voice cloned from `reference` (a WAV data URI and what it says). `language` is Ming's
     /// `language_id`, needed for Japanese, Korean, German, French and Spanish.
+    /// Ling-only: it always uses the Ling key and endpoint, whatever provider is active.
     func speech(_ text: String, voice: String? = "UK_Charlotte", reference: (audio: String, text: String)? = nil,
                 language: String? = nil) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { cont in
             let task = Task { @MainActor [weak self] in
-                guard let self, let key = self.key else { cont.finish(throwing: Failure.noKey); return }
+                guard let self, let key = AIKey.read("ling") else { cont.finish(throwing: Failure.noKey); return }
                 await self.acquire(.speak)
-                var req = URLRequest(url: Self.base.appendingPathComponent("audio/speech"))
+                var req = URLRequest(url: Self.lingBase.appendingPathComponent("audio/speech"))
                 req.httpMethod = "POST"
                 req.timeoutInterval = 20
                 req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
@@ -343,7 +382,8 @@ final class LingClient: ObservableObject {
     // MARK: Transport
 
     private func post(_ path: String, body: [String: Any], key: String, timeout: TimeInterval) async throws -> [String: Any] {
-        var req = URLRequest(url: Self.base.appendingPathComponent(path))
+        guard let base = provider().base else { throw Failure.network }
+        var req = URLRequest(url: base.appendingPathComponent(path))
         req.httpMethod = "POST"
         req.timeoutInterval = timeout
         req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")

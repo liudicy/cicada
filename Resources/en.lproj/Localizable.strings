@@ -1,24 +1,34 @@
 /* AISettings */
 "用在哪里" = "Where it's used";
 "一小时会议约 ¥0.15–1（目前优惠价）。发出去的只有文字（用你自己的声音时还有那段录音），语音识别留在本机。" = "About ¥0.15–1 per hour of meeting (current discount pricing). Only text is sent (plus your voice sample if you use your own voice); speech recognition stays on this Mac.";
+"发出去的只有文字（用你自己的声音时还有那段录音）；服务商的计费与隐私政策见其官网。" = "Only text goes out (plus that recording when your own voice is used); see the provider's site for pricing and privacy.";
 "实时纪要" = "Live notes";
-"用 Ling" = "Ling";
+"用 %@" = "Via %@";
 "需要 key" = "Needs key";
 "会中每 45 秒更新" = "Updated every 45 s during a meeting";
 "填好 key 后可用" = "Available once a key is set";
 "翻译" = "Translation";
-"整句用 Ling；不行时换 Google、本机" = "Full sentences use Ling; falls back to Google, then on-device";
+"整句用选中的服务商；不行时换 Google、本机" = "Whole sentences via the chosen provider; Google or on-device as fallback";
 "没有 key 时照常可用" = "Works without a key";
 "语音识别" = "Speech recognition";
 "本机" = "On-device";
 "更快，不花钱" = "Faster, and free";
 "同声传译的声音" = "Interpreting voice";
 "Ming 的声音或你自己的声音" = "A Ming voice or your own voice";
-"没有 key 时用本机声音" = "Uses the Mac's voice without a key";
+"没有 Ling key 时用本机声音" = "Without a Ling key the Mac's voice speaks";
 "去选声音" = "Choose voice";
 "模型" = "Model";
 "3.1 更准；3.0 更快、更省" = "3.1 is more accurate; 3.0 is faster and cheaper";
+"服务商" = "Provider";
+"纪要、翻译用选中的接口（OpenAI 兼容）" = "Notes and translation use the chosen (OpenAI-compatible) endpoint";
+"添加" = "Add";
+"保存" = "Save";
+"取消" = "Cancel";
+"名称" = "Name";
+"接口地址" = "Endpoint";
+"删除服务商" = "Remove provider";
 "在 Ling 开放平台点“创建令牌”，复制以 sk- 开头的那串。" = "On the Ling platform, click “Create token” and copy the string that starts with sk-.";
+"填入 %@ 的 API key。" = "Paste your %@ API key.";
 "打开 Ling 开放平台 ↗" = "Open the Ling platform ↗";
 "还没填 API key" = "No API key yet";
 "正在检查…" = "Checking…";
@@ -26,13 +36,13 @@
 "这个 key 用不了" = "This key doesn't work";
 "暂时连不上" = "Can't connect right now";
 "%@ · 响应约 %@ 秒" = "%1$@ · responds in about %2$@ s";
-"Ling 提示此令牌无效，请检查是否复制完整，或重新创建一个" = "Ling says this token is invalid. Check that you copied all of it, or create a new one";
+"%@ 提示此令牌无效，请检查是否复制完整，或重新创建一个" = "%@ says this token is invalid. Check it was copied in full, or create a new one";
 "不填 key 时，字幕和翻译仍可正常使用" = "Subtitles and translation work without a key";
 "更换" = "Change";
 "重试" = "Retry";
 "保存并检查" = "Save and check";
-"取消" = "Cancel";
 "只存在这台 Mac 上（只有你的账户能读），只发给 Ling（ant-ling.com）" = "Stored only on this Mac, sent only to Ling (ant-ling.com)";
+"只存在这台 Mac 上（只有你的账户能读），只发给 %@" = "Stored only on this Mac (readable by your account alone) and sent only to %@";
 "移除" = "Remove";
 
 /* AboutPanel */
@@ -210,7 +220,7 @@
 "会议原文" = "Meeting's own";
 
 /* Ling */
-"连不上 Ling，检查网络或代理" = "Can't reach Ling; check your network or proxy";
+"连不上 %@，检查网络或代理" = "Can't reach %@ — check the network or proxy";
 
 /* ListenEngine */
 "%@（识别中…）→ %@" = "%1$@ (detecting…) → %2$@";
