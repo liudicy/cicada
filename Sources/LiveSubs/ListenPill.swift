@@ -93,7 +93,7 @@ struct ListenPill: View {
             // or a recording already on disk.
             idleButton(L("线上会议"), help: L("收录 Mac 播放的声音")) { model.startListening("system") }
             idleButton(L("现场会议"), help: L("用麦克风收录房间里的说话声")) { model.startListening("mic") }
-            idleButton(L("导入会议录音…"), help: L("导入会议录音…")) { model.importRecording() }
+            idleButton(L("导入会议录音"), help: L("导入会议录音")) { model.importRecording() }
             Text("⌘R").font(.system(size: 11)).foregroundStyle(Palette.secondary)
         }
         .padding(.leading, 6).padding(.trailing, 12).frame(height: 32)

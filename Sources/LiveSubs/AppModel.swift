@@ -458,7 +458,7 @@ final class AppModel: ObservableObject {
     /// An import running right now: the file's name and 0…1 progress (nil when idle).
     @Published var importing: (name: String, fraction: Double)?
 
-    /// 导入会议录音…: pick an audio file and turn it into a meeting, on-device.
+    /// 导入会议录音: pick an audio file and turn it into a meeting, on-device.
     func importRecording() {
         guard importing == nil else { return }
         NSApp.activate()

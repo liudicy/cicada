@@ -254,7 +254,7 @@
 "收录 Mac 播放的声音" = "Captures the sound your Mac plays";
 "现场会议" = "In-person";
 "用麦克风收录房间里的说话声" = "Uses the microphone to capture the room";
-"导入会议录音…" = "Import a Meeting Recording…";
+"导入会议录音" = "Import a Meeting Recording";
 "结束" = "End";
 
 /* MicCapture */
@@ -768,7 +768,7 @@
 "跟随系统的网页听不到译文" = "Pages on the default mic won't hear the translation";
 "显示方式" = "Display";
 "轮换" = "to switch";
-"导入录音…" = "Import Recording…";
+"导入录音" = "Import Recording";
 "屏幕上不出字幕，文字记录照常保存" = "Nothing on screen; the transcript is still saved";
 "什么时候出现" = "Appears";
 "填入 API key 后可生成纪要；文字记录照常保存" = "Add an API key for notes; the transcript is saved either way";

@@ -237,7 +237,7 @@ struct MenuPanelView: View {
 
             HStack {
                 Button("会议记录") { model.openMainWindow?() }
-                Button(L("导入录音…")) { model.importRecording() }
+                Button(L("导入录音")) { model.importRecording() }
                 Spacer()
                 Button("退出") { NSApp.terminate(nil) }
             }
@@ -893,7 +893,7 @@ struct MainWindowView: View {
                 .padding(.top, 18)
             }
             HStack(spacing: 20) {
-                Button("导入会议录音…") { model.importRecording() }
+                Button("导入会议录音") { model.importRecording() }
                 Button("先听一段示例") { model.ensureListening(); model.sample.play() }
             }
             .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.secondary).padding(.top, 16)
