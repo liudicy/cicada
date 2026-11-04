@@ -1142,6 +1142,13 @@ final class AppModel: ObservableObject {
                 changed += 1
             }
             debugLog("asr: session \(id) proofread \(changed)/\(them.count) replaced, \(skipped) rejected")
+            // The transcript changed: the notes built on it are stale. Rewrite them, unless the
+            // user edited them by hand — their words win over the machine's.
+            if changed > 0, let notes = store.session(id)?.notes, !notes.isEmpty,
+               !(notes.edited ?? false), ling.hasKey {
+                debugLog("asr: session \(id) regenerating notes after proofread")
+                self.notes.generate(for: id)
+            }
         }
     }
 

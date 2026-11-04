@@ -16,6 +16,9 @@ struct MeetingNotes: Codable, Equatable {
     var covered = 0
     var updatedAt: Date?
     var final = false
+    /// The user changed these notes by hand: an automatic pass (e.g. after a cloud proofread)
+    /// must not regenerate over their edits.
+    var edited: Bool? = nil
 
     var isEmpty: Bool { summary.isEmpty && topics.isEmpty }
 }

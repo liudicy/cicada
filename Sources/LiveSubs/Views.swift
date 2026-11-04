@@ -917,6 +917,7 @@ struct MainWindowView: View {
                     // 完成 keeps the working copy; 取消 drops it. Reading again is free.
                     Button(L("完成")) {
                         draft.updatedAt = Date()
+                        draft.edited = true
                         store.setNotes(s.id, draft)
                         notesDraft = nil
                     }
