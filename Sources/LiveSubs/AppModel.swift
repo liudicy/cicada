@@ -995,17 +995,34 @@ final class AppModel: ObservableObject {
         joined.cut = seg.cut
         lastHeard = (joined, prev.line)
         store.setSource(lineID: prev.line, text)
+        // The line's audio now reaches the joined segment's end.
+        let (_, b) = audioRange(of: seg)
+        if let b { store.setAudioEnd(lineID: prev.line, b) }
         listen.join(seg.id, into: prev.seg.id, text: text)
         contentLog("JOIN \(prev.line) += \(seg.text)")
         heardWords()
+    }
+
+    /// A segment's range in the recording (seconds into system.m4a). The recording counts wall
+    /// clock while the analyzer clock (`fed`) restarts on every transcriber switch and races
+    /// through replays; within the current epoch both advance 1:1, so the offset between them
+    /// maps one onto the other exactly. Lines formed from replayed backlog can be off by the
+    /// switch gap (well under a second); the proofread window's padding covers that.
+    private func audioRange(of seg: Segment) -> (Double?, Double?) {
+        guard settings.recordAudio else { return (nil, nil) }
+        let rec = listen.router.recordedSeconds()
+        let fed = listen.router.fedSeconds()
+        guard rec > 0, fed > 0 else { return (nil, nil) }
+        return (max(0, rec - (fed - seg.start)), max(0, rec - (fed - seg.end)))
     }
 
     private func appendHeard(_ seg: Segment, t: Double, translation: String? = nil, tag: Bool = false) {
         lineCounter += 1
         let id = "h\(lineCounter)-\(seg.id)"
         lineForSegment[seg.id] = id
+        let (a, b) = audioRange(of: seg)
         store.append(TranscriptLine(id: id, t: t, speaker: "them", src: seg.text, dst: translation ?? seg.translation,
-                                    srcLang: seg.sourceCode, dstLang: listen.resolvedTarget))
+                                    srcLang: seg.sourceCode, dstLang: listen.resolvedTarget, audioStart: a, audioEnd: b))
         var kept = seg
         kept.voiceSamples = nil
         lastHeard = (kept, id)
@@ -1048,6 +1065,83 @@ final class AppModel: ObservableObject {
                 store.setTranslation(lineID: lineID, dst)
             }
             debugLog("asr: line \(lineID) proofread")
+        }
+    }
+
+    // MARK: - Post-meeting proofreading
+
+    /// Progress of a retroactive cloud proofread (nil when idle): meeting id, lines done, total.
+    @Published var proofreading: (id: String, done: Int, total: Int)?
+
+    /// A recorded meeting can be proofread afterwards: cloud recognition on, a key, and the
+    /// recording of what was heard (system.m4a) still on disk.
+    func canProofread(_ s: Session) -> Bool {
+        settings.cloudASREnabled && cloudASR.hasKey && s.id != store.liveID && proofreading == nil
+            && FileManager.default.fileExists(atPath: store.systemAudioURL(s.id).path)
+            && s.lines.contains { $0.speaker == "them" }
+    }
+
+    /// Re-runs every heard line of a finished meeting through the cloud recognizer, replacing the
+    /// on-device text and its translation where the cloud hears something different. One line at
+    /// a time (the client is serial). Lines recorded by this version carry their exact range in
+    /// the recording; older meetings fall back to the line's time and the next line's, which can
+    /// be a few seconds off — there a replacement is kept only when it still resembles the
+    /// on-device text, so a wrong window can't swap in a different sentence.
+    func proofreadSession(_ id: String) {
+        guard let s = store.session(id), canProofread(s) else { return }
+        let url = store.systemAudioURL(id)
+        let them = s.lines.filter { $0.speaker == "them" }
+        proofreading = (id, 0, them.count)
+        debugLog("asr: session \(id) proofreading \(them.count) lines")
+        Task { [weak self] in
+            guard let self else { return }
+            defer { proofreading = nil }
+            var changed = 0, skipped = 0
+            for (i, line) in them.enumerated() {
+                defer { proofreading = (id, i + 1, them.count) }
+                let exact = line.audioStart != nil && line.audioEnd != nil
+                let start: Double, end: Double
+                if let a = line.audioStart, let b = line.audioEnd {
+                    start = max(0, a - 0.15)
+                    // A little tail for a cut-off syllable, but not into the next line's
+                    // words: the cloud would transcribe them as part of this one.
+                    let nextStart = (i + 1 < them.count ? them[i + 1].audioStart : nil) ?? .infinity
+                    end = min(b + 0.35, max(b, nextStart - 0.05), a + 30)
+                } else {
+                    let next = i + 1 < them.count ? them[i + 1].t : line.t + 6
+                    start = line.t
+                    end = min(next, line.t + 30)
+                }
+                guard end - start > 0.4,
+                      let samples = try? CloudASRClient.samples(from: url, start: start, end: end),
+                      !samples.isEmpty else { continue }
+                let text: String
+                do {
+                    text = try await cloudASR.transcribe(samples: samples, language: line.srcLang)
+                } catch {
+                    debugLog("asr: \(line.id) failed: \(error)")
+                    continue
+                }
+                guard text != line.src else { continue }
+                // A guessed window (older meetings) may hold different words entirely: only a
+                // plausible correction of the same sentence is allowed through.
+                if !exact, SpeakScore.match(sent: line.src, heard: text) < 0.4 {
+                    skipped += 1
+                    contentLog("asr: \(line.id) rejected “\(text)” (window only approximate)")
+                    continue
+                }
+                // The line must still say what we sent off (the user may have edited meanwhile).
+                guard let current = store.session(id)?.lines.first(where: { $0.id == line.id }),
+                      current.src == line.src else { continue }
+                contentLog("asr: \(line.id) “\(line.src)” → “\(text)”")
+                store.editSource(id, lineID: line.id, text)
+                if let dst = await listen.translate(text, source: line.srcLang, target: line.dstLang,
+                                                    kind: .sentence, trace: TranslateTrace()) {
+                    store.editTranslation(id, lineID: line.id, dst)
+                }
+                changed += 1
+            }
+            debugLog("asr: session \(id) proofread \(changed)/\(them.count) replaced, \(skipped) rejected")
         }
     }
 
@@ -1335,6 +1429,7 @@ final class AppModel: ObservableObject {
             ling.simulate = ["429": .rateLimited, "hijack": .hijacked, "timeout": .timeout][arg]
             debugLog("ling simulate=\(String(describing: ling.simulate))")
         case "aiRemove": ling.removeKey()
+        case "proofread": proofreadSession(arg)
         case "aiHide":
             // aiHide:<on|off>: the key file stays; the app behaves as if there were none (for screenshots).
             ling.hideKey = arg != "off"

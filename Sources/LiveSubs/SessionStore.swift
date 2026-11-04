@@ -13,6 +13,10 @@ struct TranscriptLine: Codable, Identifiable, Equatable {
     var dstLang: String
     /// Experimental: which of the other side's voices said it (SpeakerID.swift); nil when unknown.
     var voice: Int? = nil
+    /// Where this line sits in the recording (seconds into system.m4a), so a post-meeting cloud
+    /// proofread cuts exactly its audio. nil in older meetings and "me" lines.
+    var audioStart: Double? = nil
+    var audioEnd: Double? = nil
 }
 
 /// A name Ling found for a voice, and the line it is based on ("00:06 “Sure, Emma…”").
@@ -165,6 +169,30 @@ final class SessionStore: ObservableObject {
               let j = sessions[i].lines.firstIndex(where: { $0.id == lineID }) else { return }
         sessions[i].lines[j].src = text
         scheduleSave(id)
+    }
+
+    /// A joined line's audio now reaches further into the recording (`HeardText.join`).
+    func setAudioEnd(lineID: String, _ end: Double) {
+        guard let id = liveID, let i = index(id),
+              let j = sessions[i].lines.firstIndex(where: { $0.id == lineID }) else { return }
+        sessions[i].lines[j].audioEnd = end
+        scheduleSave(id)
+    }
+
+    /// A finished meeting's line got a new source from a retroactive proofread or an edit.
+    func editSource(_ id: String, lineID: String, _ text: String) {
+        guard let i = index(id),
+              let j = sessions[i].lines.firstIndex(where: { $0.id == lineID }) else { return }
+        sessions[i].lines[j].src = text
+        id == liveID ? scheduleSave(id) : saveNow(id)
+    }
+
+    /// Its translation follows (`editSource`).
+    func editTranslation(_ id: String, lineID: String, _ text: String) {
+        guard let i = index(id),
+              let j = sessions[i].lines.firstIndex(where: { $0.id == lineID }) else { return }
+        sessions[i].lines[j].dst = text
+        id == liveID ? scheduleSave(id) : saveNow(id)
     }
 
     func setVoice(lineID: String, _ voice: Int) {

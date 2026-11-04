@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 /// Cloud speech recognition for proofreading: after the on-device SpeechAnalyzer finishes a
@@ -76,9 +77,23 @@ final class CloudASRClient: ObservableObject {
         case let code: debugLog("asr: HTTP \(code)"); throw Failure.http(code)
         }
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let message = (root["choices"] as? [[String: Any]])?.first?["message"] as? [String: Any],
-              let text = (message["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty else { throw Failure.parse }
+              let message = (root["choices"] as? [[String: Any]])?.first?["message"] as? [String: Any] else {
+            contentLog("asr: unexpected body: \(String(decoding: data, as: UTF8.self).prefix(300))")
+            throw Failure.parse
+        }
+        // MiMo answers with a plain string; OpenAI-style gateways may return content parts.
+        let text: String
+        if let s = message["content"] as? String {
+            text = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if let parts = message["content"] as? [[String: Any]] {
+            text = parts.compactMap { $0["text"] as? String }.joined()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            contentLog("asr: unexpected body: \(String(decoding: data, as: UTF8.self).prefix(300))")
+            throw Failure.parse
+        }
+        // Nothing heard (a quiet slice, a breath): keep the on-device text, it is not an error.
+        guard !text.isEmpty else { throw Failure.parse }
         debugLog("asr: ok \(Int(Date().timeIntervalSince(started) * 1000)) ms, \(samples.count / 16) ms of audio")
         return text
     }
@@ -88,6 +103,24 @@ final class CloudASRClient: ObservableObject {
         if locale.hasPrefix("zh") { return "zh" }
         if locale.hasPrefix("en") { return "en" }
         return "auto"
+    }
+
+    /// A slice of a meeting's recording (seconds from the start) as 16 kHz mono floats, for
+    /// proofreading an already-recorded meeting. The file is decoded fresh each call; a slice is
+    /// at most half a minute, so this is cheap.
+    static func samples(from url: URL, start: Double, end: Double) throws -> [Float] {
+        let file = try AVAudioFile(forReading: url)
+        let rate = file.fileFormat.sampleRate
+        let first = max(0, AVAudioFramePosition(start * rate))
+        guard first < file.length else { return [] }
+        let count = AVAudioFrameCount(min(AVAudioFramePosition(end * rate), file.length) - first)
+        guard count > 0 else { return [] }
+        guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: count) else { return [] }
+        file.framePosition = first
+        try file.read(into: buf, frameCount: count)
+        let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        guard let out = PCMConverter().convert(buf, to: mono), let d = out.floatChannelData else { return [] }
+        return Array(UnsafeBufferPointer(start: d[0], count: Int(out.frameLength)))
     }
 
     /// 16 kHz mono 16-bit WAV, the same encoding SpeakEngine sends to Ming (SpeakTest.wav).

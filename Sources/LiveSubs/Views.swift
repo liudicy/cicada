@@ -890,6 +890,22 @@ struct MainWindowView: View {
             tabButton(L("文字记录"), id: "transcript", count: s.lines.count)
             Spacer()
             if tab == "transcript" {
+                if let p = model.proofreading, p.id == s.id {
+                    HStack(spacing: 6) {
+                        Spinner()
+                        Text(L("云端校对中 \(p.done)/\(p.total)")).font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                    }
+                } else if model.canProofread(s) {
+                    Button { model.proofreadSession(s.id) } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "waveform.badge.magnifyingglass").font(.system(size: 12))
+                            Text(L("云端校对")).font(.system(size: 13))
+                        }
+                        .foregroundStyle(Palette.secondary).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("把每句话的录音发给云端识别，用更准的文字替换记录并重译"))
+                }
                 Segments(options: [("both", L("双语")), ("src", L("原文")), ("dst", L("译文"))], value: view) { view = $0 }
             } else if wideEnough, !s.lines.isEmpty {
                 Button { withAnimation(.easeOut(duration: 0.2)) { showQuotes.toggle() } } label: {

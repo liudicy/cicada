@@ -102,6 +102,10 @@ final class AudioRouter: @unchecked Sendable {
 
     private var recordURL: URL?
     private var recorder: AVAudioFile?
+    /// Seconds written to the current recording: a wall-clock position in system.m4a, which
+    /// (unlike the analyzer clock) keeps counting across transcriber switches and replays.
+    private var recorded = 0.0
+    func recordedSeconds() -> Double { queue.sync { recorded } }
 
     /// Below this RMS the block counts as silence (≈ -40 dBFS).
     private let voiceThreshold: Float = 0.01
@@ -157,6 +161,7 @@ final class AudioRouter: @unchecked Sendable {
         queue.sync {
             recorder = nil // closes the previous file
             recordURL = url
+            if url != nil { recorded = 0 }
         }
     }
 
@@ -166,7 +171,10 @@ final class AudioRouter: @unchecked Sendable {
             recorder = AudioFileWriter.open(AudioFileWriter.partial(url), format: buffer.format)
             if recorder == nil { recordURL = nil; return }
         }
-        try? recorder?.write(from: buffer)
+        do {
+            try recorder?.write(from: buffer)
+            recorded += Double(buffer.frameLength) / buffer.format.sampleRate
+        } catch {}
     }
 
     /// Seconds of audio given to the current analyzer, replay included: the analyzer's clock. A
