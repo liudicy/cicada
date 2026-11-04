@@ -130,7 +130,8 @@ final class ListenEngine {
         debugLog("listen start mode=\(settings.sourceMode) target=\(resolvedTarget) source=\(source)")
 
         guard startCapture() else { return }
-        router.setVoiceCapture(settings.speakerVoices)
+        // Sentence audio feeds speaker voices and the cloud proofreader.
+        router.setVoiceCapture(settings.speakerVoices || settings.cloudASREnabled)
         isRunning = true
         startTickTimer()
 
@@ -388,7 +389,7 @@ final class ListenEngine {
             seg.clock = gen
             seg.cut = cutAsked
             cutAsked = false
-            if settings.speakerVoices {
+            if settings.speakerVoices || settings.cloudASREnabled {
                 seg.voiceSamples = router.voiceSamples(from: CMTimeGetSeconds(result.range.start), to: CMTimeGetSeconds(result.range.end))
             }
             nextSegmentID += 1

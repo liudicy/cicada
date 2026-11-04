@@ -1016,6 +1016,8 @@ final class AppModel: ObservableObject {
         if settings.cloudASREnabled, cloudASR.hasKey, seg.voiceSamples != nil,
            seg.text.filter(\.isLetter).count >= 2 {
             proofread(lineID: id, seg: seg)
+        } else if settings.cloudASREnabled {
+            debugLog("asr: skip \(id) key=\(cloudASR.hasKey) samples=\(seg.voiceSamples?.count ?? -1)")
         }
         heardWords()
     }
@@ -1027,8 +1029,15 @@ final class AppModel: ObservableObject {
         let original = seg.text
         Task { [weak self] in
             guard let self else { return }
-            guard let text = try? await cloudASR.transcribe(samples: samples, language: seg.sourceCode),
-                  text != original else { return }
+            let text: String
+            do {
+                text = try await cloudASR.transcribe(samples: samples, language: seg.sourceCode)
+                contentLog("asr: \(lineID) heard “\(text)”")
+            } catch {
+                debugLog("asr: \(lineID) failed: \(error)")
+                return
+            }
+            guard text != original else { return }
             // The line must still say what we sent off; a join would have rewritten it.
             guard let session = store.session(store.liveID ?? ""),
                   let line = session.lines.first(where: { $0.id == lineID }),
