@@ -109,6 +109,18 @@ final class AppSettings: ObservableObject {
     @Published var aiActiveProvider: String {
         didSet { save() }
     }
+    /// Send each finished sentence's audio to a cloud speech service (MiMo preset) and replace the
+    /// on-device transcript with its more accurate text. Off by default; needs its own key.
+    @Published var cloudASREnabled: Bool {
+        didSet { save() }
+    }
+    /// OpenAI-compatible base of the cloud speech service (preset: Xiaomi MiMo).
+    @Published var cloudASRBase: String {
+        didSet { save() }
+    }
+    @Published var cloudASRModel: String {
+        didSet { save() }
+    }
 
     /// End the meeting when the meeting app it was heard through hangs up.
     @Published var endWithApp: Bool {
@@ -170,6 +182,9 @@ final class AppSettings: ObservableObject {
         aiProviders = (defaults.data(forKey: "aiProviders")
             .flatMap { try? JSONDecoder().decode([AIProvider].self, from: $0) }) ?? []
         aiActiveProvider = defaults.string(forKey: "aiActiveProvider") ?? "ling"
+        cloudASREnabled = defaults.bool(forKey: "cloudASREnabled")
+        cloudASRBase = defaults.string(forKey: "cloudASRBase") ?? CloudASRClient.defaultBase
+        cloudASRModel = defaults.string(forKey: "cloudASRModel") ?? CloudASRClient.defaultModel
         listenSource = defaults.string(forKey: "listenSource") ?? "system"
         listenSourceChosen = defaults.bool(forKey: "listenSourceChosen")
         displayMode = defaults.string(forKey: "displayMode") ?? "notes"
@@ -206,6 +221,9 @@ final class AppSettings: ObservableObject {
         defaults.set(aiModel, forKey: "aiModel")
         defaults.set(try? JSONEncoder().encode(aiProviders), forKey: "aiProviders")
         defaults.set(aiActiveProvider, forKey: "aiActiveProvider")
+        defaults.set(cloudASREnabled, forKey: "cloudASREnabled")
+        defaults.set(cloudASRBase, forKey: "cloudASRBase")
+        defaults.set(cloudASRModel, forKey: "cloudASRModel")
         defaults.set(listenSource, forKey: "listenSource")
         defaults.set(listenSourceChosen, forKey: "listenSourceChosen")
         defaults.set(displayMode, forKey: "displayMode")

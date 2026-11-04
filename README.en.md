@@ -58,7 +58,7 @@ Every session saves its bilingual transcript, notes, and audio recording on your
 
 ## Privacy & Permissions
 
-Audio capture, language detection, speech recognition (Apple SpeechAnalyzer), and meeting recordings all stay on your Mac. The only data that leaves your device is the recognized text sent for translation and meeting notes, plus the short audio clips you speak while holding the talk key when using a Ling API key. Without an API key, subtitles, translation (via Google with Apple on-device fallback), meeting records, and push-to-talk interpreting all work. Live meeting notes, one-step voice translation, and voice cloning use your own Ling API key (Ant Group's model service, see [below](#ling-api-key)), and an hour of live notes costs roughly ¥0.15 to ¥1 at current Ling pricing. Ling gives ¥10 of credit every month, enough for about 10 to 50 hours of meetings. Translation and notes can also use any OpenAI-compatible provider you add.
+Audio capture, language detection, speech recognition (Apple SpeechAnalyzer), and meeting recordings all stay on your Mac. The only data that leaves your device is the recognized text sent for translation and meeting notes, plus the short audio clips you speak while holding the talk key when using a Ling API key; if you turn on **Cloud speech proofreading** in Settings › AI Service, each sentence's audio is also sent to the cloud recognition service you picked for a second pass (off by default). Without an API key, subtitles, translation (via Google with Apple on-device fallback), meeting records, and push-to-talk interpreting all work. Live meeting notes, one-step voice translation, and voice cloning use your own Ling API key (Ant Group's model service, see [below](#ling-api-key)), and an hour of live notes costs roughly ¥0.15 to ¥1 at current Ling pricing. Ling gives ¥10 of credit every month, enough for about 10 to 50 hours of meetings. Translation and notes can also use any OpenAI-compatible provider you add.
 
 Cicada asks for a permission only when you use the feature that needs it, and everything else keeps working if you decline.
 
@@ -69,7 +69,7 @@ Cicada asks for a permission only when you use the feature that needs it, and ev
 | Input Monitoring | Only to tell whether the right `⌥` was pressed on its own (listen-only; nothing is blocked or logged) | The first time you talk with right `⌥` | Pick a `⌃`/`⌘` combination in Settings instead; it needs no permission |
 | Administrator password | Installing the BlackHole 2ch virtual microphone and restarting the system audio service | When you click Install in onboarding or Settings, once | The room can't hear your translation; everything else works |
 
-- **Network and virtual microphone**. Cicada only connects to Google Translate (`translate.googleapis.com`), Ling / Ming when a key is configured (`api.ant-ling.com`), the official BlackHole download, and GitHub once a day for update checks — plus any endpoint you enter yourself when you add a custom provider. BlackHole is downloaded from the official Apple-notarized package and verified against a hardcoded SHA-256 checksum before installing.
+- **Network and virtual microphone**. Cicada only connects to Google Translate (`translate.googleapis.com`), Ling / Ming when a key is configured (`api.ant-ling.com`), the official BlackHole download, and GitHub once a day for update checks — plus any endpoint you enter yourself when you add a custom provider or turn on cloud speech proofreading. BlackHole is downloaded from the official Apple-notarized package and verified against a hardcoded SHA-256 checksum before installing.
 - **No analytics or servers of our own**. There is no analytics, no tracking, and no backend server. Diagnostics only log timings and counts locally in the meeting folder.
 - **Local storage**. Meetings, recordings, and notes live in `~/Library/Application Support/LiveSubs`. Your Ling key and voice sample are readable only by your user account, excluded from Time Machine backups, and never written to logs or exports.
 - **Private notes window**. Hidden from screen sharing, screen recording, and screenshots, unless you turn on the option to show it during screen sharing to record a demo.
@@ -84,6 +84,7 @@ Without a Ling key, everything runs on Apple's on-device models plus Google Tran
 | Translating finished sentences | Ling `Ling-3.1-flash` (or `Ling-3.0-flash`, set in Settings › AI Service — or any model from a provider you add) | Google Translate → Apple `Translation` (on device) |
 | Translating the sentence still being spoken | Google Translate (saves Ling's rate limit) | Apple `Translation` (on device) |
 | Live notes and the final version | Ling `Ling-3.1-flash` (same setting) | not available |
+| Cloud speech proofreading (optional, off by default) | Xiaomi MiMo `mimo-v2.5-asr`, or any OpenAI-compatible audio endpoint, re-checking each recorded sentence | on-device recognition only |
 | Checking the key | Ling `Ling-3.0-tiny` (one token) | — |
 | Interpreting: hearing and translating what you say | Ming `Ming-3.0-audio-flash`, one step | Apple on-device transcript, then the translation chain above |
 | Interpreting: the voice the room hears, voice cloning | Ming `Ming-3.0-tts-0.5B` | macOS system voices (`AVSpeechSynthesizer`); no cloning |
@@ -99,7 +100,7 @@ Without a Ling key, everything runs on Apple's on-device models plus Google Tran
 
 ## Using your own model provider
 
-Notes and translation don't have to use Ling: in **Settings › AI Service**, click **Add** next to the provider row and enter a name, an OpenAI-compatible `/v1` endpoint, and a model name. Add as many providers as you like and switch between them anytime; each provider's key is stored read-only for your account on this Mac. Ming voices, one-step voice translation, and voice cloning are Ling-only — with another provider they fall back to on-device recognition plus translation and macOS system voices. Speech recognition always runs on device.
+Notes and translation don't have to use Ling: in **Settings › AI Service**, click **Add** next to the provider row and enter a name, an OpenAI-compatible `/v1` endpoint, and a model name. Add as many providers as you like and switch between them anytime; each provider's key is stored read-only for your account on this Mac. Ming voices, one-step voice translation, and voice cloning are Ling-only — with another provider they fall back to on-device recognition plus translation and macOS system voices. Speech recognition always runs on device; for a more accurate record, turn on **Cloud speech proofreading** on the same page (preset to Xiaomi MiMo, just add a key, about ¥0.5/hour): after each sentence its audio is re-recognized in the cloud, and the record's text is replaced and re-translated.
 
 ## Requirements & Installation
 

@@ -13,6 +13,10 @@ struct AISettingsView: View {
     @State private var pName = ""
     @State private var pBase = ""
     @State private var pModel = ""
+    @State private var asrDraft = ""
+    @State private var asrEditing = false
+    /// Re-read after saving/removing the cloud key (the key file is not observable).
+    @State private var asrKey: String? = nil
 
     private var provider: AIProvider { model.activeAIProvider }
 
@@ -27,12 +31,14 @@ struct AISettingsView: View {
                          note: ling.usable ? L("会中每 45 秒更新") : L("填好 key 后可用"))
                 usageRow(L("翻译"), tag: ling.usable ? provider.name : "Google", on: ling.usable,
                          note: ling.usable ? L("整句用选中的服务商；不行时换 Google、本机") : L("没有 key 时照常可用"))
-                usageRow(L("语音识别"), tag: L("本机"), on: false, note: L("更快，不花钱"))
+                usageRow(L("语音识别"), tag: asrOn ? L("云端校对") : L("本机"), on: asrOn,
+                         note: asrOn ? L("整句再请云端识别一遍，记录更准") : L("更快，不花钱"))
                 SettingsRow(title: L("同声传译的声音"), detail: ling.speechCapable ? L("Ming 的声音或你自己的声音") : L("没有 Ling key 时用本机声音"),
                             divider: false) {
                     SoftButton(L("去选声音")) { model.settingsSection = .speak }
                 }
             }
+            cloudASRCard
             if provider.isLing {
                 SettingsCard {
                     SettingsRow(title: L("模型"), detail: L("3.1 更准；3.0 更快、更省"), divider: false) {
@@ -48,7 +54,10 @@ struct AISettingsView: View {
         }
     }
 
+    private var asrOn: Bool { settings.cloudASREnabled && asrKey != nil }
+
     // MARK: Provider
+
     private var providerOptions: [(String, String)] {
         [("ling", "Ling")] + settings.aiProviders.map { ($0.id, $0.name) }
     }
@@ -209,6 +218,62 @@ struct AISettingsView: View {
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(RoundedRectangle(cornerRadius: 6).fill(on ? Palette.okPale : Palette.fill))
         }
+    }
+
+    // MARK: Cloud speech proofreading
+
+    private var cloudASRCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(L("云端语音识别校对")).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+                Spacer()
+                Toggle("", isOn: $settings.cloudASREnabled).labelsHidden().toggleStyle(.switch)
+            }
+            Text("每句说完后，把这句的声音发给云端模型再识别一遍，用更准的文字替换记录里的原文并重译；实时字幕仍是本机识别。")
+                .font(.system(size: 12)).foregroundStyle(Palette.secondary)
+            if settings.cloudASREnabled {
+                if let key = asrKey, !asrEditing {
+                    HStack(spacing: 8) {
+                        Text(AIKey.masked(key)).font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.line, lineWidth: 1))
+                        SoftButton(L("更换")) { asrDraft = ""; asrEditing = true }
+                        Button("移除") { model.cloudASR.removeKey(); asrKey = nil }
+                            .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        SecureField("API key", text: $asrDraft)
+                            .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced))
+                            .padding(.horizontal, 12).frame(height: 36)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.ink.opacity(0.6), lineWidth: 1))
+                        SoftButton(L("保存"), dark: true) {
+                            model.cloudASR.setKey(asrDraft)
+                            asrDraft = ""
+                            asrEditing = false
+                            asrKey = model.cloudASR.key
+                        }
+                        if asrEditing { SoftButton(L("取消")) { asrEditing = false } }
+                    }
+                    Button("去小米 MiMo 开放平台领 key ↗") {
+                        if let url = URL(string: "https://platform.xiaomimimo.com") { NSWorkspace.shared.open(url) }
+                    }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                }
+                field(L("接口地址"), text: $settings.cloudASRBase)
+                field(L("模型"), text: $settings.cloudASRModel)
+                HStack(spacing: 6) {
+                    Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
+                    Text("只发句子的录音（小米 MiMo 约 ¥0.5/小时）。key 只存在这台 Mac 上。")
+                        .font(.system(size: 11)).foregroundStyle(Palette.tertiary)
+                }
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.961, green: 0.965, blue: 0.973)))
+        .onAppear { asrKey = model.cloudASR.key }
     }
 
     private func field(_ placeholder: String, text: Binding<String>) -> some View {

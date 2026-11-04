@@ -79,6 +79,7 @@ final class AppModel: ObservableObject {
     private var shortcutsSuspended = false
     let installer = VirtualMicInstaller()
     let ling = LingClient()
+    let cloudASR = CloudASRClient()
     lazy var translator = TranslationService(ling: ling)
     let diagnostics = Diagnostics()
     let updates = Updates()
@@ -91,6 +92,7 @@ final class AppModel: ObservableObject {
     /// Set by the notes window; the records window's people row opens that voice's editor.
     @Published var speakerEdit: SpeakerEditRequest?
     private var speakerSetting: AnyCancellable?
+    private var asrSetting: AnyCancellable?
     var openOnboarding: (() -> Void)?
 
     var openMainWindow: (() -> Void)?
@@ -127,8 +129,10 @@ final class AppModel: ObservableObject {
             if let id = self.store.liveID { self.speakerNamer.guess(id) }
         }
         speakerSetting = settings.$speakerVoices.sink { [weak self] on in
+            guard let self else { return }
             TranscriptExport.voices = on
-            self?.listen.router.setVoiceCapture(on)
+            // Cloud proofreading also needs the sentence audio (see CloudASRClient).
+            self.listen.router.setVoiceCapture(on || self.settings.cloudASREnabled)
         }
         listen.onTranslated = { [weak self] segID, text in
             guard let self else { return }
@@ -153,6 +157,12 @@ final class AppModel: ObservableObject {
 
         ling.provider = { [weak self] in self?.activeAIProvider ?? .ling }
         ling.model = { [weak self] in self?.activeAIProvider.model ?? "Ling-3.1-flash" }
+        cloudASR.base = { [weak self] in self?.settings.cloudASRBase ?? CloudASRClient.defaultBase }
+        cloudASR.model = { [weak self] in self?.settings.cloudASRModel ?? CloudASRClient.defaultModel }
+        asrSetting = settings.$cloudASREnabled.sink { [weak self] on in
+            guard let self else { return }
+            self.listen.router.setVoiceCapture(on || self.settings.speakerVoices)
+        }
         listen.translator = translator
         translator.glossary = { [weak self] in self?.notes.glossary ?? [] }
         notes.language = { [weak self] id in
@@ -1003,7 +1013,33 @@ final class AppModel: ObservableObject {
         if tag, settings.speakerVoices, let samples = seg.voiceSamples, seg.text.filter(\.isLetter).count >= 2 {
             speakers.tag(lineID: id, samples: samples)
         }
+        if settings.cloudASREnabled, cloudASR.hasKey, seg.voiceSamples != nil,
+           seg.text.filter(\.isLetter).count >= 2 {
+            proofread(lineID: id, seg: seg)
+        }
         heardWords()
+    }
+
+    /// The record gets the cloud's more accurate transcript once it answers; the live subtitles
+    /// keep the on-device text. If the line moved on meanwhile (a join), this pass is dropped.
+    private func proofread(lineID: String, seg: Segment) {
+        guard let samples = seg.voiceSamples, !samples.isEmpty else { return }
+        let original = seg.text
+        Task { [weak self] in
+            guard let self else { return }
+            guard let text = try? await cloudASR.transcribe(samples: samples, language: seg.sourceCode),
+                  text != original else { return }
+            // The line must still say what we sent off; a join would have rewritten it.
+            guard let session = store.session(store.liveID ?? ""),
+                  let line = session.lines.first(where: { $0.id == lineID }),
+                  line.src == original else { return }
+            store.setSource(lineID: lineID, text)
+            if let dst = await listen.translate(text, source: seg.sourceCode, target: listen.resolvedTarget,
+                                                kind: .sentence, trace: TranslateTrace()) {
+                store.setTranslation(lineID: lineID, dst)
+            }
+            debugLog("asr: line \(lineID) proofread")
+        }
     }
 
     private func recordSaid(_ src: String, _ dst: String, from: String, to: String, secondsAgo: Double) {

@@ -11,7 +11,9 @@
 "整句用选中的服务商；不行时换 Google、本机" = "Whole sentences via the chosen provider; Google or on-device as fallback";
 "没有 key 时照常可用" = "Works without a key";
 "语音识别" = "Speech recognition";
+"云端校对" = "Cloud check";
 "本机" = "On-device";
+"整句再请云端识别一遍，记录更准" = "Each sentence re-checked in the cloud for a more accurate record";
 "更快，不花钱" = "Faster, and free";
 "同声传译的声音" = "Interpreting voice";
 "Ming 的声音或你自己的声音" = "A Ming voice or your own voice";
@@ -44,6 +46,10 @@
 "只存在这台 Mac 上（只有你的账户能读），只发给 Ling（ant-ling.com）" = "Stored only on this Mac, sent only to Ling (ant-ling.com)";
 "只存在这台 Mac 上（只有你的账户能读），只发给 %@" = "Stored only on this Mac (readable by your account alone) and sent only to %@";
 "移除" = "Remove";
+"每句说完后，把这句的声音发给云端模型再识别一遍，用更准的文字替换记录里的原文并重译；实时字幕仍是本机识别。" = "After each sentence, its audio goes to a cloud model for a second, more accurate pass: the record's text is replaced and re-translated. Live subtitles stay on-device.";
+"去小米 MiMo 开放平台领 key ↗" = "Get a key on the Xiaomi MiMo platform ↗";
+"云端语音识别校对" = "Cloud speech proofreading";
+"只发句子的录音（小米 MiMo 约 ¥0.5/小时）。key 只存在这台 Mac 上。" = "Only sentence audio goes out (Xiaomi MiMo, about ¥0.5/hour). The key stays on this Mac.";
 
 /* AboutPanel */
 "把 Mac 正在播放的声音变成实时双语字幕和会议纪要" = "Live bilingual subtitles and meeting notes from whatever your Mac is playing";
