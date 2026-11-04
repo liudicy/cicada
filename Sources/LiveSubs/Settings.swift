@@ -80,12 +80,9 @@ final class AppSettings: ObservableObject {
     }
 
     /// Where the meeting is heard: "system" (the Mac's own sound, online meetings) or "mic"
-    /// (a microphone, a meeting in the room).
+    /// (a microphone, a meeting in the room). Asked every time listening starts; the last
+    /// choice is the default answer, and the panel's 声源 row switches mid-meeting.
     @Published var listenSource: String {
-        didSet { save() }
-    }
-    /// The 声源 question was answered once (first start asks it); the panel can always change it.
-    @Published var listenSourceChosen: Bool {
         didSet { save() }
     }
     /// What shows while listening: "notes" (live notes window, default), "bar" (subtitle bar), "none".
@@ -186,7 +183,6 @@ final class AppSettings: ObservableObject {
         cloudASRBase = defaults.string(forKey: "cloudASRBase") ?? CloudASRClient.defaultBase
         cloudASRModel = defaults.string(forKey: "cloudASRModel") ?? CloudASRClient.defaultModel
         listenSource = defaults.string(forKey: "listenSource") ?? "system"
-        listenSourceChosen = defaults.bool(forKey: "listenSourceChosen")
         displayMode = defaults.string(forKey: "displayMode") ?? "notes"
         speakVoices = defaults.dictionary(forKey: "speakVoices") as? [String: String] ?? [:]
         endWithApp = defaults.object(forKey: "endWithApp") as? Bool ?? true
@@ -225,7 +221,6 @@ final class AppSettings: ObservableObject {
         defaults.set(cloudASRBase, forKey: "cloudASRBase")
         defaults.set(cloudASRModel, forKey: "cloudASRModel")
         defaults.set(listenSource, forKey: "listenSource")
-        defaults.set(listenSourceChosen, forKey: "listenSourceChosen")
         defaults.set(displayMode, forKey: "displayMode")
         defaults.set(speakVoices, forKey: "speakVoices")
         defaults.set(endWithApp, forKey: "endWithApp")

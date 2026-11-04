@@ -114,7 +114,7 @@
 "你正在说…" = "You're speaking…";
 "你：%@" = "You: %@";
 "记录哪里的声音？" = "Record which audio?";
-"线上会议选系统音频，收录 Mac 播放的声音；现场会议选麦克风，收录房间里的说话声。选择会记住，菜单栏面板里随时可以改。" = "For an online meeting choose System Audio, recording what the Mac plays; for a meeting in the room choose Microphone. The choice is remembered and can be changed anytime in the menu bar panel.";
+"线上会议选系统音频，收录 Mac 播放的声音；现场会议选麦克风，收录房间里的说话声。开会中也可以在菜单栏面板的“声源”一行切换。" = "Choose System audio for online meetings (what the Mac plays), or Microphone for a meeting in the room (the voices around you). You can also switch on the panel's Source row mid-meeting.";
 "系统音频（线上会议）" = "System Audio (online meeting)";
 "麦克风（现场会议）" = "Microphone (meeting in the room)";
 "结束这场会议？" = "End this meeting?";

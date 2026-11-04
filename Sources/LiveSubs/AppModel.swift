@@ -442,21 +442,22 @@ final class AppModel: ObservableObject {
     }
 
     func setRunning(_ on: Bool) {
-        if on, !settings.listenSourceChosen { askListenSource(); return }
-        on ? start() : requestStop()
+        if on { askListenSource(); return }
+        requestStop()
     }
 
-    /// The first start asks where the meeting is: the Mac's sound (online) or a microphone (in
-    /// the room). The choice is remembered; the menu bar panel's 声源 row changes it any time.
+    /// Every start asks where the meeting is: the Mac's sound (online) or a microphone (in the
+    /// room). The last choice is the default button; the menu bar panel's 声源 row switches
+    /// mid-meeting without asking.
     private func askListenSource() {
         NSApp.activate()
         let alert = NSAlert()
         alert.messageText = L("记录哪里的声音？")
-        alert.informativeText = L("线上会议选系统音频，收录 Mac 播放的声音；现场会议选麦克风，收录房间里的说话声。选择会记住，菜单栏面板里随时可以改。")
+        alert.informativeText = L("线上会议选系统音频，收录 Mac 播放的声音；现场会议选麦克风，收录房间里的说话声。开会中也可以在菜单栏面板的“声源”一行切换。")
         let system = alert.addButton(withTitle: L("系统音频（线上会议）"))
-        alert.addButton(withTitle: L("麦克风（现场会议）"))
+        let mic = alert.addButton(withTitle: L("麦克风（现场会议）"))
         alert.addButton(withTitle: L("取消"))
-        system.keyEquivalent = "\r"
+        (settings.listenSource == "mic" ? mic : system).keyEquivalent = "\r"
         switch alert.runModal() {
         case .alertFirstButtonReturn: setListenSource("system"); start()
         case .alertSecondButtonReturn: setListenSource("mic"); start()
@@ -464,12 +465,11 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The 声源 row in the panel (and the first-start question). Switching mid-meeting restarts
-    /// only the capture; the meeting and its notes carry on.
+    /// The 声源 row in the panel (and the question when listening starts). Switching mid-meeting
+    /// restarts only the capture; the meeting and its notes carry on.
     func setListenSource(_ source: String) {
         guard source == "system" || source == "mic" else { return }
         settings.listenSource = source
-        settings.listenSourceChosen = true
         if source == "mic" { requestMicrophone() }
         listen.sourceChanged()
         refresh()
@@ -1234,7 +1234,7 @@ final class AppModel: ObservableObject {
         case "source":
             // source:<system|mic>: the 声源 choice, as in the menu bar panel.
             if arg == "system" || arg == "mic" { setListenSource(arg) }
-            debugLog("listen source=\(settings.listenSource) chosen=\(settings.listenSourceChosen) running=\(listen.isRunning)")
+            debugLog("listen source=\(settings.listenSource) running=\(listen.isRunning)")
         case "sourceAsk":
             // sourceAsk: the first-start 声源 question, as if the panel switch was flipped.
             askListenSource()

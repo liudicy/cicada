@@ -34,7 +34,7 @@ Cicada works with whatever is playing on your Mac, from Zoom, Teams, and Feishu 
 
 ### Live notes and bilingual transcript
 
-While the meeting runs, the notes window organizes a summary, topics and key points, conclusions, to-dos, a fishbone diagram, and a glossary of names and terms, and every conclusion or to-do clicks straight back to the supporting lines in the bilingual transcript. Cicada unifies names and terms across the notes and remembers misrecognized spellings, so `⌘F` searches both the canonical spelling and the variants. Online meetings record what the Mac plays; for a meeting in the room, switch the Source row in the menu bar panel to Microphone and Cicada hears the room instead, with the same notes and transcript.
+While the meeting runs, the notes window organizes a summary, topics and key points, conclusions, to-dos, a fishbone diagram, and a glossary of names and terms, and every conclusion or to-do clicks straight back to the supporting lines in the bilingual transcript. Cicada unifies names and terms across the notes and remembers misrecognized spellings, so `⌘F` searches both the canonical spelling and the variants. Every time listening starts, Cicada asks where the meeting is: pick System audio for online meetings (what the Mac plays), or Microphone for a meeting in the room (the voices around you), with the same notes and transcript. The Source row in the menu bar panel switches mid-meeting.
 
 ### Live subtitles and language detection
 
