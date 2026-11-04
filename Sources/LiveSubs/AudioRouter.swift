@@ -175,7 +175,8 @@ final class AudioRouter: @unchecked Sendable {
     func fedSeconds() -> Double { queue.sync { fed } }
     /// Analyzer clock now, the silence running at the end of it, and the last pause before that.
     func clock() -> (fed: Double, silence: Double, pause: (end: Double, length: Double)) {
-        queue.sync { (fed, silenceRun, pause) }
+        // Named explicitly: Swift 6.4's diagnostics crash on the unlabelled nested tuple here.
+        queue.sync { (fed: fed, silence: silenceRun, pause: pause) }
     }
 
     func attach(format: AVAudioFormat, continuation: AsyncStream<AnalyzerInput>.Continuation, replaySeconds: Double = 0) {
