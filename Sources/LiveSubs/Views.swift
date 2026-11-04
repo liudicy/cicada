@@ -132,6 +132,13 @@ struct MenuPanelView: View {
         }
     }
 
+    /// Importing a recording counts as busy too: the dot and the line say so while it runs.
+    private var statusLine: String {
+        if let imp = model.importing { return L("正在导入 \(imp.name)（\(Int(imp.fraction * 100))%）") }
+        if model.running { return model.summary }
+        return model.autoEnded ? L("会议已自动结束") : L("已暂停")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
@@ -150,9 +157,9 @@ struct MenuPanelView: View {
                         Text(dev).font(.system(size: 10).monospaced()).foregroundStyle(Palette.tertiary).lineLimit(1)
                     }
                     HStack(spacing: 6) {
-                        Circle().fill(model.running ? Palette.accent : Color.gray.opacity(0.5)).frame(width: 7, height: 7)
+                        Circle().fill(model.running || model.importing != nil ? Palette.accent : Color.gray.opacity(0.5)).frame(width: 7, height: 7)
                         // Two lines: "English (detecting…) → 简体中文" doesn't fit one beside the switch.
-                        Text(model.running ? model.summary : model.autoEnded ? L("会议已自动结束") : L("已暂停"))
+                        Text(statusLine)
                             .font(.system(size: 12)).foregroundStyle(Palette.secondary).lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -230,6 +237,7 @@ struct MenuPanelView: View {
 
             HStack {
                 Button("会议记录") { model.openMainWindow?() }
+                Button(L("导入录音…")) { model.importRecording() }
                 Spacer()
                 Button("退出") { NSApp.terminate(nil) }
             }
@@ -801,6 +809,16 @@ struct MainWindowView: View {
     private var detail: some View {
         if let s = current {
             VStack(spacing: 0) {
+                if let imp = model.importing {
+                    HStack(spacing: 8) {
+                        Spinner()
+                        Text(L("正在导入 \(imp.name)（\(Int(imp.fraction * 100))%）"))
+                            .font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20).padding(.vertical, 8)
+                    .background(Palette.raised)
+                }
                 if s.lines.isEmpty {
                     ScrollView {
                         header(s).frame(maxWidth: 680).padding(.horizontal, 44).padding(.vertical, 36)
@@ -843,18 +861,42 @@ struct MainWindowView: View {
             Text("打开会议或视频，开始听后，每一场都会存在这里。")
                 .font(.system(size: 15)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
                 .padding(.top, 10)
-            Button { model.setRunning(true) } label: {
-                HStack(spacing: 10) {
-                    Circle().fill(Palette.accent).frame(width: 9, height: 9)
-                    Text("开始听").font(.system(size: 15, weight: .semibold))
+            HStack(spacing: 12) {
+                Button { model.startListening("system") } label: {
+                    HStack(spacing: 10) {
+                        Circle().fill(Palette.accent).frame(width: 9, height: 9)
+                        Text("开始听线上会议").font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 44)
+                    .background(Capsule().fill(Palette.ink))
+                    .contentShape(Capsule())
                 }
-                .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 44)
-                .background(Capsule().fill(Palette.ink))
-                .contentShape(Capsule())
+                .buttonStyle(.plain)
+                .help(L("收录 Mac 播放的声音"))
+                Button { model.startListening("mic") } label: {
+                    Text("现场会议").font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Palette.ink).padding(.horizontal, 22).frame(height: 44)
+                        .background(Capsule().fill(Color.white))
+                        .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(L("用麦克风收录房间里的说话声"))
             }
-            .buttonStyle(.plain).padding(.top, 32)
-            Button("先听一段示例") { model.ensureListening(); model.sample.play() }
-                .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.secondary).padding(.top, 16)
+            .padding(.top, 32)
+            if let imp = model.importing {
+                HStack(spacing: 8) {
+                    Spinner()
+                    Text(L("正在导入 \(imp.name)（\(Int(imp.fraction * 100))%）"))
+                        .font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                }
+                .padding(.top, 18)
+            }
+            HStack(spacing: 20) {
+                Button("导入会议录音…") { model.importRecording() }
+                Button("先听一段示例") { model.ensureListening(); model.sample.play() }
+            }
+            .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.secondary).padding(.top, 16)
         }
         .frame(maxWidth: 420)
         .padding(.bottom, 60)

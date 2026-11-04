@@ -270,6 +270,16 @@ final class SessionStore: ObservableObject {
 
     func session(_ id: String?) -> Session? { id.flatMap { index($0) }.map { sessions[$0] } }
 
+    /// A meeting made from an imported recording: stored and listed like a recorded one.
+    func insert(_ s: Session) {
+        var s = s
+        while sessions.contains(where: { $0.id == s.id }) { s.id += "-2" }
+        try? FileManager.default.createDirectory(at: folder(s.id), withIntermediateDirectories: true)
+        sessions.append(s)
+        sessions.sort { $0.startedAt > $1.startedAt }
+        saveNow(s.id)
+    }
+
     private func index(_ id: String) -> Int? { sessions.firstIndex(where: { $0.id == id }) }
 
     private func scheduleSave(_ id: String) {

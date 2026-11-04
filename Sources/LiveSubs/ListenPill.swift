@@ -81,23 +81,41 @@ struct ListenPill: View {
     }
 
     private var idle: some View {
-        Button { model.setRunning(true) } label: {
-            HStack(spacing: 9) {
-                // In colour while idle too: the white pill against the ink one already tells off from on.
-                BrandMark(size: 22)
-                Text(L("知了")).font(.system(size: 13, weight: .heavy)).foregroundStyle(Palette.ink)
-                Rectangle().fill(Palette.line).frame(width: 1, height: 14)
-                Text(model.autoEnded ? L("会议已自动结束") : L("开始听"))
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
-                Text("⌘R").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+        HStack(spacing: 8) {
+            // In colour while idle too: the white pill against the ink one already tells off from on.
+            BrandMark(size: 22)
+            Text(L("知了")).font(.system(size: 13, weight: .heavy)).foregroundStyle(Palette.ink)
+            if model.autoEnded {
+                Text(L("会议已自动结束")).font(.system(size: 11)).foregroundStyle(Palette.secondary)
             }
-            .padding(.leading, 6).padding(.trailing, 12).frame(height: 32)
-            .background(Capsule().fill(Color.white))
-            .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
-            .contentShape(Capsule())
+            Rectangle().fill(Palette.line).frame(width: 1, height: 14)
+            // Two doors in: the meeting the Mac plays, or the room the mic hears.
+            idleButton(L("线上会议"), help: L("收录 Mac 播放的声音")) { model.startListening("system") }
+            idleButton(L("现场会议"), help: L("用麦克风收录房间里的说话声")) { model.startListening("mic") }
+            Menu {
+                Button(L("导入会议录音…")) { model.importRecording() }
+            } label: {
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Palette.secondary)
+                    .frame(width: 20, height: 22).contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel(L("更多"))
+            Text("⌘R").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+        }
+        .padding(.leading, 6).padding(.trailing, 12).frame(height: 32)
+        .background(Capsule().fill(Color.white))
+        .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
+    }
+
+    private func idleButton(_ title: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 8).frame(height: 22).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(L("开始听"))
+        .help(help)
+        .accessibilityLabel(title)
     }
 
     private var listening: some View {

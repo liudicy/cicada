@@ -442,26 +442,87 @@ final class AppModel: ObservableObject {
     }
 
     func setRunning(_ on: Bool) {
-        if on { askListenSource(); return }
+        if on { start(); return }
         requestStop()
     }
 
-    /// Every start asks where the meeting is: the Mac's sound (online) or a microphone (in the
-    /// room). The last choice is the default button; the menu bar panel's 声源 row switches
-    /// mid-meeting without asking.
-    private func askListenSource() {
+    /// A start button that already says where the meeting is: 线上会议 (system audio) or
+    /// 现场会议 (a microphone in the room). Switching mid-meeting stays in the panel's 声源 row.
+    func startListening(_ source: String) {
+        setListenSource(source)
+        start()
+    }
+
+    // MARK: Import
+
+    /// An import running right now: the file's name and 0…1 progress (nil when idle).
+    @Published var importing: (name: String, fraction: Double)?
+
+    /// 导入会议录音…: pick an audio file and turn it into a meeting, on-device.
+    func importRecording() {
+        guard importing == nil else { return }
         NSApp.activate()
-        let alert = NSAlert()
-        alert.messageText = L("记录哪里的声音？")
-        alert.informativeText = L("线上会议选系统音频，收录 Mac 播放的声音；现场会议选麦克风，收录房间里的说话声。开会中也可以在菜单栏面板的“声源”一行切换。")
-        let system = alert.addButton(withTitle: L("系统音频（线上会议）"))
-        let mic = alert.addButton(withTitle: L("麦克风（现场会议）"))
-        alert.addButton(withTitle: L("取消"))
-        (settings.listenSource == "mic" ? mic : system).keyEquivalent = "\r"
-        switch alert.runModal() {
-        case .alertFirstButtonReturn: setListenSource("system"); start()
-        case .alertSecondButtonReturn: setListenSource("mic"); start()
-        default: break
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = false
+        panel.message = L("选择会议录音文件")
+        if let w = NSApp.keyWindow, !(w is NSPanel), w.isVisible {
+            panel.beginSheetModal(for: w) { [weak self] r in
+                guard r == .OK, let url = panel.url else { return }
+                MainActor.assumeIsolated { self?.importFile(url) }
+            }
+            return
+        }
+        panel.level = .modalPanel
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        importFile(url)
+    }
+
+    private func importFile(_ url: URL) {
+        importing = (url.deletingPathExtension().lastPathComponent, 0)
+        debugLog("import: \(url.lastPathComponent)")
+        Task { [weak self] in
+            guard let self else { return }
+            defer { importing = nil }
+            do {
+                let (lines, lang, seconds) = try await MeetingImport.run(
+                    url: url, sourceMode: settings.sourceMode, candidates: candidates.isEmpty ? sourceLanguages : candidates,
+                    target: settings.resolvedTarget(source: nil),
+                    translate: { [translator] text, from, to in
+                        await translator.translate(text, source: from, target: to, kind: .sentence, trace: TranslateTrace())
+                    },
+                    progress: { f in self.importing?.fraction = f })
+                let started = (try? FileManager.default.attributesOfItem(atPath: url.path)[FileAttributeKey.modificationDate] as? Date) ?? Date()
+                var s = Session(id: "", title: Session.defaultTitle(started), startedAt: started,
+                                endedAt: started.addingTimeInterval(seconds), lines: lines, hasAudio: true)
+                let fid = DateFormatter()
+                fid.dateFormat = "yyyyMMdd-HHmmss"
+                s.id = fid.string(from: Date())
+                store.insert(s)
+                try await MeetingImport.copyAudio(from: url, to: store.systemAudioURL(s.id))
+                debugLog("import: \(lines.count) lines, \(lang.name), \(Int(seconds)) s → \(s.id)")
+                mainShow = nil
+                mainShow = "\(s.id),notes"
+                openMainWindow?()
+                if ling.hasKey { notes.generate(for: s.id) }
+            } catch {
+                debugLog("import failed: \(error)")
+                NSApp.activate()
+                let alert = NSAlert()
+                alert.messageText = L("导入失败")
+                alert.informativeText = Self.importProblem(error)
+                alert.addButton(withTitle: L("好"))
+                alert.runModal()
+            }
+        }
+    }
+
+    private static func importProblem(_ error: Error) -> String {
+        guard let f = error as? MeetingImport.Failure else { return error.localizedDescription }
+        switch f {
+        case .unreadable: return L("这个音频文件读不了，换 m4a、wav 或 mp3 再试")
+        case .silent: return L("没有在这段录音里听到说话声")
+        case .model(let name): return L("本机不支持识别\(name)，或语音模型下载失败")
         }
     }
 
@@ -1366,9 +1427,9 @@ final class AppModel: ObservableObject {
             // source:<system|mic>: the 声源 choice, as in the menu bar panel.
             if arg == "system" || arg == "mic" { setListenSource(arg) }
             debugLog("listen source=\(settings.listenSource) running=\(listen.isRunning)")
-        case "sourceAsk":
-            // sourceAsk: the first-start 声源 question, as if the panel switch was flipped.
-            askListenSource()
+        case "import":
+            // import:<audio file>: the 导入会议录音 flow without the picker.
+            importFile(URL(fileURLWithPath: arg))
         case "notesWindow":
             let v = arg.split(separator: ",").compactMap { Double($0) }
             openNotesWindow()

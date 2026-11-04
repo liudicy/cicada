@@ -113,14 +113,16 @@
 "准备就绪" = "Ready";
 "你正在说…" = "You're speaking…";
 "你：%@" = "You: %@";
-"记录哪里的声音？" = "Record which audio?";
-"线上会议选系统音频，收录 Mac 播放的声音；现场会议选麦克风，收录房间里的说话声。开会中也可以在菜单栏面板的“声源”一行切换。" = "Choose System audio for online meetings (what the Mac plays), or Microphone for a meeting in the room (the voices around you). You can also switch on the panel's Source row mid-meeting.";
-"系统音频（线上会议）" = "System Audio (online meeting)";
-"麦克风（现场会议）" = "Microphone (meeting in the room)";
 "结束这场会议？" = "End this meeting?";
 "已记录 %@ · %lld 句。结束后停止收听，并整理一份完整版纪要。" = "Recorded %@ · %lld lines. Ending stops listening and writes the full notes.";
 "结束会议" = "End Meeting";
 "继续记录" = "Keep Recording";
+"选择会议录音文件" = "Choose a meeting recording";
+"导入失败" = "Import Failed";
+"好" = "OK";
+"这个音频文件读不了，换 m4a、wav 或 mp3 再试" = "This audio file can't be read. Try m4a, wav, or mp3.";
+"没有在这段录音里听到说话声" = "No speech was heard in this recording.";
+"本机不支持识别%@，或语音模型下载失败" = "This Mac can't recognize %@, or the speech model failed to download.";
 "重新整理纪要？" = "Rewrite the notes?";
 "这场纪要手工修改过，重新整理会用当前文字记录生成的内容覆盖你的修改。" = "You edited these notes by hand. Rewriting them from the current transcript will replace your edits.";
 "重新整理" = "Rewrite";
@@ -248,6 +250,12 @@
 "开始听" = "Start listening";
 "知了" = "Cicada";
 "会议已自动结束" = "Meeting ended by itself";
+"线上会议" = "Online meeting";
+"收录 Mac 播放的声音" = "Captures the sound your Mac plays";
+"现场会议" = "In-person";
+"用麦克风收录房间里的说话声" = "Uses the microphone to capture the room";
+"更多" = "More";
+"导入会议录音…" = "Import a Meeting Recording…";
 "结束" = "End";
 
 /* MicCapture */
@@ -747,9 +755,12 @@
 /* Views */
 "自动识别（%@）" = "Auto-detect (%@)";
 "选中后自动下载语音模型" = "Downloads its speech model when chosen";
+"正在导入 %@（%lld%%）" = "Importing %@ (%lld%%)";
 "声源" = "Source";
 "系统音频" = "System Audio";
 "现场" = "In the room";
+"系统音频（线上会议）" = "System Audio (online meeting)";
+"麦克风（现场会议）" = "Microphone (meeting in the room)";
 "系统" = "System";
 "内容" = "Content";
 "仅本场" = "This meeting";
@@ -758,6 +769,7 @@
 "跟随系统的网页听不到译文" = "Pages on the default mic won't hear the translation";
 "显示方式" = "Display";
 "轮换" = "to switch";
+"导入录音…" = "Import Recording…";
 "屏幕上不出字幕，文字记录照常保存" = "Nothing on screen; the transcript is still saved";
 "什么时候出现" = "Appears";
 "填入 API key 后可生成纪要；文字记录照常保存" = "Add an API key for notes; the transcript is saved either way";
@@ -808,6 +820,7 @@
 "这场会议没有记录到内容" = "Nothing was recorded in this meeting";
 "还没有会议" = "No meetings yet";
 "打开会议或视频，开始听后，每一场都会存在这里。" = "Open a meeting or a video and start listening: each one is kept here.";
+"开始听线上会议" = "Start Listening to an Online Meeting";
 "先听一段示例" = "Try a sample first";
 "把每句话的录音发给云端识别，用更准的文字替换记录并重译" = "Sends each sentence's audio to the cloud and replaces the record with the more accurate text, retranslated";
 "用当前文字记录重新生成纪要" = "Regenerate the notes from the current transcript";
