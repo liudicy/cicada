@@ -42,6 +42,7 @@ final class ListenEngine {
     private(set) var installedLocales: Set<String> = []
 
     private var audioTap: SystemAudioTap?
+    private var micCapture: MicCapture?
     private var analyzer: SpeechAnalyzer?
     private var resultsTask: Task<Void, Never>?
     private var generation = 0
@@ -126,9 +127,9 @@ final class ListenEngine {
         ambiguousDetections = 0
         unconfirmed = []
         lastDetectionAt = .distantPast
-        debugLog("listen start mode=\(settings.sourceMode) target=\(resolvedTarget)")
+        debugLog("listen start mode=\(settings.sourceMode) target=\(resolvedTarget) source=\(source)")
 
-        guard startTap() else { return }
+        guard startCapture() else { return }
         router.setVoiceCapture(settings.speakerVoices)
         isRunning = true
         startTickTimer()
@@ -150,8 +151,7 @@ final class ListenEngine {
         generation += 1
         tickTimer?.invalidate()
         tickTimer = nil
-        audioTap?.stop()
-        audioTap = nil
+        stopCapture()
         router.reset()
         resultsTask?.cancel()
         resultsTask = nil
@@ -168,15 +168,58 @@ final class ListenEngine {
         setStatus(L("已暂停"))
     }
 
+    /// The real microphone a room meeting is recorded from (set by the app: `SystemMic.recordingDevice`,
+    /// never the virtual mic). nil reads the system default input.
+    var micDevice: (() -> OutputDevice?)?
+
+    /// Where the meeting is heard: the Mac's own sound or a microphone in the room.
+    private var source: String { settings.listenSource }
+
     func reconnectAudio() {
         guard isRunning else { return }
-        audioTap?.stop()
-        audioTap = nil
+        stopCapture()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.isRunning else { return }
-                if self.startTap() { self.setStatus(L("正在听")) }
+                if self.startCapture() { self.setStatus(L("正在听")) }
             }
+        }
+    }
+
+    /// The 声源 choice flipped: switch capture without touching the meeting. Idle: nothing to restart.
+    func sourceChanged() {
+        guard isRunning else { onStateChange?(); return }
+        stopCapture()
+        if startCapture() { setStatus(L("正在听")) }
+        onStateChange?()
+    }
+
+    private func stopCapture() {
+        audioTap?.stop()
+        audioTap = nil
+        micCapture?.stop()
+        micCapture = nil
+    }
+
+    @discardableResult
+    private func startCapture() -> Bool {
+        source == "mic" ? startMic() : startTap()
+    }
+
+    @discardableResult
+    private func startMic() -> Bool {
+        let capture = MicCapture()
+        let router = self.router
+        capture.onAudio = { pcm in router.push(pcm) }
+        do {
+            try capture.start(device: micDevice?())
+            micCapture = capture
+            return true
+        } catch {
+            debugLog("mic capture start failed: \(error)")
+            isRunning = false
+            setStatus(error.localizedDescription)
+            return false
         }
     }
 

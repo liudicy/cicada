@@ -158,6 +158,8 @@ final class AppModel: ObservableObject {
             TranslationService.englishName(self?.notesLanguageCode(id) ?? "zh-CN")
         }
         listen.translationOff = { [weak self] in self?.subtitles == "original" }
+        // Room meetings record a real microphone, never the virtual one (our own voice).
+        listen.micDevice = { [weak self] in self?.systemMic.recordingDevice }
         if ling.hasKey { Task { await ling.check() } }
 
         installer.speakThrough = { [weak self] text, lang, device in
@@ -339,8 +341,12 @@ final class AppModel: ObservableObject {
     }
 
     func requestMicrophone() {
-        AVCaptureDevice.requestAccess(for: .audio) { _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self.refreshPermissions() } }
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            DispatchQueue.main.async { MainActor.assumeIsolated {
+                self.refreshPermissions()
+                // The engine opened the mic before the grant and reads silence: reopen it.
+                if granted, self.settings.listenSource == "mic" { self.listen.reconnectAudio() }
+            } }
         }
     }
 
@@ -424,7 +430,40 @@ final class AppModel: ObservableObject {
         refresh()
     }
 
-    func setRunning(_ on: Bool) { on ? start() : requestStop() }
+    func setRunning(_ on: Bool) {
+        if on, !settings.listenSourceChosen { askListenSource(); return }
+        on ? start() : requestStop()
+    }
+
+    /// The first start asks where the meeting is: the Mac's sound (online) or a microphone (in
+    /// the room). The choice is remembered; the menu bar panel's 声源 row changes it any time.
+    private func askListenSource() {
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = L("记录哪里的声音？")
+        alert.informativeText = L("线上会议选系统音频，收录 Mac 播放的声音；现场会议选麦克风，收录房间里的说话声。选择会记住，菜单栏面板里随时可以改。")
+        let system = alert.addButton(withTitle: L("系统音频（线上会议）"))
+        alert.addButton(withTitle: L("麦克风（现场会议）"))
+        alert.addButton(withTitle: L("取消"))
+        system.keyEquivalent = "\r"
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: setListenSource("system"); start()
+        case .alertSecondButtonReturn: setListenSource("mic"); start()
+        default: break
+        }
+    }
+
+    /// The 声源 row in the panel (and the first-start question). Switching mid-meeting restarts
+    /// only the capture; the meeting and its notes carry on.
+    func setListenSource(_ source: String) {
+        guard source == "system" || source == "mic" else { return }
+        settings.listenSource = source
+        settings.listenSourceChosen = true
+        if source == "mic" { requestMicrophone() }
+        listen.sourceChanged()
+        refresh()
+        objectWillChange.send()
+    }
 
     /// The menu (⌘R) and the panel switch: a meeting with lines is ended only after asking, with
     /// "继续记录" as the default so a stray Return keeps it going. An empty one just stops.
@@ -1118,6 +1157,13 @@ final class AppModel: ObservableObject {
             debugLog("login item enabled=\(loginItem.enabled) needsApproval=\(loginItem.needsApproval)")
         case "about": AboutPanel.show()
         case "display": setDisplayMode(arg)
+        case "source":
+            // source:<system|mic>: the 声源 choice, as in the menu bar panel.
+            if arg == "system" || arg == "mic" { setListenSource(arg) }
+            debugLog("listen source=\(settings.listenSource) chosen=\(settings.listenSourceChosen) running=\(listen.isRunning)")
+        case "sourceAsk":
+            // sourceAsk: the first-start 声源 question, as if the panel switch was flipped.
+            askListenSource()
         case "notesWindow":
             let v = arg.split(separator: ",").compactMap { Double($0) }
             openNotesWindow()
@@ -1528,8 +1574,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         deviceWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated {
-                debugLog("default output device changed → reconnecting tap")
-                self?.model.listen.reconnectAudio()
+                // The tap follows the default output; a microphone capture doesn't care.
+                if self?.model.settings.listenSource != "mic" {
+                    debugLog("default output device changed → reconnecting tap")
+                    self?.model.listen.reconnectAudio()
+                }
                 self?.model.refreshOutputs()
             }
         }

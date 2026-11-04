@@ -165,6 +165,12 @@ struct MenuPanelView: View {
             if let p = model.ending { MeetingEndingStrip(model: model, pending: p, compact: true) }
 
             VStack(spacing: 8) {
+                ChoiceRow(label: L("声源"),
+                          value: settings.listenSource == "mic" ? L("麦克风") : L("系统音频"),
+                          badge: settings.listenSource == "mic" ? L("现场") : nil,
+                          options: [("system", L("系统音频（线上会议）")), ("mic", L("麦克风（现场会议）"))]) {
+                    model.setListenSource($0)
+                }
                 ChoiceRow(label: L("听到"), value: heardValue.0, badge: heardValue.1, sections: sourceSections) {
                     model.sourceSelection = $0
                 }

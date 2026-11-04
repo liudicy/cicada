@@ -34,7 +34,7 @@ Cicada works with whatever is playing on your Mac, from Zoom, Teams, and Feishu 
 
 ### Live notes and bilingual transcript
 
-While the meeting runs, the notes window organizes a summary, topics and key points, conclusions, to-dos, a fishbone diagram, and a glossary of names and terms, and every conclusion or to-do clicks straight back to the supporting lines in the bilingual transcript. Cicada unifies names and terms across the notes and remembers misrecognized spellings, so `⌘F` searches both the canonical spelling and the variants.
+While the meeting runs, the notes window organizes a summary, topics and key points, conclusions, to-dos, a fishbone diagram, and a glossary of names and terms, and every conclusion or to-do clicks straight back to the supporting lines in the bilingual transcript. Cicada unifies names and terms across the notes and remembers misrecognized spellings, so `⌘F` searches both the canonical spelling and the variants. Online meetings record what the Mac plays; for a meeting in the room, switch the Source row in the menu bar panel to Microphone and Cicada hears the room instead, with the same notes and transcript.
 
 ### Live subtitles and language detection
 
@@ -65,7 +65,7 @@ Cicada asks for a permission only when you use the feature that needs it, and ev
 | Permission | What it's for | When it's asked | Without it |
 |---|---|---|---|
 | System audio recording (Screen & System Audio Recording) | Hearing what your Mac plays, for subtitles. Never records the screen or its own sound | Onboarding step 1, or the first time it listens | No subtitles or notes |
-| Microphone | Recording only while you hold the talk key, for speak-back | When you turn on speak-back | No speak-back |
+| Microphone | Recording while you hold the talk key, for speak-back; recording the room when Microphone is picked as the source | When you turn on speak-back, or first pick the microphone source | No speak-back, and no in-person meetings |
 | Input Monitoring | Only to tell whether the right `⌥` was pressed on its own (listen-only; nothing is blocked or logged) | The first time you talk with right `⌥` | Pick a `⌃`/`⌘` combination in Settings instead; it needs no permission |
 | Administrator password | Installing the BlackHole 2ch virtual microphone and restarting the system audio service | When you click Install in onboarding or Settings, once | The room can't hear your translation; everything else works |
 

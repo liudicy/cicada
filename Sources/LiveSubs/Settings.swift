@@ -79,6 +79,15 @@ final class AppSettings: ObservableObject {
         didSet { save() }
     }
 
+    /// Where the meeting is heard: "system" (the Mac's own sound, online meetings) or "mic"
+    /// (a microphone, a meeting in the room).
+    @Published var listenSource: String {
+        didSet { save() }
+    }
+    /// The 声源 question was answered once (first start asks it); the panel can always change it.
+    @Published var listenSourceChosen: Bool {
+        didSet { save() }
+    }
     /// What shows while listening: "notes" (live notes window, default), "bar" (subtitle bar), "none".
     @Published var displayMode: String {
         didSet { save() }
@@ -150,6 +159,8 @@ final class AppSettings: ObservableObject {
         talkKey = Shortcut(stored: defaults.string(forKey: "talkKey")) ?? .defaultTalk
         toggleKey = Shortcut(stored: defaults.string(forKey: "toggleKey")) ?? .defaultToggle
         aiModel = defaults.string(forKey: "aiModel") ?? "Ling-3.1-flash"
+        listenSource = defaults.string(forKey: "listenSource") ?? "system"
+        listenSourceChosen = defaults.bool(forKey: "listenSourceChosen")
         displayMode = defaults.string(forKey: "displayMode") ?? "notes"
         speakVoices = defaults.dictionary(forKey: "speakVoices") as? [String: String] ?? [:]
         endWithApp = defaults.object(forKey: "endWithApp") as? Bool ?? true
@@ -182,6 +193,8 @@ final class AppSettings: ObservableObject {
         defaults.set(talkKey.stored, forKey: "talkKey")
         defaults.set(toggleKey.stored, forKey: "toggleKey")
         defaults.set(aiModel, forKey: "aiModel")
+        defaults.set(listenSource, forKey: "listenSource")
+        defaults.set(listenSourceChosen, forKey: "listenSourceChosen")
         defaults.set(displayMode, forKey: "displayMode")
         defaults.set(speakVoices, forKey: "speakVoices")
         defaults.set(endWithApp, forKey: "endWithApp")

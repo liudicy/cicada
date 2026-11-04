@@ -97,6 +97,10 @@
 "准备就绪" = "Ready";
 "你正在说…" = "You're speaking…";
 "你：%@" = "You: %@";
+"记录哪里的声音？" = "Record which audio?";
+"线上会议选系统音频，收录 Mac 播放的声音；现场会议选麦克风，收录房间里的说话声。选择会记住，菜单栏面板里随时可以改。" = "For an online meeting choose System Audio, recording what the Mac plays; for a meeting in the room choose Microphone. The choice is remembered and can be changed anytime in the menu bar panel.";
+"系统音频（线上会议）" = "System Audio (online meeting)";
+"麦克风（现场会议）" = "Microphone (meeting in the room)";
 "结束这场会议？" = "End this meeting?";
 "已记录 %@ · %lld 句。结束后停止收听，并整理一份完整版纪要。" = "Recorded %@ · %lld lines. Ending stops listening and writes the full notes.";
 "结束会议" = "End Meeting";
@@ -213,8 +217,8 @@
 "自动识别 → %@" = "Auto-detect → %@";
 "正在听" = "Listening";
 "此 Mac 不支持本机语音识别" = "This Mac doesn't support on-device speech recognition";
-"无法读取系统音频，请在系统设置里允许“系统音频录制”" = "Can't read system audio. Allow “System Audio Recording” in System Settings";
 "已暂停" = "Paused";
+"无法读取系统音频，请在系统设置里允许“系统音频录制”" = "Can't read system audio. Allow “System Audio Recording” in System Settings";
 "正在下载 %@ 语音模型…" = "Downloading the %@ speech model…";
 "本机不支持%@识别" = "This Mac can't recognize %@";
 "识别出错，%lld 秒后重试" = "Recognition error; retrying in %lld s";
@@ -226,6 +230,9 @@
 "知了" = "Cicada";
 "会议已自动结束" = "Meeting ended by itself";
 "结束" = "End";
+
+/* MicCapture */
+"无法读取麦克风，请在系统设置里允许“麦克风”" = "Can't read the microphone. Allow “Microphone” in System Settings";
 
 /* MicUsersView */
 "顺便关掉自动调节麦克风音量和降噪，译文会更清楚" = "Also turn off automatic mic volume and noise suppression so the translation sounds clearer";
@@ -721,6 +728,9 @@
 /* Views */
 "自动识别（%@）" = "Auto-detect (%@)";
 "选中后自动下载语音模型" = "Downloads its speech model when chosen";
+"声源" = "Source";
+"系统音频" = "System Audio";
+"现场" = "In the room";
 "系统" = "System";
 "内容" = "Content";
 "仅本场" = "This meeting";
