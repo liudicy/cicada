@@ -17,6 +17,8 @@ struct NotesContentView: View {
     var document = false
     var updating = false
     var summaryJustChanged = false
+    /// 编辑 (document pages only): the working copy fields write into (nil = reading).
+    var edit: Binding<MeetingNotes>? = nil
     /// The time of the last line the notes cover ("到 03:52").
     var coveredUntil: Double?
     /// Where the last topic ends when the meeting is over (its last line).
@@ -25,7 +27,7 @@ struct NotesContentView: View {
 
     var body: some View {
         if document {
-            DocumentNotesView(notes: notes, fresh: fresh, live: live, updating: updating, endedAt: endedAt, onJump: onJump)
+            DocumentNotesView(notes: notes, fresh: fresh, live: live, updating: updating, edit: edit, endedAt: endedAt, onJump: onJump)
         } else {
             cards
         }
@@ -139,6 +141,8 @@ private struct DocumentNotesView: View {
     let fresh: Set<String>
     let live: Bool
     let updating: Bool
+    /// 编辑: the working copy fields write into (nil = reading).
+    let edit: Binding<MeetingNotes>?
     let endedAt: Double?
     let onJump: (Double) -> Void
 
@@ -160,8 +164,16 @@ private struct DocumentNotesView: View {
             }
 
             if !notes.summary.isEmpty {
-                Text(notes.summary).font(.system(size: 15)).lineSpacing(9).foregroundStyle(Palette.body)
-                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                if let edit {
+                    TextEditor(text: edit.summary)
+                        .font(.system(size: 15)).lineSpacing(9).foregroundStyle(Palette.body)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 96)
+                        .modifier(NotesEditField())
+                } else {
+                    Text(notes.summary).font(.system(size: 15)).lineSpacing(9).foregroundStyle(Palette.body)
+                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             if !notes.topics.isEmpty {
@@ -172,6 +184,9 @@ private struct DocumentNotesView: View {
                         Rectangle().fill(MainWindowView.hairline).frame(height: 1)
                         DocumentTopicRow(index: i, topic: topic, current: current,
                                          updating: updating && current, fresh: fresh,
+                                         edit: edit.map { e in Binding(
+                                            get: { e.wrappedValue.topics[i] },
+                                            set: { e.wrappedValue.topics[i] = $0 }) },
                                          startOpen: i == 0 || current, onJump: onJump)
                             .id(NotesContentView.topicID(topic))
                     }
@@ -198,15 +213,38 @@ private struct DocumentNotesView: View {
                 if todo { Image(systemName: "circle").font(.system(size: 11)) } else { Text("\(index)").font(.system(size: 12).monospacedDigit()) }
             }
             .fontWeight(.semibold).foregroundStyle(weak ? Palette.secondary : Palette.link).frame(width: 16, alignment: .leading)
-            Text(weak ? AttributedString(text) : Highlight.facts(text))
-                .font(.system(size: 15)).lineSpacing(5)
-                .foregroundStyle(weak ? Palette.secondary : Palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if weak { Tag(L("依据较少")) }
-            if let t = item.t, !weak { TimeLink(text: NotesEngine.clock(t), t: t, onJump: onJump) }
+            if let edit {
+                let isTodo = todo
+                TextField("", text: Binding(
+                    get: { isTodo ? edit.wrappedValue.todos[index - edit.wrappedValue.conclusions.count - 1].text
+                                  : edit.wrappedValue.conclusions[index - 1].text },
+                    set: { if isTodo { edit.wrappedValue.todos[index - edit.wrappedValue.conclusions.count - 1].text = $0 }
+                           else { edit.wrappedValue.conclusions[index - 1].text = $0 } }
+                ), axis: .vertical)
+                .font(.system(size: 15)).lineSpacing(5).foregroundStyle(Palette.ink)
+                .modifier(NotesEditField())
+            } else {
+                Text(weak ? AttributedString(text) : Highlight.facts(text))
+                    .font(.system(size: 15)).lineSpacing(5)
+                    .foregroundStyle(weak ? Palette.secondary : Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if weak { Tag(L("依据较少")) }
+                if let t = item.t, !weak { TimeLink(text: NotesEngine.clock(t), t: t, onJump: onJump) }
+            }
         }
         .padding(.vertical, 3)
+    }
+}
+
+/// 编辑 in the notes page: text sits in quiet fields on the ground tint, so it reads as writable.
+private struct NotesEditField: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Palette.ground))
     }
 }
 
@@ -242,13 +280,15 @@ private struct DocumentTopicRow: View {
     let current: Bool
     let updating: Bool
     let fresh: Set<String>
+    /// 编辑: the working copy this row's fields write into (nil = reading). Editing rows stay open.
+    let edit: Binding<NoteTopic>?
     let onJump: (Double) -> Void
     @State private var open: Bool
 
     init(index: Int, topic: NoteTopic, current: Bool, updating: Bool, fresh: Set<String>,
-         startOpen: Bool, onJump: @escaping (Double) -> Void) {
+         edit: Binding<NoteTopic>?, startOpen: Bool, onJump: @escaping (Double) -> Void) {
         self.index = index; self.topic = topic; self.current = current; self.updating = updating
-        self.fresh = fresh; self.onJump = onJump
+        self.fresh = fresh; self.edit = edit; self.onJump = onJump
         _open = State(initialValue: startOpen)
     }
 
@@ -259,8 +299,14 @@ private struct DocumentTopicRow: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(String(format: "%02d", index + 1)).font(.system(size: 12, weight: .semibold).monospacedDigit())
                             .foregroundStyle(Palette.link).frame(width: 28, alignment: .leading)
-                        Text(topic.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
-                            .multilineTextAlignment(.leading)
+                        if let edit {
+                            TextField("", text: edit.title, axis: .vertical)
+                                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                                .modifier(NotesEditField())
+                        } else {
+                            Text(topic.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                                .multilineTextAlignment(.leading)
+                        }
                         if current { Tag(L("正在讲"), live: true) }
                         if fresh.contains(topic.title) && !current { Tag(L("新"), live: true) }
                         Spacer(minLength: 8)
@@ -268,35 +314,59 @@ private struct DocumentTopicRow: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                TimeLink(text: NotesEngine.clock(topic.start), t: topic.start, onJump: onJump)
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Palette.secondary).rotationEffect(.degrees(open ? 90 : 0))
+                .disabled(edit != nil)
+                if edit == nil {
+                    TimeLink(text: NotesEngine.clock(topic.start), t: topic.start, onJump: onJump)
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Palette.secondary).rotationEffect(.degrees(open ? 90 : 0))
+                }
             }
             .padding(.vertical, 15)
 
-            if open {
+            if open || edit != nil {
                 VStack(alignment: .leading, spacing: 7) {
-                    if !topic.summary.isEmpty {
-                        Text(topic.summary).font(.system(size: 14)).lineSpacing(6).foregroundStyle(Palette.body)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    ForEach(Array(topic.points.enumerated()), id: \.offset) { i, p in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("·").foregroundStyle(Palette.secondary)
-                            Text(p).font(.system(size: 14)).lineSpacing(5).foregroundStyle(Palette.ink).textSelection(.enabled)
+                    if let edit {
+                        if !topic.summary.isEmpty {
+                            TextEditor(text: edit.summary)
+                                .font(.system(size: 14)).lineSpacing(6).foregroundStyle(Palette.body)
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 56)
+                                .modifier(NotesEditField())
+                        }
+                        ForEach(edit.wrappedValue.points.indices, id: \.self) { i in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text("·").foregroundStyle(Palette.secondary)
+                                TextField("", text: Binding(
+                                    get: { edit.wrappedValue.points[i] },
+                                    set: { edit.wrappedValue.points[i] = $0 }
+                                ), axis: .vertical)
+                                .font(.system(size: 14)).lineSpacing(5).foregroundStyle(Palette.ink)
+                                .modifier(NotesEditField())
+                            }
+                        }
+                    } else {
+                        if !topic.summary.isEmpty {
+                            Text(topic.summary).font(.system(size: 14)).lineSpacing(6).foregroundStyle(Palette.body)
                                 .fixedSize(horizontal: false, vertical: true)
-                            if fresh.contains(p) { Tag(L("新"), live: true) }
                         }
-                        .help(topic.pointTime(i).map { NotesEngine.clock($0) } ?? "")
-                        .modifier(FadeIn(active: fresh.contains(p)))
-                    }
-                    if let fish = topic.fishbone { FishboneView(fishbone: fish, onJump: onJump).padding(.top, 4) }
-                    if updating {
-                        VStack(alignment: .leading, spacing: 7) {
-                            SkeletonBar(fraction: 0.82, height: 10, warm: true)
-                            SkeletonBar(fraction: 0.56, height: 10, warm: true)
+                        ForEach(Array(topic.points.enumerated()), id: \.offset) { i, p in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text("·").foregroundStyle(Palette.secondary)
+                                Text(p).font(.system(size: 14)).lineSpacing(5).foregroundStyle(Palette.ink).textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if fresh.contains(p) { Tag(L("新"), live: true) }
+                            }
+                            .help(topic.pointTime(i).map { NotesEngine.clock($0) } ?? "")
+                            .modifier(FadeIn(active: fresh.contains(p)))
                         }
-                        .padding(.top, 2)
+                        if let fish = topic.fishbone { FishboneView(fishbone: fish, onJump: onJump).padding(.top, 4) }
+                        if updating {
+                            VStack(alignment: .leading, spacing: 7) {
+                                SkeletonBar(fraction: 0.82, height: 10, warm: true)
+                                SkeletonBar(fraction: 0.56, height: 10, warm: true)
+                            }
+                            .padding(.top, 2)
+                        }
                     }
                 }
                 .padding(.leading, 36).padding(.bottom, 20)

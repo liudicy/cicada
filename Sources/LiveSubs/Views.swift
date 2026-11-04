@@ -590,6 +590,8 @@ struct MainWindowView: View {
     @State private var jumpTo: Double?
     /// A topic's time picked in the notes, for the bilingual column beside them.
     @State private var quoteJump: Double?
+    /// 编辑 in the notes page: the working copy, saved on 完成 (nil = reading).
+    @State private var notesDraft: MeetingNotes?
     @State private var detailWidth: CGFloat = 0
     @FocusState private var searchFocused: Bool
     /// The bilingual column beside the notes is opt-in: three full columns of text read as crowded.
@@ -811,7 +813,10 @@ struct MainWindowView: View {
                 } else if tab == "notes" {
                     HStack(spacing: 0) {
                         SessionNotesView(model: model, engine: model.notes, ling: model.ling, session: s,
-                                         header: AnyView(header(s))) { t in
+                                         header: AnyView(header(s)),
+                                         edit: notesDraft == nil ? nil : Binding(
+                                            get: { notesDraft ?? MeetingNotes() },
+                                            set: { notesDraft = $0 })) { t in
                             // Beside the notes, a topic's time scrolls the column; otherwise it opens the transcript.
                             if sideBySide { quoteJump = t } else { jumpTo = t; tab = "transcript" }
                         }
@@ -824,7 +829,7 @@ struct MainWindowView: View {
                 }
                 if s.id == store.liveID { liveNow }
             }
-            .onChange(of: s.id) { _, _ in titleDraft = "" }
+            .onChange(of: s.id) { _, _ in titleDraft = ""; notesDraft = nil }
         } else {
             welcome
         }
@@ -907,17 +912,42 @@ struct MainWindowView: View {
                     .help(L("把每句话的录音发给云端识别，用更准的文字替换记录并重译"))
                 }
                 Segments(options: [("both", L("双语")), ("src", L("原文")), ("dst", L("译文"))], value: view) { view = $0 }
-            } else if wideEnough, !s.lines.isEmpty {
-                Button { withAnimation(.easeOut(duration: 0.2)) { showQuotes.toggle() } } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "sidebar.right").font(.system(size: 12))
-                        Text("原话").font(.system(size: 13))
+            } else {
+                if var draft = notesDraft {
+                    // 完成 keeps the working copy; 取消 drops it. Reading again is free.
+                    Button(L("完成")) {
+                        draft.updatedAt = Date()
+                        store.setNotes(s.id, draft)
+                        notesDraft = nil
                     }
-                    .foregroundStyle(showQuotes ? Palette.ink : Palette.secondary)
-                    .contentShape(Rectangle())
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.link)
+                    .buttonStyle(.plain)
+                    Button(L("取消")) { notesDraft = nil }
+                        .font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                        .buttonStyle(.plain)
+                } else if s.id != store.liveID, let n = s.notes, !n.isEmpty, model.notes.generatingID != s.id {
+                    Button { notesDraft = n } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "square.and.pencil").font(.system(size: 12))
+                            Text(L("编辑")).font(.system(size: 13))
+                        }
+                        .foregroundStyle(Palette.secondary).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("修改纪要的文字，完成后保存"))
                 }
-                .buttonStyle(.plain)
-                .help(showQuotes ? L("收起原话") : L("在纪要旁显示原话"))
+                if wideEnough, !s.lines.isEmpty, notesDraft == nil {
+                    Button { withAnimation(.easeOut(duration: 0.2)) { showQuotes.toggle() } } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sidebar.right").font(.system(size: 12))
+                            Text("原话").font(.system(size: 13))
+                        }
+                        .foregroundStyle(showQuotes ? Palette.ink : Palette.secondary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(showQuotes ? L("收起原话") : L("在纪要旁显示原话"))
+                }
             }
             Menu {
                 Button("复制为 Markdown") { model.export(s, kind: "copy") }
@@ -937,7 +967,8 @@ struct MainWindowView: View {
 
     private func tabButton(_ title: String, id: String, count: Int? = nil) -> some View {
         let on = tab == id
-        return Button { tab = id } label: {
+        // Leaving the notes page drops an unsaved edit, like its 取消.
+        return Button { tab = id; notesDraft = nil } label: {
             HStack(spacing: 5) {
                 Text(title).font(.system(size: 13, weight: on ? .semibold : .regular))
                     .foregroundStyle(on ? Palette.ink : Palette.secondary)
@@ -1124,10 +1155,12 @@ struct SessionNotesView: View {
     let session: Session
     /// The page's title block, scrolling with the notes.
     var header: AnyView = AnyView(EmptyView())
+    /// 编辑: the working copy the page shows and writes into (nil = reading).
+    var edit: Binding<MeetingNotes>? = nil
     let onJump: (Double) -> Void
 
     private var live: Bool { session.id == model.store.liveID }
-    private var notes: MeetingNotes? { live ? engine.notes : session.notes }
+    private var notes: MeetingNotes? { edit?.wrappedValue ?? (live ? engine.notes : session.notes) }
     private var generating: Bool { engine.generatingID == session.id }
 
     var body: some View {
@@ -1135,8 +1168,8 @@ struct SessionNotesView: View {
             VStack(alignment: .leading, spacing: 40) {
                 header
                 if let notes, !notes.isEmpty {
-                    NotesContentView(notes: notes, fresh: live ? engine.fresh : [], live: live, document: true,
-                                     endedAt: session.lines.last?.t, onJump: onJump)
+                    NotesContentView(notes: notes, fresh: live && edit == nil ? engine.fresh : [], live: live, document: true,
+                                     edit: edit, endedAt: session.lines.last?.t, onJump: onJump)
                 } else if generating || (live && ling.hasKey && !session.lines.isEmpty) {
                     NotesGeneratingView(heard: session.lines.count)
                 } else {
