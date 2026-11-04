@@ -89,18 +89,11 @@ struct ListenPill: View {
                 Text(L("会议已自动结束")).font(.system(size: 11)).foregroundStyle(Palette.secondary)
             }
             Rectangle().fill(Palette.line).frame(width: 1, height: 14)
-            // Two doors in: the meeting the Mac plays, or the room the mic hears.
+            // Three doors in, side by side: the meeting the Mac plays, the room the mic hears,
+            // or a recording already on disk.
             idleButton(L("线上会议"), help: L("收录 Mac 播放的声音")) { model.startListening("system") }
             idleButton(L("现场会议"), help: L("用麦克风收录房间里的说话声")) { model.startListening("mic") }
-            Menu {
-                Button(L("导入会议录音…")) { model.importRecording() }
-            } label: {
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Palette.secondary)
-                    .frame(width: 20, height: 22).contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .accessibilityLabel(L("更多"))
+            idleButton(L("导入会议录音…"), help: L("导入会议录音…")) { model.importRecording() }
             Text("⌘R").font(.system(size: 11)).foregroundStyle(Palette.secondary)
         }
         .padding(.leading, 6).padding(.trailing, 12).frame(height: 32)
