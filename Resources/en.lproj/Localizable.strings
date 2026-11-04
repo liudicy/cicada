@@ -121,6 +121,9 @@
 "已记录 %@ · %lld 句。结束后停止收听，并整理一份完整版纪要。" = "Recorded %@ · %lld lines. Ending stops listening and writes the full notes.";
 "结束会议" = "End Meeting";
 "继续记录" = "Keep Recording";
+"重新整理纪要？" = "Rewrite the notes?";
+"这场纪要手工修改过，重新整理会用当前文字记录生成的内容覆盖你的修改。" = "You edited these notes by hand. Rewriting them from the current transcript will replace your edits.";
+"重新整理" = "Rewrite";
 "右 ⌥ 只能用于“按住说话”" = "Right ⌥ can only be used for “Hold to talk”";
 "与另一个快捷键冲突" = "Conflicts with the other shortcut";
 "%@ 是系统快捷键，换一个吧" = "%@ is a system shortcut; choose another";
@@ -807,10 +810,12 @@
 "打开会议或视频，开始听后，每一场都会存在这里。" = "Open a meeting or a video and start listening: each one is kept here.";
 "先听一段示例" = "Try a sample first";
 "把每句话的录音发给云端识别，用更准的文字替换记录并重译" = "Sends each sentence's audio to the cloud and replaces the record with the more accurate text, retranslated";
+"用当前文字记录重新生成纪要" = "Regenerate the notes from the current transcript";
 "修改纪要的文字，完成后保存" = "Edit the notes text; Done saves it";
 "收起原话" = "Hide original";
 "在纪要旁显示原话" = "Show the original beside the notes";
 "云端校对中 %lld/%lld" = "Cloud checking %lld/%lld";
+"正在整理纪要…" = "Writing notes…";
 "复制为 Markdown" = "Copy as Markdown";
 "导出 Markdown…" = "Export Markdown…";
 "导出 Word…" = "Export Word…";
@@ -821,7 +826,6 @@
 "标题" = "Title";
 "全部 %lld 句" = "All %lld lines";
 "翻译中…" = "Translating…";
-"正在整理纪要…" = "Writing notes…";
 "纪要会在会议进行中自动生成" = "Notes are written during the meeting";
 "使用 Ling 将文字记录整理为总结、议题、结论和人名，约需半分钟。" = "Ling turns the transcript into a summary, topics, conclusions and names. Takes about half a minute.";
 "前往 设置 › AI 服务 填入 Ling 的 API key 后即可生成。" = "Add a Ling API key in Settings › AI Service to generate them.";

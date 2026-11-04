@@ -555,6 +555,27 @@ final class AppModel: ObservableObject {
         notes.generate(for: id)
     }
 
+    /// The notes page's 重新整理: the notes as the transcript reads now (after edits and cloud
+    /// proofreading). Notes the user edited by hand are only overwritten after they confirm.
+    func canRewriteNotes(_ s: Session) -> Bool {
+        ling.hasKey && s.id != store.liveID && !s.lines.isEmpty
+            && notes.generatingID == nil && proofreading?.id != s.id
+    }
+
+    func rewriteNotes(_ id: String) {
+        guard let s = store.session(id), canRewriteNotes(s) else { return }
+        guard s.notes?.edited == true else { notes.generate(for: id); return }
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = L("重新整理纪要？")
+        alert.informativeText = L("这场纪要手工修改过，重新整理会用当前文字记录生成的内容覆盖你的修改。")
+        let go = alert.addButton(withTitle: L("重新整理"))
+        alert.addButton(withTitle: L("取消"))
+        go.hasDestructiveAction = true
+        go.keyEquivalent = ""
+        if alert.runModal() == .alertFirstButtonReturn { notes.generate(for: id) }
+    }
+
     // MARK: Display (live notes / subtitle bar / nothing)
 
     /// 录屏时可见: every place that shows it (settings, menu bar panel, 显示 menu, the notes

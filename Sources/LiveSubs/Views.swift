@@ -913,6 +913,22 @@ struct MainWindowView: View {
                 }
                 Segments(options: [("both", L("双语")), ("src", L("原文")), ("dst", L("译文"))], value: view) { view = $0 }
             } else {
+                if model.notes.generatingID == s.id {
+                    HStack(spacing: 6) {
+                        Spinner()
+                        Text(L("正在整理纪要…")).font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                    }
+                } else if model.canRewriteNotes(s) {
+                    Button { model.rewriteNotes(s.id) } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.clockwise").font(.system(size: 12))
+                            Text(L("重新整理")).font(.system(size: 13))
+                        }
+                        .foregroundStyle(Palette.secondary).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("用当前文字记录重新生成纪要"))
+                }
                 if var draft = notesDraft {
                     // 完成 keeps the working copy; 取消 drops it. Reading again is free.
                     Button(L("完成")) {
