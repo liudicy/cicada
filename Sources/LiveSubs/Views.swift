@@ -869,7 +869,7 @@ struct MainWindowView: View {
                 Button { model.startListening("system") } label: {
                     HStack(spacing: 10) {
                         Circle().fill(Palette.accent).frame(width: 9, height: 9)
-                        Text("开始听线上会议").font(.system(size: 15, weight: .semibold))
+                        Text("线上会议").font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 44)
                     .background(Capsule().fill(Palette.ink))
