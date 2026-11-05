@@ -957,7 +957,7 @@ struct MainWindowView: View {
         }
     }
 
-    /// No meetings yet: the logo, one line and the one thing to do.
+    /// No meetings yet: the logo, one line, and the same three starts as the sidebar's 开始听.
     private var welcome: some View {
         VStack(spacing: 0) {
             BrandMark(size: 72).shadow(color: Palette.accent.opacity(0.22), radius: 14, y: 8)
@@ -965,24 +965,32 @@ struct MainWindowView: View {
             Text("打开会议或视频，开始听后，每一场都会存在这里。")
                 .font(.system(size: 15)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
                 .padding(.top, 10)
-            Button { model.setRunning(true) } label: {
-                HStack(spacing: 10) {
-                    Circle().fill(Palette.accent).frame(width: 9, height: 9)
-                    Text("开始听").font(.system(size: 15, weight: .semibold))
-                }
-                .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 44)
-                .background(Capsule().fill(Palette.ink))
-                .contentShape(Capsule())
+            HStack(spacing: 10) {
+                welcomeAction(L("线上会议"), icon: "desktopcomputer") { model.listenSourceSelection = "system"; model.start() }
+                welcomeAction(L("现场会议"), icon: "mic") { model.listenSourceSelection = "room"; model.start() }
+                welcomeAction(L("导入会议录音"), icon: "square.and.arrow.down") { model.chooseImportFiles() }
             }
-            .buttonStyle(.plain).padding(.top, 32)
+            .padding(.top, 32)
             Button("先听一段示例") { model.ensureListening(); model.sample.play() }
-                .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.secondary).padding(.top, 16)
-            Button("或导入录音、视频…") { model.chooseImportFiles() }
-                .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.ink).padding(.top, 8)
+                .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.secondary).padding(.top, 18)
         }
-        .frame(maxWidth: 420)
+        .frame(maxWidth: 480)
         .padding(.bottom, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// One of the welcome page's three starts: a quiet capsule, all three at the same level.
+    private func welcomeAction(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: icon).font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink)
+            }
+            .padding(.horizontal, 16).frame(height: 38)
+            .background(Capsule().fill(Palette.raised))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     /// 此刻: the sentence being heard, pinned under the page while the meeting is live.
