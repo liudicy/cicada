@@ -22,23 +22,10 @@ struct AISettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // 1) Text AI first: pick a provider, paste its key, (Ling only) pick a model.
+            sectionHeader(L("纪要和翻译"), detail: L("整句翻译和实时纪要都走这里选的服务商；不填 key 时翻译照常可用（Google、本机）"))
             providerCard
             keyCard
-            Text("用在哪里").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
-                .padding(.top, 4)
-            SettingsCard {
-                usageRow(L("实时纪要"), tag: ling.usable ? L("用 \(provider.name)") : L("需要 key"), on: ling.usable,
-                         note: ling.usable ? L("会中每 45 秒更新") : L("填好 key 后可用"))
-                usageRow(L("翻译"), tag: ling.usable ? provider.name : "Google", on: ling.usable,
-                         note: ling.usable ? L("整句用选中的服务商；不行时换 Google、本机") : L("没有 key 时照常可用"))
-                usageRow(L("语音识别"), tag: asrOn ? L("云端校对") : L("本机"), on: asrOn,
-                         note: asrOn ? L("整句再请云端识别一遍，记录更准") : L("更快，不花钱"))
-                SettingsRow(title: L("同声传译的声音"), detail: ling.speechCapable ? L("Ming 的声音或你自己的声音") : L("没有 Ling key 时用本机声音"),
-                            divider: false) {
-                    SoftButton(L("去选声音")) { model.settingsSection = .speak }
-                }
-            }
-            cloudASRCard
             if provider.isLing {
                 SettingsCard {
                     SettingsRow(title: L("模型"), detail: L("3.1 更准；3.0 更快、更省"), divider: false) {
@@ -51,7 +38,35 @@ struct AISettingsView: View {
                 Text("发出去的只有文字（用你自己的声音时还有那段录音）；服务商的计费与隐私政策见其官网。")
                     .font(.system(size: 12)).foregroundStyle(Palette.tertiary)
             }
+            // 2) Speech proofreading is an independent add-on with its own key.
+            sectionHeader(L("语音识别校对"), detail: nil)
+            cloudASRCard
+            // 3) Last, the read-only summary: what each feature uses right now.
+            sectionHeader(L("用在哪里"), detail: nil)
+            SettingsCard {
+                usageRow(L("实时纪要"), tag: ling.usable ? L("用 \(provider.name)") : L("需要 key"), on: ling.usable,
+                         note: ling.usable ? L("会中每 45 秒更新") : L("在上面填好服务商 key 后可用"))
+                usageRow(L("翻译"), tag: ling.usable ? provider.name : "Google", on: ling.usable,
+                         note: ling.usable ? L("整句用选中的服务商；不行时换 Google、本机") : L("没有 key 时照常可用"))
+                usageRow(L("语音识别"), tag: asrOn ? L("云端校对") : L("本机"), on: asrOn,
+                         note: asrOn ? L("整句再请云端识别一遍，记录更准") : L("更快，不花钱"))
+                SettingsRow(title: L("同声传译的声音"), detail: ling.speechCapable ? L("Ming 的声音或你自己的声音") : L("没有 Ling key 时用本机声音"),
+                            divider: false) {
+                    SoftButton(L("去选声音")) { model.settingsSection = .speak }
+                }
+            }
         }
+    }
+
+    private func sectionHeader(_ title: String, detail: String?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
+            if let detail {
+                Text(detail).font(.system(size: 12)).foregroundStyle(Palette.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 4)
     }
 
     private var asrOn: Bool { settings.cloudASREnabled && asrKey != nil }

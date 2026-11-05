@@ -1,12 +1,17 @@
 /* AISettings */
-"用在哪里" = "Where it's used";
 "一小时会议约 ¥0.15–1（目前优惠价）。发出去的只有文字（用你自己的声音时还有那段录音），语音识别留在本机。" = "About ¥0.15–1 per hour of meeting (current discount pricing). Only text is sent (plus your voice sample if you use your own voice); speech recognition stays on this Mac.";
 "发出去的只有文字（用你自己的声音时还有那段录音）；服务商的计费与隐私政策见其官网。" = "Only text goes out (plus that recording when your own voice is used); see the provider's site for pricing and privacy.";
+"纪要和翻译" = "Notes and Translation";
+"整句翻译和实时纪要都走这里选的服务商；不填 key 时翻译照常可用（Google、本机）" = "Sentence translation and live notes use the provider chosen here; without a key, translation still works (Google, on-device).";
+"语音识别校对" = "Speech Proofreading";
+"用在哪里" = "Where it's used";
+"模型" = "Model";
+"3.1 更准；3.0 更快、更省" = "3.1 is more accurate; 3.0 is faster and cheaper";
 "实时纪要" = "Live notes";
 "用 %@" = "Via %@";
 "需要 key" = "Needs key";
 "会中每 45 秒更新" = "Updated every 45 s during a meeting";
-"填好 key 后可用" = "Available once a key is set";
+"在上面填好服务商 key 后可用" = "Available once the provider key above is filled in";
 "翻译" = "Translation";
 "整句用选中的服务商；不行时换 Google、本机" = "Whole sentences via the chosen provider; Google or on-device as fallback";
 "没有 key 时照常可用" = "Works without a key";
@@ -19,8 +24,6 @@
 "Ming 的声音或你自己的声音" = "A Ming voice or your own voice";
 "没有 Ling key 时用本机声音" = "Without a Ling key the Mac's voice speaks";
 "去选声音" = "Choose voice";
-"模型" = "Model";
-"3.1 更准；3.0 更快、更省" = "3.1 is more accurate; 3.0 is faster and cheaper";
 "服务商" = "Provider";
 "纪要、翻译用选中的接口（OpenAI 兼容）" = "Notes and translation use the chosen (OpenAI-compatible) endpoint";
 "添加" = "Add";
