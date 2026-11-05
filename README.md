@@ -186,6 +186,7 @@ Mac 版从源码构建只需要安装 Xcode Command Line Tools（`xcode-select -
 scripts/build.sh            # 编译开发版 → build/Cicada.app（名为 Cicada Dev，可与正式版同时运行）
 open build/Cicada.app
 scripts/package.sh          # 打包正式版 DMG、zip 和 SHA-256 校验值
+scripts/package-dev.sh      # fork：打包开发版；加 -r 顺带发 GitHub pre-release（tag 自动递增）
 ```
 
 代码架构等说明写在 [AGENTS.md](AGENTS.md) 里。官网源码放在 `site/` 目录，由 `scripts/site.py` 生成。历次更新记录见 [CHANGELOG.md](CHANGELOG.md) 或官网的[更新日志页](https://cicada.indaloop.app/changelog/)。
