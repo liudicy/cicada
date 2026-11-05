@@ -235,9 +235,13 @@ struct MenuPanelView: View {
 
             Divider()
 
-            HStack {
-                Button("会议记录") { model.openMainWindow?() }
-                Button(L("导入录音")) { model.importRecording() }
+            HStack(spacing: 14) {
+                Button { model.openMainWindow?() } label: {
+                    Label("会议记录", systemImage: "rectangle.stack")
+                }
+                Button { model.importRecording() } label: {
+                    Label(L("导入录音"), systemImage: "square.and.arrow.down")
+                }
                 Spacer()
                 Button("退出") { NSApp.terminate(nil) }
             }
