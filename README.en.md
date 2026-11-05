@@ -25,6 +25,17 @@
 
 <p align="center"><a href="README.md">简体中文</a> · <a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a></p>
 
+> **This is a personal fork of [wquguru/cicada](https://github.com/wquguru/cicada)**, adding the features listed below (Mac app only so far) and continuously tracking upstream; when upstream ships the same capability, the upstream implementation wins. The fork has no packaged release yet — build from source (see [Development](#development)).
+
+## What this fork adds
+
+- **Cloud speech proofreading**: preset for Xiaomi MiMo (about ¥0.5/hour, or any other OpenAI-compatible audio endpoint). Sentences are proofread as the meeting runs, and a finished meeting can be re-proofread from its 文字记录 page; when proofreading changes the transcript, the notes are regenerated from the new text.
+- **Editable, regenerable notes**: the summary, topics, conclusions and to-dos on the notes page can be edited directly; 重新整理 regenerates the whole notes from the current transcript, asking first if you edited them by hand.
+- **Delete recordings & storage page**: a meeting's 文字记录 page can delete just the recording to free space (transcript and notes stay), and Settings › 存储空间 shows what each meeting takes on disk.
+- **Main window layout**: 开始听 splits into three sidebar entries — online meeting, in-person meeting, import a recording — greyed out while a meeting runs; settings moves to the bottom of the sidebar, and the toolbar only shows live state, elapsed time and 结束 while listening.
+
+> Three features this fork added earlier — in-person meeting recording, importing recordings, and custom AI providers — were officially implemented upstream in v1.1.0, and the fork now uses the upstream implementations.
+
 Cicada works with whatever is playing on your computer, from Zoom, Teams, and Feishu calls to X Spaces, Discord stages, and YouTube livestreams. By listening directly to system audio, it gives you live bilingual subtitles and structured meeting notes without sending bots into the call or asking anyone else to install a thing. And when you need to jump in, just hold the talk key (right `⌥` on the Mac, right `Ctrl` on Windows) to speak and broadcast your translated voice straight into the meeting. On the Mac, speech is recognized on your computer, so audio never leaves it.
 
 <p align="center">
