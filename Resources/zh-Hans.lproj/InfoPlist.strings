@@ -1,5 +1,5 @@
 CFBundleName = "知了";
 CFBundleDisplayName = "知了";
 NSAudioCaptureUsageDescription = "知了需要读取系统正在播放的声音，用于生成实时字幕。";
-NSMicrophoneUsageDescription = "按住快捷键说话时，知了需要麦克风把你的话翻译成对方的语言。";
+NSMicrophoneUsageDescription = "按住快捷键说话时，知了需要麦克风把你的话翻译成对方的语言；听会议室时，麦克风用来听屋里的人说话。";
 NSSpeechRecognitionUsageDescription = "知了需要语音识别权限，把音频转成文字。";

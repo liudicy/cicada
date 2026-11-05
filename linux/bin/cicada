@@ -1,0 +1,5 @@
+#!/bin/sh
+# Starts Cicada from this tree (an install under ~/.local/lib/cicada, or a checkout's linux/).
+# --dev: the dev build (own app id, records in ~/.local/share/cicada-dev, the control socket).
+here="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m cicada.app "$@"

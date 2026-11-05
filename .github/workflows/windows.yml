@@ -1,0 +1,36 @@
+name: windows
+
+# The Windows app (windows/): unit tests on a real Windows runner, then the x64 and ARM64 builds
+# as artifacts. Runners have no sound card, so listening itself is tested in a VM or on a PC.
+on:
+  push:
+    branches: [main]
+    paths: ["windows/**", "Resources/**/Localizable.strings", ".github/workflows/windows.yml"]
+  pull_request:
+    paths: ["windows/**", "Resources/**/Localizable.strings", ".github/workflows/windows.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Unit tests
+        run: |
+          dotnet build windows/tests/Cicada.Tests -o windows/build/tests
+          windows/build/tests/Cicada.Tests.exe
+      - name: Translations
+        run: python windows/scripts/strings.py
+      - name: Build
+        shell: bash
+        run: |
+          for rid in win-x64 win-arm64; do
+            dotnet publish windows/src/Cicada -c Release -r $rid -o windows/build/Cicada-$rid
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cicada-windows
+          path: windows/build/Cicada-win-*

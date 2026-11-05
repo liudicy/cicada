@@ -3,38 +3,8 @@ import AVFoundation
 import AudioToolbox
 import CoreAudio
 import CoreMedia
-import Speech
 
 // MARK: - Audio routing
-
-/// Stateful sample-rate / sample-format converter.
-final class PCMConverter {
-    private var converter: AVAudioConverter?
-
-    func convert(_ input: AVAudioPCMBuffer, to format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        if input.format == format { return input }
-        if converter == nil || converter!.inputFormat != input.format || converter!.outputFormat != format {
-            converter = AVAudioConverter(from: input.format, to: format)
-        }
-        guard let converter else { return nil }
-        let ratio = format.sampleRate / input.format.sampleRate
-        let capacity = AVAudioFrameCount(Double(input.frameLength) * ratio) + 64
-        guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
-        var consumed = false
-        var error: NSError?
-        let status = converter.convert(to: out, error: &error) { _, outStatus in
-            if consumed {
-                outStatus.pointee = .noDataNow
-                return nil
-            }
-            consumed = true
-            outStatus.pointee = .haveData
-            return input
-        }
-        if status == .error || out.frameLength == 0 { return nil }
-        return out
-    }
-}
 
 /// Moves audio off the real-time thread, converts it for the analyzer,
 /// feeds the live transcriber, and keeps a short ring buffer for language detection.
@@ -52,17 +22,22 @@ final class AudioRouter: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.wquguru.cicada.audio", qos: .userInitiated)
     private let converter = PCMConverter()
     private var format: AVAudioFormat?
-    private var continuation: AsyncStream<AnalyzerInput>.Continuation?
+    private var sink: RecognitionStream?
     private var ring: [(buffer: AVAudioPCMBuffer, seconds: Double, voiced: Bool)] = []
     private var ringSeconds = 0.0
-    private let ringLimit = 10.0
+    private var ringLimit = 10.0
+    /// While the language is unknown the audio is kept longer: the right model, once it is known
+    /// or fetched, hears it all again instead of the wrong model's guesses being kept.
+    func holdAudio(_ seconds: Double) {
+        queue.async { [self] in ringLimit = seconds }
+    }
     private var voicedTotal = 0.0
     private var silenceRun = 0.0
     private var sinceGap = 0.0
     /// The last short pause between words, on the analyzer's clock: where it ended and how long it was.
     private var pause: (end: Double, length: Double) = (0, 0)
 
-    /// Experimental voiceprints: the last `voiceLimit` seconds as 16 kHz mono floats, placed on
+    /// Voiceprints (说话人识别): the last `voiceLimit` seconds as 16 kHz mono floats, placed on
     /// the analyzer clock so a result's time range finds its audio.
     private let voiceConverter = PCMConverter()
     private let voiceFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
@@ -89,7 +64,7 @@ final class AudioRouter: @unchecked Sendable {
     }
 
     private func keepVoice(_ mono: AVAudioPCMBuffer) {
-        guard voiceCapture, continuation != nil,
+        guard voiceCapture, sink != nil,
               let b = voiceConverter.convert(mono, to: voiceFormat), let d = b.floatChannelData else { return }
         if voice.isEmpty { voiceStart = fed }
         voice.append(contentsOf: UnsafeBufferPointer(start: d[0], count: Int(b.frameLength)))
@@ -107,8 +82,12 @@ final class AudioRouter: @unchecked Sendable {
     private var recorded = 0.0
     func recordedSeconds() -> Double { queue.sync { recorded } }
 
-    /// Below this RMS the block counts as silence (≈ -40 dBFS).
-    private let voiceThreshold: Float = 0.01
+    /// When a block counts as speech (pauses, language detection, the silence that ends a meeting).
+    private var gate = VoiceGate()
+    func setRoomGate(_ on: Bool) {
+        queue.async { [self] in gate = VoiceGate(adaptive: on) }
+    }
+    func gateThreshold() -> Float { queue.sync { gate.threshold } }
 
     /// Loudest buffer since the last `takeLevel()`, for the level meter.
     private var peak: Float = 0
@@ -131,9 +110,9 @@ final class AudioRouter: @unchecked Sendable {
         let rms = (sum / Float(n)).squareRoot()
         peak = max(peak, rms)
         let seconds = Double(n) / mono.format.sampleRate
-        let voiced = rms >= voiceThreshold
+        let voiced = gate.voiced(rms)
         if voiced {
-            if silenceRun >= 0.12, continuation != nil { pause = (fed, silenceRun) }
+            if silenceRun >= 0.12, sink != nil { pause = (fed, silenceRun) }
             if silenceRun >= Self.gapSeconds { sinceGap = 0 }
             voicedTotal += seconds
             silenceRun = 0
@@ -143,9 +122,9 @@ final class AudioRouter: @unchecked Sendable {
         sinceGap += seconds
 
         guard let format, let converted = converter.convert(mono, to: format) else { return }
-        continuation?.yield(AnalyzerInput(buffer: converted))
+        sink?.append(converted)
         keepVoice(mono)
-        if continuation != nil { fed += seconds }
+        if sink != nil { fed += seconds }
         record(converted)
         ring.append((converted, seconds, voiced))
         ringSeconds += seconds
@@ -171,10 +150,8 @@ final class AudioRouter: @unchecked Sendable {
             recorder = AudioFileWriter.open(AudioFileWriter.partial(url), format: buffer.format)
             if recorder == nil { recordURL = nil; return }
         }
-        do {
-            try recorder?.write(from: buffer)
-            recorded += Double(buffer.frameLength) / buffer.format.sampleRate
-        } catch {}
+        try? recorder?.write(from: buffer)
+        recorded += Double(buffer.frameLength) / buffer.format.sampleRate
     }
 
     /// Seconds of audio given to the current analyzer, replay included: the analyzer's clock. A
@@ -183,11 +160,12 @@ final class AudioRouter: @unchecked Sendable {
     func fedSeconds() -> Double { queue.sync { fed } }
     /// Analyzer clock now, the silence running at the end of it, and the last pause before that.
     func clock() -> (fed: Double, silence: Double, pause: (end: Double, length: Double)) {
-        // Named explicitly: Swift 6.4's diagnostics crash on the unlabelled nested tuple here.
-        queue.sync { (fed: fed, silence: silenceRun, pause: pause) }
+        // The return type spelled out: Swift 6.4 (Xcode 27) crashes inferring this labelled tuple.
+        queue.sync { () -> (fed: Double, silence: Double, pause: (end: Double, length: Double)) in (fed, silenceRun, pause) }
     }
 
-    func attach(format: AVAudioFormat, continuation: AsyncStream<AnalyzerInput>.Continuation, replaySeconds: Double = 0) {
+    func attach(_ stream: RecognitionStream, replaySeconds: Double = 0) {
+        let format = stream.format
         queue.sync {
             fed = 0
             pause = (0, 0)
@@ -206,27 +184,24 @@ final class AudioRouter: @unchecked Sendable {
                     acc += item.seconds
                     replay.append(item.buffer)
                 }
-                for buffer in replay.reversed() { continuation.yield(AnalyzerInput(buffer: buffer)) }
+                for buffer in replay.reversed() { stream.append(buffer) }
                 fed = acc
                 voice = Array(keptVoice.suffix(Int(acc * 16000)))
             }
             self.format = format
-            self.continuation?.finish()
-            self.continuation = continuation
+            self.sink = stream
         }
     }
 
     func detach() {
         queue.sync {
-            continuation?.finish()
-            continuation = nil
+            sink = nil
         }
     }
 
     func reset() {
         queue.sync {
-            continuation?.finish()
-            continuation = nil
+            sink = nil
             ring.removeAll()
             ringSeconds = 0
             voice = []
@@ -249,6 +224,21 @@ final class AudioRouter: @unchecked Sendable {
         }
     }
 
+    /// The last `seconds` of speech with the silences left out: what was said, even when nobody is
+    /// speaking now (a model that arrives after the talk stopped can still check it).
+    func voicedSnapshot(seconds: Double) -> (buffers: [AVAudioPCMBuffer], seconds: Double) {
+        queue.sync {
+            var acc = 0.0
+            var out: [AVAudioPCMBuffer] = []
+            for item in ring.reversed() where item.voiced {
+                if acc >= seconds { break }
+                acc += item.seconds
+                out.append(item.buffer)
+            }
+            return (out.reversed(), acc)
+        }
+    }
+
     func snapshot(seconds: Double) -> [AVAudioPCMBuffer] {
         queue.sync {
             var acc = 0.0
@@ -259,47 +249,6 @@ final class AudioRouter: @unchecked Sendable {
                 out.append(item.buffer)
             }
             return out.reversed()
-        }
-    }
-}
-
-
-enum AudioFileWriter {
-    /// AAC .m4a, mono, at the buffer's sample rate. The processing format must
-    /// match the buffers written to it exactly.
-    static func open(_ url: URL, format: AVAudioFormat) -> AVAudioFile? {
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: format.sampleRate,
-            AVNumberOfChannelsKey: Int(format.channelCount),
-            AVEncoderBitRateKey: 32_000,
-        ]
-        return try? AVAudioFile(forWriting: url, settings: settings,
-                                commonFormat: format.commonFormat, interleaved: format.isInterleaved)
-    }
-
-    /// Meetings are recorded as ADTS (`system.aac`), which stays readable up to the last packet
-    /// if the app is killed; an .m4a is unreadable until it is closed. `finish` turns it into
-    /// the .m4a afterwards (and at launch, for a meeting the app didn't get to close).
-    static func partial(_ url: URL) -> URL { url.deletingPathExtension().appendingPathExtension("aac") }
-
-    /// Rewraps `partial(url)` into `url` without re-encoding, then removes the partial file.
-    /// A partial file next to an .m4a means the last rewrap was cut short: it is done again.
-    /// `until`: seconds to keep from the start (the silent tail of a meeting that ended by itself).
-    nonisolated static func finish(_ url: URL, until: Double? = nil) async {
-        let src = partial(url)
-        guard FileManager.default.fileExists(atPath: src.path) else { return }
-        try? FileManager.default.removeItem(at: url)
-        let asset = AVURLAsset(url: src)
-        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough) else { return }
-        if let until { export.timeRange = CMTimeRange(start: .zero, duration: CMTime(seconds: until, preferredTimescale: 600)) }
-        do {
-            try await export.export(to: url, as: .m4a)
-            try? FileManager.default.removeItem(at: src)
-        } catch {
-            debugLog("audio rewrap failed \(url.lastPathComponent): \(error)")
-            try? FileManager.default.removeItem(at: url)
         }
     }
 }

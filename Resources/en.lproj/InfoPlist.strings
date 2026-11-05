@@ -1,5 +1,5 @@
 CFBundleName = "Cicada";
 CFBundleDisplayName = "Cicada";
 NSAudioCaptureUsageDescription = "Cicada reads the sound your Mac is playing to make live subtitles.";
-NSMicrophoneUsageDescription = "While you hold the talk key, Cicada uses the microphone to translate what you say into the other side's language.";
+NSMicrophoneUsageDescription = "While you hold the talk key, Cicada uses the microphone to translate what you say into the other side's language. When it listens to a meeting in the room, the microphone hears the people there.";
 NSSpeechRecognitionUsageDescription = "Cicada uses speech recognition to turn audio into text.";

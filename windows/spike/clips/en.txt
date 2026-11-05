@@ -1,0 +1,8 @@
+Okay, let's get started. Thanks everyone for joining this morning.
+First item is the Q4 launch. Priya, where are we on the payment integration?
+We finished the Stripe migration last Thursday. The error rate dropped from two percent to zero point three.
+That's great. What's still blocking the release?
+Mostly the Android build. Kenji found a crash on Samsung devices running Android fourteen.
+Can we ship on November twenty first if that's fixed by Monday?
+I think so, as long as QA signs off by Wednesday.
+Alright, let's lock that in. Marcus, please send the release notes to the design team today.

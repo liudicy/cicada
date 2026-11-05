@@ -1,0 +1,62 @@
+name: android
+
+# The Android app (android/): the engines' unit tests on the JVM, the translation check, then the
+# dev APK as an artifact, and the release build so a tag doesn't find it broken. Run by hand with
+# sign on, it also signs with the release key from the secrets and checks it, uploading nothing.
+# Listening itself is tested in the emulator or on a phone.
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", "Resources/**/Localizable.strings", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", "Resources/**/Localizable.strings", ".github/workflows/android.yml"]
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: "Also sign with the release key and check it (nothing is uploaded)"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.8.2"
+      - name: Unit tests
+        run: |
+          gradle --console=plain -q :cli:installDist
+          JAVA_OPTS="-Dcicada.resources=$PWD/../Resources -Dcicada.androidStrings=$PWD/app/src/main/strings" cli/build/install/cicada-cli/bin/cicada-cli test
+      - name: Translations
+        run: python3 scripts/strings.py
+      - name: Build
+        run: gradle --console=plain -q :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cicada-android-dev
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Release build
+        run: gradle --console=plain -q :app:assembleRelease
+      # The release workflow's signing, tried before a tag needs it. The signed APK is deleted: the
+      # repo is public, and an artifact would be a release-signed build that was never released.
+      - name: Sign with the release key
+        if: github.event_name == 'workflow_dispatch' && inputs.sign
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          CICADA_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          [[ -n "$ANDROID_KEYSTORE_BASE64" ]] || { echo "no ANDROID_KEYSTORE_BASE64 secret (android/scripts/keystore.sh --github)"; exit 1; }
+          export CICADA_KEYSTORE="$RUNNER_TEMP/release.jks"
+          base64 -d <<< "$ANDROID_KEYSTORE_BASE64" > "$CICADA_KEYSTORE"
+          gradle --console=plain -q :app:assembleRelease
+          scripts/check-release.sh app/build/outputs/apk/release/app-release.apk
+          rm -f "$CICADA_KEYSTORE" app/build/outputs/apk/release/app-release.apk

@@ -1,5 +1,10 @@
 name: release
 
+# One tag, one version for every platform (VERSION), and every release builds and attaches all of
+# them (the CHANGELOG.md section has a group for each since 1.1.2; scripts/release_platforms.sh reads
+# them), so releases/latest always has every app. Android ships only once its signing key is in the
+# secrets (android/scripts/keystore.sh --github). Each platform's tests run before its build, and
+# the release is left as a draft: nobody's update check sees it until scripts/publish-release.sh.
 on:
   push:
     tags: ["v*.*.*"]
@@ -17,31 +22,235 @@ env:
   TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
-  release:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      mac: ${{ steps.platforms.outputs.mac }}
+      windows: ${{ steps.platforms.outputs.windows }}
+      linux: ${{ steps.platforms.outputs.linux }}
+      android: ${{ steps.platforms.outputs.android }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Check the tag matches VERSION
+        run: |
+          VERSION=$(tr -d '[:space:]' < VERSION)
+          [[ "v$VERSION" == "$TAG" ]] || { echo "tag $TAG != VERSION $VERSION"; exit 1; }
+      - id: platforms
+        name: Platforms in this release
+        env:
+          HAS_ANDROID_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          shipped=$(scripts/release_platforms.sh "${TAG#v}")
+          if grep -qx android <<< "$shipped" && [[ "$HAS_ANDROID_KEY" != true ]]; then
+            echo "::warning::Android left out: no ANDROID_KEYSTORE_BASE64 secret (android/scripts/keystore.sh --github)"
+            shipped=$(grep -vx android <<< "$shipped" || true)
+          fi
+          echo "$shipped"
+          grep -qxE "mac|windows|linux|android" <<< "$shipped" || { echo "nothing to build"; exit 1; }
+          for p in mac windows linux android; do
+            grep -qx "$p" <<< "$shipped" && echo "$p=true" >> "$GITHUB_OUTPUT" || echo "$p=false" >> "$GITHUB_OUTPUT"
+          done
+
+  mac:
+    needs: plan
+    if: needs.plan.outputs.mac == 'true'
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
-      - name: Check the tag matches Info.plist
-        run: |
-          PLIST=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)
-          [[ "v$PLIST" == "$TAG" ]] || { echo "tag $TAG != Info.plist $PLIST"; exit 1; }
+      - name: Unit tests
+        run: scripts/test.sh
       - name: Build and package
         run: scripts/package.sh
         env:
           BUILD_NUMBER: ${{ github.run_number }}
-      - name: Publish the release
-        # A tag pushed again (history rewritten, tag moved) must not fail on the existing release:
-        # replace its files and notes instead.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: |
+            build/Cicada-*.dmg
+            build/Cicada-*.zip
+
+  windows:
+    needs: plan
+    if: needs.plan.outputs.windows == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Unit tests
         run: |
-          scripts/release_notes.sh "${TAG#v}" > build/notes.md
+          dotnet build windows/tests/Cicada.Tests -o windows/build/tests
+          windows/build/tests/Cicada.Tests.exe
+      - name: Translations
+        run: python windows/scripts/strings.py
+      - name: Build and zip
+        shell: pwsh
+        run: |
+          $v = "$env:TAG".TrimStart("v")
+          New-Item -ItemType Directory -Force dist | Out-Null
+          foreach ($pair in @(@("win-x64", "x64"), @("win-arm64", "ARM64"))) {
+            $out = "windows/build/Cicada-$($pair[0])"
+            dotnet publish windows/src/Cicada -c Release -r $pair[0] -o $out -p:DebugType=embedded
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+            # The zip stays: older Cicadas only look for it when checking for updates.
+            Compress-Archive -Path "$out/*" -DestinationPath "dist/Cicada-$v-Windows-$($pair[1]).zip"
+            # The download for people: the same exe, which installs itself (Install.cs).
+            Copy-Item "$out/Cicada.exe" "dist/Cicada-Setup$(if ($pair[1] -eq 'ARM64') { '-arm64' }).exe"
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/*.zip
+            dist/*.exe
+
+  # The voiceprint library (说话人识别) for each architecture, on 22.04 so it loads on 22.04 and 24.04.
+  linux-native:
+    needs: plan
+    if: needs.plan.outputs.linux == 'true'
+    strategy:
+      matrix:
+        runner: [ubuntu-22.04, ubuntu-22.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - run: linux/native/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-${{ matrix.runner }}
+          path: linux/native/out/libcicada-voice-*.so
+
+  linux:
+    needs: [plan, linux-native]
+    if: needs.plan.outputs.linux == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: voice-*
+          path: linux/native/out
+          merge-multiple: true
+      - name: Build
+        # ffmpeg turns the sample meeting into WAV (no afconvert on Linux).
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+          linux/scripts/build.sh
+          mkdir -p dist && cp linux/build/cicada-linux-*.tar.gz "dist/Cicada-${TAG#v}-Linux.tar.gz"
+      # What a user gets, as the linux workflow checks it on every push: the tarball installed by its
+      # install.sh, unit tests against the shipped voiceprint library, then the GTK app under Xvfb.
+      - name: Desktop libraries
+        run: sudo apt-get install -y -q python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 libpulse0 pulseaudio pulseaudio-utils xvfb
+      - name: Install
+        run: |
+          mkdir -p "$RUNNER_TEMP/install" && tar -xzf dist/*.tar.gz -C "$RUNNER_TEMP/install"
+          sh "$RUNNER_TEMP/install/cicada-linux/install.sh"
+          test -x ~/.local/lib/cicada/bin/cicada
+      - name: Unit tests against the shipped voiceprint library
+        working-directory: linux
+        run: |
+          lib="$HOME/.local/lib/cicada/lib/libcicada-voice-$(uname -m).so"
+          test -f "$lib"
+          CICADA_VOICE_LIB="$lib" scripts/test.sh
+      - name: Smoke test of the installed app
+        run: |
+          cp linux/scripts/smoke.sh linux/scripts/cicadactl ~/.local/lib/cicada/bin/
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=speakers
+          pactl set-default-sink speakers
+          SMOKE_VOICES=1 xvfb-run -a ~/.local/lib/cicada/bin/smoke.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.tar.gz
+
+  # Signed with the one release key; a debug-signed APK fails the check.
+  android:
+    needs: plan
+    if: needs.plan.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.8.2"
+      - name: Unit tests
+        run: |
+          gradle --console=plain -q :cli:installDist
+          JAVA_OPTS="-Dcicada.resources=$PWD/../Resources -Dcicada.androidStrings=$PWD/app/src/main/strings" cli/build/install/cicada-cli/bin/cicada-cli test
+          python3 scripts/strings.py
+      - name: Build and sign
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          CICADA_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          export CICADA_KEYSTORE="$RUNNER_TEMP/release.jks"
+          base64 -d <<< "$ANDROID_KEYSTORE_BASE64" > "$CICADA_KEYSTORE"
+          gradle --console=plain -q :app:assembleRelease
+          mkdir -p ../dist && cp app/build/outputs/apk/release/app-release.apk "../dist/Cicada-${TAG#v}-Android.apk"
+          scripts/check-release.sh "../dist/Cicada-${TAG#v}-Android.apk"
+          rm -f "$CICADA_KEYSTORE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*.apk
+
+  publish:
+    needs: [plan, mac, windows, linux, android]
+    # Skipped platforms are fine; a failed or cancelled one stops the release.
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        # A new release is a draft: download it, try it, then scripts/publish-release.sh makes it public
+        # (and latest only when it has the Mac app: Macs on 1.0.0 read releases/latest). A tag pushed
+        # again (history rewritten, tag moved) must not fail on the existing release: replace its files
+        # and notes instead, leaving it a draft or public as it was.
+        run: |
+          rm -f dist/libcicada-voice-*.so  # the voiceprint libraries are inside the Linux tarball, not files of their own
+          (cd dist && sha256sum -- * > checksums.txt)
+          cat dist/checksums.txt
+          scripts/release_notes.sh "${TAG#v}" > notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" build/Cicada-*.dmg build/Cicada-*.zip build/checksums.txt --clobber
-            gh release edit "$TAG" --notes-file build/notes.md
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" build/Cicada-*.dmg build/Cicada-*.zip build/checksums.txt \
-              --title "知了 Cicada ${TAG#v}" --notes-file build/notes.md
+            gh release create "$TAG" dist/* --draft --title "知了 Cicada ${TAG#v}" --notes-file notes.md
+            echo "::notice::Draft $TAG is ready: try its files, then scripts/publish-release.sh ${TAG#v}"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
+          # The install notes for what this release carries (Android can be left out by plan).
+          PLATFORMS: >-
+            ${{ needs.plan.outputs.mac == 'true' && 'mac' || '' }}
+            ${{ needs.plan.outputs.windows == 'true' && 'windows' || '' }}
+            ${{ needs.plan.outputs.linux == 'true' && 'linux' || '' }}
+            ${{ needs.plan.outputs.android == 'true' && 'android' || '' }}

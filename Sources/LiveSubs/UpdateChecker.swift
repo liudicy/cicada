@@ -1,7 +1,10 @@
+import AppKit
 import Foundation
 
-/// Checks GitHub Releases once a day for a version newer than the running one.
-/// Failures (offline, rate-limited, or the repository not public: the API answers 404) are silent.
+/// Checks GitHub Releases for a version newer than the running one: at launch, every 4 hours,
+/// after the Mac wakes and when the menu bar panel opens (those two only once the last check is an
+/// hour old). Failures (offline, rate-limited, or the repository not public: the API answers 404)
+/// are silent.
 @MainActor
 final class UpdateChecker {
     struct Update: Equatable {
@@ -17,12 +20,26 @@ final class UpdateChecker {
 
     static let repository = URL(string: "https://github.com/wquguru/cicada")!
 
-    /// `CICADA_UPDATE_FEED` (or the `updateFeed:` debug command) points at another release JSON;
-    /// a file:// URL works, for testing.
+    /// `CICADA_UPDATE_FEED` (or the `updateFeed:` debug command) points at another release JSON,
+    /// a list or a single release; a file:// URL works, for testing.
+    /// The list, not `releases/latest`: every platform shares one version, and a release that only
+    /// ships Windows, Android or Linux has no Mac zip, so the newest Mac release may be further down.
     var feed = ProcessInfo.processInfo.environment["CICADA_UPDATE_FEED"].flatMap(URL.init(string:))
-        ?? URL(string: "https://api.github.com/repos/wquguru/cicada/releases/latest")!
+        ?? URL(string: "https://api.github.com/repos/wquguru/cicada/releases?per_page=20")!
     private let onUpdate: (Update?) -> Void
     private var timer: Timer?
+    private var wakeObserver: Any?
+    private var checking = false
+
+    /// How often a running app checks, and how old the last check must be before waking or
+    /// opening the panel checks again. GitHub allows 60 anonymous API calls an hour.
+    static let every: TimeInterval = 4 * 60 * 60
+    static let stale: TimeInterval = 60 * 60
+
+    /// The last time the feed answered, kept across launches.
+    private(set) var lastChecked = UserDefaults.standard.object(forKey: "updateLastChecked") as? Date {
+        didSet { UserDefaults.standard.set(lastChecked, forKey: "updateLastChecked") }
+    }
 
     init(onUpdate: @escaping (Update?) -> Void) {
         self.onUpdate = onUpdate
@@ -30,30 +47,70 @@ final class UpdateChecker {
 
     func start() {
         Task { await check() }
-        timer = Timer.scheduledTimer(withTimeInterval: 24 * 60 * 60, repeats: true) { [weak self] _ in
-            Task { await self?.check() }
+        // A short tick that checks when due, not one 4-hour timer: a timer doesn't count while
+        // the Mac sleeps, so a laptop that is often closed would hardly ever check.
+        timer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in
+            Task { await self?.checkIfDue(after: Self.every) }
         }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification,
+                                                                          object: nil, queue: .main) { [weak self] _ in
+            // The network takes a moment to come back after waking.
+            Task { try? await Task.sleep(for: .seconds(15)); await self?.checkIfDue(after: Self.stale) }
+        }
+    }
+
+    /// Checks only when the last successful check is at least `age` old.
+    func checkIfDue(after age: TimeInterval) async {
+        guard Self.due(last: lastChecked, now: Date(), after: age) else { return }
+        await check()
+    }
+
+    nonisolated static func due(last: Date?, now: Date, after age: TimeInterval) -> Bool {
+        guard let last else { return true }
+        // A clock set back leaves `last` in the future: check rather than wait for it.
+        return now.timeIntervalSince(last) >= age || last > now
     }
 
     /// Returns false when the feed couldn't be reached or answered with something unexpected.
     @discardableResult
     func check() async -> Bool {
+        guard !checking else { return true }
+        checking = true
+        defer { checking = false }
         var request = URLRequest(url: feed)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode ?? 200 == 200,
-              let release = try? JSONDecoder().decode(Release.self, from: data),
-              let url = URL(string: release.html_url) else { return false }
-        let latest = release.tag_name.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
+              let releases = Self.decode(data) else { return false }
         let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-        let zip = release.assets.first { $0.name.hasPrefix("Cicada-") && $0.name.hasSuffix("-macOS-AppleSilicon.zip") }
-        let checksums = release.assets.first { $0.name == "checksums.txt" }
-        let update = Update(version: latest, url: url,
-                            zip: zip.flatMap { URL(string: $0.browser_download_url) },
-                            checksums: checksums.flatMap { URL(string: $0.browser_download_url) },
-                            size: zip?.size ?? 0)
-        onUpdate(Self.isNewer(latest, than: current) ? update : nil)
+        let update = Self.newestMac(in: releases)
+        lastChecked = Date()
+        debugLog("update: checked, latest Mac \(update?.version ?? "none"), running \(current)")
+        onUpdate(update.flatMap { Self.isNewer($0.version, than: current) ? $0 : nil })
         return true
+    }
+
+    nonisolated static func decode(_ data: Data) -> [Release]? {
+        let decoder = JSONDecoder()
+        return (try? decoder.decode([Release].self, from: data))
+            ?? (try? decoder.decode(Release.self, from: data)).map { [$0] }
+    }
+
+    /// The newest published release that ships the Mac app. A release without the Mac zip only
+    /// carries other platforms (the Mac app had no change), so it is skipped, not offered.
+    nonisolated static func newestMac(in releases: [Release]) -> Update? {
+        let shipped = releases.compactMap { release -> Update? in
+            guard release.draft != true, release.prerelease != true,
+                  let url = URL(string: release.html_url),
+                  let zip = release.assets.first(where: { $0.name.hasPrefix("Cicada-") && $0.name.hasSuffix("-macOS-AppleSilicon.zip") })
+            else { return nil }
+            let checksums = release.assets.first { $0.name == "checksums.txt" }
+            return Update(version: release.tag_name.trimmingCharacters(in: CharacterSet(charactersIn: "v")), url: url,
+                          zip: URL(string: zip.browser_download_url),
+                          checksums: checksums.flatMap { URL(string: $0.browser_download_url) },
+                          size: zip.size ?? 0)
+        }
+        return shipped.max { isNewer($1.version, than: $0.version) }
     }
 
     /// Compares dotted numeric versions: "2.10.0" is newer than "2.9.1".
@@ -67,13 +124,15 @@ final class UpdateChecker {
         return false
     }
 
-    private struct Release: Decodable {
+    struct Release: Decodable {
         let tag_name: String
         let html_url: String
         let assets: [Asset]
+        var draft: Bool? = nil
+        var prerelease: Bool? = nil
     }
 
-    private struct Asset: Decodable {
+    struct Asset: Decodable {
         let name: String
         let browser_download_url: String
         let size: Int?

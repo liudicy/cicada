@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for the pure parts, as a plain console runner: no test framework packages. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Cicada.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="../../../Resources/**/Localizable.strings" LinkBase="Resources" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Cicada/Strings/**/Windows.strings" LinkBase="Resources" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="../../src/Cicada.Core/Cicada.Core.csproj" />
+  </ItemGroup>
+</Project>

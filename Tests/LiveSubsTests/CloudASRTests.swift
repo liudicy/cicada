@@ -36,13 +36,4 @@ import Testing
         // Nothing useful after stripping: keep the cloud text rather than blank the line.
         #expect(CloudASRClient.stripInventedEnumeration("10. ", original: "hello") == "10. ")
     }
-
-    @Test func providerBaseURLGetsATrailingSlash() {
-        #expect(AIProvider(id: "x", name: "X", baseURL: "https://a.example/v1", model: "m").base
-            == URL(string: "https://a.example/v1/"))
-        #expect(AIProvider(id: "x", name: "X", baseURL: "https://a.example/v1/", model: "m").base
-            == URL(string: "https://a.example/v1/"))
-        #expect(AIProvider.ling.isLing)
-        #expect(AIProvider.ling.base == URL(string: "https://api.ant-ling.com/v1/"))
-    }
 }

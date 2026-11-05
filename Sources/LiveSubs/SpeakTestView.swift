@@ -144,7 +144,10 @@ struct SpeakTestView: View {
     }
 
     private func voiceName(_ r: SpeakTestResult) -> String {
-        let v = r.voice.hasPrefix("ming") ? "Ming" : r.voice.contains("failed") ? L("本机（Ming 未成功）") : L("本机声音")
+        // "ming" / "zenmux", or "system (zenmux failed)" when the stream fell back to the Mac's voice.
+        let who = r.voice.contains("(") ? String(r.voice.drop { $0 != "(" }.dropFirst().prefix { $0 != " " }) : r.voice
+        let cloud = who == "ming" ? "Ming" : AIProvider.named(who).name
+        let v = r.voice.contains("failed") ? L("本机（\(cloud) 失败）") : r.voice.hasPrefix("system") ? L("本机声音") : cloud
         return "\(v) → \(r.outputName)"
     }
 

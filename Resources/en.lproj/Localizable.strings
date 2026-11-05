@@ -1,57 +1,93 @@
+/* AIProviders */
+"更准" = "More accurate";
+"更快、更省" = "Faster, cheaper";
+"女" = "Female";
+"男" = "Male";
+"和 Ling 同款" = "Same as Ling";
+"中文好" = "Great at Chinese";
+"效果和价格最均衡" = "Best balance of quality and price";
+"更省" = "Cheaper";
+"够用、更省" = "Good enough, cheaper";
+"自定义服务" = "Custom service";
+
 /* AISettings */
-"一小时会议约 ¥0.15–1（目前优惠价）。发出去的只有文字（用你自己的声音时还有那段录音），语音识别留在本机。" = "About ¥0.15–1 per hour of meeting (current discount pricing). Only text is sent (plus your voice sample if you use your own voice); speech recognition stays on this Mac.";
-"发出去的只有文字（用你自己的声音时还有那段录音）；服务商的计费与隐私政策见其官网。" = "Only text goes out (plus that recording when your own voice is used); see the provider's site for pricing and privacy.";
-"纪要和翻译" = "Notes and Translation";
-"整句翻译和实时纪要都走这里选的服务商；不填 key 时翻译照常可用（Google、本机）" = "Sentence translation and live notes use the provider chosen here; without a key, translation still works (Google, on-device).";
-"语音识别校对" = "Speech Proofreading";
-"用在哪里" = "Where it's used";
-"模型" = "Model";
-"3.1 更准；3.0 更快、更省" = "3.1 is more accurate; 3.0 is faster and cheaper";
+"现在能用的" = "What works now";
+"语音识别校对" = "Speech proofreading";
+"用 %@" = "Uses %@";
 "实时纪要" = "Live notes";
-"用 %@" = "Via %@";
 "需要 key" = "Needs key";
 "会中每 45 秒更新" = "Updated every 45 s during a meeting";
-"在上面填好服务商 key 后可用" = "Available once the provider key above is filled in";
+"填好 key 后可用" = "Available once a key is set";
 "翻译" = "Translation";
-"整句用选中的服务商；不行时换 Google、本机" = "Whole sentences via the chosen provider; Google or on-device as fallback";
+"整句用它；不行时换 Google、本机" = "Used for full sentences; falls back to Google, then on-device";
+"整句用它；不行时换 Google" = "Used for full sentences; falls back to Google";
 "没有 key 时照常可用" = "Works without a key";
-"语音识别" = "Speech recognition";
-"云端校对" = "Cloud check";
+"同传声音" = "Interpreting voice";
 "本机" = "On-device";
-"整句再请云端识别一遍，记录更准" = "Each sentence re-checked in the cloud for a more accurate record";
+"你自己的声音" = "Your own voice";
+"录一段，让对方听到你的音色" = "Record a sample so others hear your voice";
+"只有 Ling" = "Ling only";
+"换用 Ling 才有" = "Switch to Ling to use";
+"语音识别" = "Speech recognition";
+"云端校对" = "Cloud proofread";
+"整句再请云端识别一遍，记录更准" = "Each sentence is re-recognized in the cloud for a more accurate record";
 "更快，不花钱" = "Faster, and free";
-"同声传译的声音" = "Interpreting voice";
-"Ming 的声音或你自己的声音" = "A Ming voice or your own voice";
-"没有 Ling key 时用本机声音" = "Without a Ling key the Mac's voice speaks";
-"去选声音" = "Choose voice";
-"服务商" = "Provider";
-"Ling 或任何 OpenAI 兼容接口" = "Ling or any OpenAI-compatible endpoint";
-"添加" = "Add";
-"保存" = "Save";
-"取消" = "Cancel";
-"名称" = "Name";
-"接口地址" = "Endpoint";
-"删除服务商" = "Remove provider";
-"在 Ling 开放平台点“创建令牌”，复制以 sk- 开头的那串。" = "On the Ling platform, click “Create token” and copy the string that starts with sk-.";
-"填入 %@ 的 API key。" = "Paste your %@ API key.";
-"打开 Ling 开放平台 ↗" = "Open the Ling platform ↗";
+"自己选模型" = "Choose models yourself";
+"模型" = "Model";
+"3.1 更准；3.0 更快、更省" = "3.1 is more accurate; 3.0 is faster and cheaper";
+"文字模型" = "Text model";
+"纪要和整句翻译" = "Notes and sentence translation";
+"声音模型" = "Voice model";
+"同传念给对方" = "Speaks to the room when interpreting";
+"一小时会议约 ¥0.15–1（目前优惠价）。发出去的只有文字（用你自己的声音时还有那段录音），语音识别留在本机。" = "About ¥0.15–1 per hour of meeting (current discount pricing). Only text is sent (plus your voice sample if you use your own voice); speech recognition stays on this Mac.";
+"按所选模型计费。发出去的只有文字，语音识别留在本机。" = "Billed by chosen model. Only text is sent; speech recognition stays on-device.";
+"在 %@ 创建 key，复制后粘贴到这里。" = "Create a key on %@, then copy and paste it here.";
+"打开 %@ ↗" = "Open %@ ↗";
+"还没填好" = "Incomplete";
 "还没填 API key" = "No API key yet";
 "正在检查…" = "Checking…";
 "已连接" = "Connected";
 "这个 key 用不了" = "This key doesn't work";
 "暂时连不上" = "Can't connect right now";
 "%@ · 响应约 %@ 秒" = "%1$@ · responds in about %2$@ s";
-"%@ 提示此令牌无效，请检查是否复制完整，或重新创建一个" = "%@ says this token is invalid. Check it was copied in full, or create a new one";
+"%@ 提示 key 无效，请检查是否复制完整，或重新创建一个" = "%@ says the key is invalid. Check if it's copied completely, or create a new one.";
 "不填 key 时，字幕和翻译仍可正常使用" = "Subtitles and translation work without a key";
 "更换" = "Change";
 "重试" = "Retry";
 "保存并检查" = "Save and check";
-"只存在这台 Mac 上（只有你的账户能读），只发给 Ling（ant-ling.com）" = "Stored only on this Mac, sent only to Ling (ant-ling.com)";
-"只存在这台 Mac 上（只有你的账户能读），只发给 %@" = "Stored only on this Mac (readable by your account alone) and sent only to %@";
+"取消" = "Cancel";
+"本机服务可不填" = "Optional for local services";
 "移除" = "Remove";
-"每句说完后，把这句的声音发给云端模型再识别一遍，用更准的文字替换记录里的原文并重译；实时字幕仍是本机识别。" = "After each sentence, its audio goes to a cloud model for a second, more accurate pass: the record's text is replaced and re-translated. Live subtitles stay on-device.";
-"去小米 MiMo 开放平台领 key ↗" = "Get a key on the Xiaomi MiMo platform ↗";
-"只发句子的录音（小米 MiMo 约 ¥0.5/小时）。key 只存在这台 Mac 上。" = "Only sentence audio goes out (Xiaomi MiMo, about ¥0.5/hour). The key stays on this Mac.";
+"只存在这台 Mac 上（只有你的账户能读），只发给 %@" = "Stored only on this Mac (readable only by your account) and sent only to %@";
+"只存在这台 Mac 上（只有你的账户能读），只发给 %@（%@）" = "Stored only on this Mac (readable only by your account) and sent only to %@ (%@)";
+"地址需用 https，仅 localhost 可用 http。" = "URL must use https. http is only allowed for localhost.";
+"地址" = "URL";
+"例如 qwen3:14b" = "e.g. qwen3:14b";
+"你填的地址" = "the URL you entered";
+"Ming 的声音" = "Ming's voice";
+"没有 key 时用本机声音" = "Uses the Mac's voice without a key";
+"没填声音模型，用本机声音" = "No voice model set; using on-device voice";
+"%@ 暂不能出声音，用本机声音" = "%@ doesn't support voice yet; using on-device voice";
+"声音（可选）" = "Voice (optional)";
+"需支持 /audio/speech；不填则用本机声音。" = "Needs /audio/speech; leave blank to use the on-device voice.";
+"例如 kokoro" = "e.g. kokoro";
+"声音" = "Voice";
+"例如 af_heart" = "e.g. af_heart";
+"跟上面一样" = "Same as above";
+"每句说完后，把这句的声音发给云端模型再识别一遍，用更准的文字替换记录里的原文并重译；实时字幕仍是本机识别。" = "After each sentence, its audio is sent to a cloud model to be recognized again; the more accurate text replaces the original in the record and is retranslated. Live captions still use on-device recognition.";
+"去小米 MiMo 开放平台领 key ↗" = "Get a key from the Xiaomi MiMo platform ↗";
+"接口地址" = "Endpoint";
+"保存" = "Save";
+"只发句子的录音（小米 MiMo 约 ¥0.5/小时）。key 只存在这台 Mac 上。" = "Only sentence audio is sent (Xiaomi MiMo ≈ ¥0.5/hour). The key stays on this Mac.";
+"其他（兼容 OpenAI）" = "Other (OpenAI-compatible)";
+"（推荐）" = "(Recommended)";
+"模型名" = "Model name";
+"好" = "OK";
+"推荐" = "Recommended";
+"全部 %lld 个" = "All %lld";
+"填其他模型名…" = "Enter another model name…";
+"其他" = "Other";
+"选一个" = "Choose one";
 
 /* AboutPanel */
 "把 Mac 正在播放的声音变成实时双语字幕和会议纪要" = "Live bilingual subtitles and meeting notes from whatever your Mac is playing";
@@ -68,6 +104,10 @@
 "隐藏其他" = "Hide Others";
 "全部显示" = "Show All";
 "退出 %@" = "Quit %@";
+"文件" = "File";
+"导入录音或视频…" = "Import Recording or Video…";
+"停止转写" = "Stop Transcribing";
+"会议记录" = "Meetings";
 "纪要" = "Notes";
 "停止记录" = "Stop Recording";
 "立即更新纪要" = "Update Notes Now";
@@ -75,7 +115,6 @@
 "复制纪要" = "Copy Notes";
 "导出" = "Export";
 "SRT 字幕…" = "SRT Subtitles…";
-"会议记录" = "Meetings";
 "显示" = "Display";
 "字幕条" = "Subtitle bar";
 "不显示" = "None";
@@ -101,33 +140,19 @@
 "反馈问题…" = "Report an Issue…";
 "开始记录" = "Start Recording";
 "安装 %@ 并重新打开" = "Install %@ and Reopen";
-"有新版本 %@" = "Version %@ is available";
-"当前版本 %@。安装后会自动重新打开。" = "You have %@. The app reopens after installing.";
-"安装并重新打开" = "Install and Reopen";
-"更新说明" = "Release Notes";
-"稍后" = "Later";
-"已是最新版本" = "You’re up to date";
-"当前版本 %@。" = "You have %@.";
-"暂时无法检查更新" = "Couldn’t check for updates";
-"连不上 GitHub，请稍后再试。" = "GitHub can’t be reached. Try again later.";
 
 /* AppModel */
 "准备就绪" = "Ready";
+"会议室 · %@" = "Room · %@";
+"%@ 转好了" = "%@ is transcribed";
+"%@ · %lld 句" = "%@ · %lld lines";
+"，正在整理纪要" = ", writing notes";
 "你正在说…" = "You're speaking…";
 "你：%@" = "You: %@";
 "结束这场会议？" = "End this meeting?";
 "已记录 %@ · %lld 句。结束后停止收听，并整理一份完整版纪要。" = "Recorded %@ · %lld lines. Ending stops listening and writes the full notes.";
 "结束会议" = "End Meeting";
 "继续记录" = "Keep Recording";
-"选择会议录音文件" = "Choose a meeting recording";
-"导入失败" = "Import Failed";
-"好" = "OK";
-"这个音频文件读不了，换 m4a、wav 或 mp3 再试" = "This audio file can't be read. Try m4a, wav, or mp3.";
-"没有在这段录音里听到说话声" = "No speech was heard in this recording.";
-"本机不支持识别%@，或语音模型下载失败" = "This Mac can't recognize %@, or the speech model failed to download.";
-"重新整理纪要？" = "Rewrite the notes?";
-"这场纪要手工修改过，重新整理会用当前文字记录生成的内容覆盖你的修改。" = "You edited these notes by hand. Rewriting them from the current transcript will replace your edits.";
-"重新整理" = "Rewrite";
 "右 ⌥ 只能用于“按住说话”" = "Right ⌥ can only be used for “Hold to talk”";
 "与另一个快捷键冲突" = "Conflicts with the other shortcut";
 "%@ 是系统快捷键，换一个吧" = "%@ is a system shortcut; choose another";
@@ -136,34 +161,41 @@
 "%@ 已挂断" = "%@ hung up";
 "已经 %lld 分钟没人说话" = "No one has spoken for %lld min";
 "%lld 秒后结束会议并整理纪要" = "Ending in %lld s and writing up the notes";
-"删除这场会议的录音？" = "Delete this meeting's recordings?";
-"可释放 %@。文字记录和纪要都会保留；删除后不能再云端校对，录音也找不回来。" = "Frees %@. The transcript and notes are kept; afterwards cloud proofreading is no longer possible and the recordings can't be recovered.";
-"删除录音" = "Delete Recordings";
+"%@ 已改成 %@" = "%1$@ is now %2$@";
+"%@ 已并入 %@" = "%1$@ merged into %2$@";
+"%@ 这句已改给 %@" = "%1$@ line moved to %2$@";
+"删除这场会议的录音？" = "Delete this meeting's recording?";
+"可释放 %@。文字记录和纪要都会保留；删除后不能再云端校对，录音也找不回来。" = "Frees %@. The transcript and notes stay; after deletion cloud proofreading is no longer possible and the recording can't be recovered.";
+"删除录音" = "Delete recording";
+"重新整理纪要？" = "Regenerate the notes?";
+"这场纪要手工修改过，重新整理会用当前文字记录生成的内容覆盖你的修改。" = "These notes were edited by hand; regenerating from the current transcript will overwrite your edits.";
+"重新整理" = "Regenerate";
+"导入" = "Import";
 "欢迎使用%@" = "Welcome to %@";
 "设置" = "Settings";
+"有新版本 %@" = "Version %@ is available";
 "正在记录会议" = "A meeting is being recorded";
 "退出会结束这场记录，已记下的内容会保存。" = "Quitting ends this recording. What has been recorded so far is saved.";
 "退出" = "Quit";
 
 /* Diagnostics */
 "%@ %@ 诊断  %@" = "%1$@ %2$@ diagnostics  %3$@";
-"模型 %@" = "Model %@";
 "本场 %.0f 分钟" = "This meeting %.0f min";
 "说完到出字幕 " = "Speech end → subtitle ";
 "识别定稿 " = "Final transcript ";
 "翻译 " = "Translation ";
-"同声传译（松开到译好）" = "Interpreting (release → translated) ";
-"单轮纪要耗时 " = "Notes round ";
+"同声传译（松开到对方听到）" = "Interpreting (release → heard) ";
 "翻译来源 " = "Translated by ";
 "换后备 " = "Fallbacks ";
 "无" = "none";
-"Ling 请求 %d 次 · 排队最久 %.2fs · token %d/%d" = "Ling requests: %d · longest queue %.2fs · tokens %d/%d";
+"AI 请求 %d 次 · 排队最久 %.2fs · token %d/%d" = "AI requests: %d · longest queue %.2fs · tokens %d/%d";
+
+/* DiagnosticsView */
 "有人说话后，这里会显示每句话的耗时明细" = "Each sentence's timing shows here once someone speaks";
 "这场会议 · %lld 分钟 · %lld 句 · 同声传译 %lld 次" = "This meeting · %lld min · sentences: %lld · interpreted: %lld";
 "开始聆听后，这里会显示每句话的耗时明细" = "Once listening starts, the timing of every sentence shows here";
-"说完到上屏" = "Speech end → on screen";
-"识别定稿" = "Final transcript";
-"纪要一轮" = "Notes round";
+"对方说完 → 你看到字幕" = "They finish → you see subtitles";
+"你说完 → 对方听到" = "You finish → they hear you";
 "只记时间和次数，不存字幕原文" = "Only timings and counts are recorded, never the words";
 "已复制" = "Copied";
 "复制诊断信息" = "Copy Diagnostics";
@@ -172,37 +204,78 @@
 "暂无数据" = "No data yet";
 "一句话的路" = "A sentence's path";
 "还没有句子" = "No sentences yet";
+"识别定稿" = "Final transcript";
 "听清这句话" = "Hearing it";
 "译成目标语言" = "Translating it";
+"说完到上屏" = "Speech end → on screen";
 "你感到的延迟" = "The delay you feel";
+"纪要一轮" = "Notes round";
 "更新一次纪要" = "One notes update";
-"翻译通道" = "Translation";
-"Ling 用量" = "Ling usage";
+"AI 服务" = "AI Service";
 "账号上限约每秒 2 次" = "The account allows about 2 per second";
-"Ming 语音" = "Ming voice";
-"没译出" = "Not translated";
+"本场用量" = "This meeting's usage";
 "本场还没调用" = "Not used yet";
 "最近的句子" = "Recent sentences";
 "示例 · 对方" = "Example · them";
 "识别" = "Recognize";
 "排队" = "Queue";
+"Ming 语音" = "Ming voice";
+"没译出" = "Not translated";
 "被搜索劫持" = "Search hijack";
 "限流" = "Rate limited";
 "超时" = "Timeout";
 "回复格式不对" = "Bad reply format";
 "网络错误" = "Network error";
 "未安装语言包" = "Language not installed";
-"翻译通道分布" = "Translation providers";
-"共 %lld 句" = "Total: %lld";
+"整句翻译" = "Sentence translation";
+"听懂你说的" = "Hearing you";
+"认出说话人" = "Naming speakers";
+"跟着 AI 服务走 · %@" = "Depends on the AI service · %@";
+"不受换服务影响" = "Same with any service";
+"%lld 次" = "requests: %lld";
+"%lld 字" = "characters: %lld";
+"%lld 句退回 %@" = "%lld fell back to %@";
+"失败 %lld" = "failed: %lld";
+"没有失败" = "no failures";
+"到开始出声" = "to first sound";
+"识别对方" = "Recognizing them";
+"本机识别" = "On this Mac";
+"%lld 句" = "%lld lines";
+"识别你说的" = "Recognizing you";
+"半句翻译" = "Partial translation";
 "Ling 请求速度" = "Ling request rate";
 "排队最久" = "Longest queue";
-"本场用量" = "This meeting's usage";
+"请求太密时，纪要让翻译先走" = "When requests pile up, notes let translation go first";
+"服务返回的数，以服务的账单为准" = "As reported by the service; its bill is final";
 "%.1f / 2 次每秒" = "%.1f / 2 per second";
+"%lld 次 · %lld token · %lld 字语音" = "requests: %lld · tokens: %lld · voice characters: %lld";
 "%lld 次 · %lld token" = "requests: %lld · tokens: %lld";
 "还没有" = "None yet";
 "你" = "You";
 "对方" = "Them";
 "%@ · %lld 字" = "%@ · chars: %lld";
+
+/* ImportViews */
+"重新转写" = "Transcribe Again";
+"排队中，前面还有 %lld 个文件" = "Queued, %lld files ahead";
+"排队中" = "Queued";
+"没转完" = "Unfinished";
+"没转完，原文件已不在原来的位置" = "Unfinished; the original file has moved";
+"正在读取文件…" = "Reading the file…";
+"正在听是哪种语言…" = "Working out the language…";
+"正在下载 %@ 语音模型…" = "Downloading the %@ speech model…";
+"文字记录已转到 %@ / %@" = "Transcribed to %@ of %@";
+"还有 %lld 句在翻译" = "%lld lines still translating";
+"纪要等文字记录转完再整理；正在听的会议优先" = "Notes come once it's transcribed; a live meeting goes first";
+"这场会议只留下了录音" = "Only the recording was kept";
+"当时没听出是哪种语言。选一下，就按它转成文字" = "The language wasn't recognized at the time. Pick it to turn the recording into text";
+"其他语言…" = "Other…";
+"找不到原文件，没法播放" = "Can't find the original file to play";
+"暂停" = "Pause";
+"播放" = "Play";
+"播放速度" = "Playback speed";
+"松开，开始转写" = "Drop to transcribe";
+"录音或视频，一次可放多个" = "Recordings or videos, several at once";
 
 /* LanguageSettings */
 "听对方" = "Listening";
@@ -236,27 +309,36 @@
 "会议原文" = "Meeting's own";
 
 /* Ling */
-"连不上 %@，检查网络或代理" = "Can't reach %@ — check the network or proxy";
+"这个服务" = "this service";
+"找不到模型，或地址不对（HTTP %lld）" = "Model not found, or wrong URL (HTTP %lld)";
+"%@ 拒绝了请求（HTTP %lld），请检查模型名" = "%@ rejected the request (HTTP %lld). Check the model name.";
+"连不上 %@，请检查网络或代理" = "Can't connect to %@. Check your network or proxy.";
+"这个服务不支持 JSON（HTTP %lld），纪要用不了" = "This service doesn't support JSON (HTTP %lld), so notes won't work";
 
 /* ListenEngine */
 "%@（识别中…）→ %@" = "%1$@ (detecting…) → %2$@";
 "自动识别 → %@" = "Auto-detect → %@";
+"等你允许使用麦克风" = "Waiting for microphone access";
 "正在听" = "Listening";
 "此 Mac 不支持本机语音识别" = "This Mac doesn't support on-device speech recognition";
-"已暂停" = "Paused";
+"请在系统设置里允许“系统音频录制”，再重新打开知了" = "Allow System Audio Recording in System Settings, then reopen Cicada";
 "无法读取系统音频，请在系统设置里允许“系统音频录制”" = "Can't read system audio. Allow “System Audio Recording” in System Settings";
-"正在下载 %@ 语音模型…" = "Downloading the %@ speech model…";
-"本机不支持%@识别" = "This Mac can't recognize %@";
+"没能下载 %@ 语音模型" = "Couldn't download the %@ speech model";
+"已暂停" = "Paused";
+"麦克风无法启动，请在系统设置里允许%@使用麦克风" = "The microphone won't start. Allow %@ to use it in System Settings";
 "识别出错，%lld 秒后重试" = "Recognition error; retrying in %lld s";
+"听不出是哪种语言，到菜单栏里选一下" = "Can't tell the language. Pick one from the menu bar";
 "正在识别语言…" = "Detecting language…";
 "翻译暂不可用" = "Translation unavailable for now";
 
 /* ListenPill */
 "开始听" = "Start listening";
+"显示字幕条" = "Show Subtitle Bar";
+"显示实时纪要" = "Show Live Notes";
 "结束" = "End";
 
-/* MicCapture */
-"无法读取麦克风，请在系统设置里允许“麦克风”" = "Can't read the microphone. Allow “Microphone” in System Settings";
+/* Localization */
+"知了" = "Cicada";
 
 /* MicUsersView */
 "顺便关掉自动调节麦克风音量和降噪，译文会更清楚" = "Also turn off automatic mic volume and noise suppression so the translation sounds clearer";
@@ -291,11 +373,12 @@
 "人名和术语" = "Names and terms";
 "依据较少" = "Little evidence";
 "依据 %lld 句" = "Evidence: %lld";
-"%@ · %lld 句" = "%@ · %lld lines";
 "正在讲" = "Now";
 "新" = "New";
 "看原话" = "See what was said";
 "%@ 起" = "From %@";
+"先看原话 →" = "Read the transcript →";
+"%@ 之后的 %lld 句还在整理" = "%2$lld lines after %1$@ not in the notes yet";
 "回到原话" = "Back to transcript";
 "点击分支跳回原话" = "Click a branch to jump to what was said";
 "鱼骨图" = "Fishbone";
@@ -303,6 +386,8 @@
 "依据较少，仅供参考" = "Little evidence; for reference only";
 "说话的内容会出现在这里" = "What's said will appear here";
 "%lld 句新内容" = "%lld new lines";
+"这段是谁说的" = "Who said this?";
+"这句是谁说的" = "Who said this?";
 "正在说" = "Speaking";
 "从这里开始听" = "Listening began";
 "原话" = "Original";
@@ -311,13 +396,12 @@
 "等有人开口" = "Waiting for someone to speak";
 "收起" = "Hide";
 "展开全部 %lld 个" = "Show all %lld";
-" · 原识别 %@" = " · heard as %@";
+"原识别 %@" = "Heard as %@";
 "有人开口后，约半分钟出第一版" = "First notes about 30 s after someone speaks";
 "会整理出" = "You'll get";
 "待办" = "To-dos";
 "已听到 %lld 句" = "Heard %lld lines";
 "正在生成纪要" = "Writing notes";
-"正在更新" = "Updating";
 "现在结束" = "End now";
 
 /* NotesWindow */
@@ -328,18 +412,20 @@
 "结束这场会议" = "End this meeting";
 "收窄" = "Narrow";
 "收成小卡" = "Collapse to card";
-"这场会议的语言" = "Languages for this meeting";
 "正在听 · " = "Listening · ";
 "正在记录 · " = "Recording · ";
-"%lld 句" = "%lld lines";
-"纪要已更新至 %@" = "Notes up to %@";
 "刚刚更新" = "Updated just now";
 "%lld 秒前更新" = "Updated %lld s ago";
 "%lld 分钟前更新" = "Updated %lld min ago";
-"录屏可见" = "Visible in recordings";
-"录屏和共享屏幕都看得到纪要窗口，点一下关闭" = "Recordings and screen sharing can see the notes window. Click to turn off";
+"这场会议的语言" = "Languages for this meeting";
+"整理中" = "Updating";
+"共享屏幕时让对方看到" = "Show when sharing screen";
+"对方可见" = "Visible to others";
+"仅自己可见" = "Only you";
 "文字记录 · %lld" = "Transcript · %lld";
 "文字记录" = "Transcript";
+"对方可见 · 点击关闭" = "Visible to others · Click to hide";
+"仅自己可见 · 点击共享" = "Only you · Click to share";
 "在文字记录中搜索  ⌘F" = "Search transcript  ⌘F";
 "无结果" = "No results";
 "上一个" = "Previous";
@@ -347,10 +433,6 @@
 "清除" = "Clear";
 "已结束 · " = "Ended · ";
 "没有在记录" = "Not recording";
-"中" = "ZH";
-"繁" = "ZH-TW";
-"日" = "JA";
-"韩" = "KO";
 "自动" = "Auto";
 "打开语言设置" = "Open language settings";
 "这场会议" = "This meeting";
@@ -370,8 +452,8 @@
 "开始新会议" = "New Meeting";
 "更换 key" = "Change Key";
 "生成纪要需要 API key" = "Notes need an API key";
-"文字记录仍在正常保存。填入 Ling 的 key 后，会从头开始整理整场会议的内容。" = "The transcript is still being saved. Once you add a Ling key, notes are written for the whole meeting from the start.";
-"获取 Ling key ↗" = "Get a Ling key ↗";
+"文字记录仍在保存。填好 %@ 的 key 后，会从头整理出整场纪要。" = "Transcript is still being saved. Enter a %@ key to generate notes from the beginning.";
+"获取 %@ key ↗" = "Get %@ key ↗";
 "保存并开始" = "Save and Start";
 "没有进行中的会议" = "No meeting in progress";
 "这场会议还没有纪要" = "No notes for this meeting yet";
@@ -413,9 +495,13 @@
 "字幕和纪要都从这里来。去系统设置打开，回来会自动识别。" = "Subtitles and notes come from it. Turn it on in System Settings; Cicada notices when you're back.";
 "声音只在本机识别" = "Audio is recognized only on this Mac";
 "听电脑里的声音" = "Hear the Mac's audio";
+"在系统设置里打开后，要重新打开知了" = "After turning it on in System Settings, reopen Cicada";
 "只听声音，不录屏幕画面" = "Sound only, never the screen";
+"识别语音" = "Recognize speech";
+"打开“听写”，允许“语音识别”" = "Turn on Dictation and allow Speech Recognition";
 "已打开" = "On";
 "去开启" = "Turn On";
+"重新打开" = "Reopen";
 "放一段会议试试" = "Try a meeting";
 "一段 9 秒的英文会议，字幕会跟着声音实时出来。" = "A 9-second meeting in English. Subtitles appear as they talk.";
 "听到" = "Hearing";
@@ -452,21 +538,31 @@
 "下一步接上 Ling 就有" = "Connect Ling in the next step";
 
 /* OnboardingKey */
-"接上 Ling，用上完整的知了" = "Connect Ling to get all of Cicada";
-"纪要、更准的翻译和自然的同传语音都靠它，约 1 分钟。" = "Notes, sharper translation and natural interpreting voices all run on it. Takes about a minute.";
+"用其他服务" = "Use another service";
+"纪要和翻译都能用，模型已经选好。" = "Notes and translation are ready; models are preselected.";
+"接上 Ling，一个 key 用上全部功能" = "Connect Ling to unlock all features with one key";
+"更准的翻译" = "Sharper translation";
+"自然的同传声音" = "Natural interpreting voice";
+"用你自己的声音" = "Use your own voice";
 "Ling 每月赠送 ¥10 额度" = "Ling gives ¥10 of credit every month";
 "约够 10–50 小时会议" = "Enough for about 10–50 hours of meetings";
+"‹ 还是用 Ling" = "‹ Use Ling instead";
+"用不了 Ling？" = "Can't use Ling?";
+"粘贴 %@ 的 key" = "Paste %@ key";
+"打开 %@" = "Open %@";
+"这个 key 无效，请检查是否复制完整，或重新创建一个" = "This key doesn't work. Check it was copied in full, or create a new one";
+"剪贴板里没有 sk- 开头的 key，请先去 %@ 复制。" = "No key starting with sk- in clipboard. Copy one from %@ first.";
+"剪贴板里没有 sk- 开头的 key，先在 Ling 开放平台复制。" = "No key starting with sk- on the clipboard. Copy it from the Ling platform first.";
+"只保存在这台 Mac 上，只发给 %@" = "Stored only on this Mac, sent only to %@";
+"少了：" = "Missing:";
+"（只有 Ling 支持）" = "(Ling only)";
+"自然的同传声音、你自己的声音" = "Natural interpreting voice, your own voice";
 "在 Ling 开放平台创建 key" = "Create a key on the Ling platform";
-"注册或登录后点“创建令牌”" = "Sign up or log in, then click “Create Credential”";
+"国内直接注册，不用代理；登录后点“创建令牌”" = "Sign up directly in China without a proxy; click \"Create Token\" after signing in";
 "打开 Ling 开放平台" = "Open Ling platform";
 "复制 sk- 开头的 key，回来粘贴" = "Copy the key that starts with sk-, then paste it here";
-"粘贴并检查" = "Paste and Check";
-"这个 key 无效，请检查是否复制完整，或重新创建一个" = "This key doesn't work. Check it was copied in full, or create a new one";
-"剪贴板里没有 sk- 开头的 key，先在 Ling 开放平台复制。" = "No key starting with sk- on the clipboard. Copy it from the Ling platform first.";
-"只保存在这台 Mac 上，只发给 Ling" = "Stored only on this Mac, sent only to Ling";
 "现在可以用了" = "Now available";
 "开会时，纪要会跟着字幕一起更新。" = "In meetings, the notes update along with the subtitles.";
-"更准的翻译" = "Sharper translation";
 "人名、术语前后一致" = "Names and terms stay consistent";
 "自然人声" = "Natural voices";
 "同传约 2 秒出声" = "Interpreting speaks in ~2 s";
@@ -479,6 +575,7 @@
 "接上 Ling 才有" = "Needs Ling";
 "实时纪要和会后总结" = "Live notes and a summary after";
 "自然人声，约 2 秒出声" = "Natural voices in about 2 s";
+"粘贴并检查" = "Paste and Check";
 "接上后继续" = "Connect to continue";
 "好，先这样" = "OK, skip for now";
 "先不接" = "Skip";
@@ -489,16 +586,40 @@
 "翻译中…  " = "Translating…  ";
 "你：" = "You: ";
 
+/* Recognition */
+"请在系统设置 › 键盘里打开“听写”" = "Turn on Dictation in System Settings › Keyboard";
+"请在系统设置里允许知了使用“语音识别”" = "Allow Cicada to use Speech Recognition in System Settings";
+"本机不支持%@识别" = "This Mac can't recognize %@";
+"请在系统设置 › 键盘 › 听写里添加%@，下载好后可用" = "Add %@ to Dictation in System Settings › Keyboard; it works once downloaded";
+
+/* RecordList */
+"今天" = "Today";
+"昨天" = "Yesterday";
+"本周" = "This Week";
+"不到 1 分钟" = "Under 1 min";
+"%lld 小时" = "%lld h";
+"%lld 小时 %lld 分" = "%lld h %lld min";
+"英语" = "English";
+"日语" = "Japanese";
+"中文" = "Chinese";
+"繁中" = "Trad. Chinese";
+"韩语" = "Korean";
+"西语" = "Spanish";
+"法语" = "French";
+"德语" = "German";
+"葡语" = "Portuguese";
+
+/* RoomMic */
+"没有可用的麦克风" = "No microphone available";
+
 /* SessionStore */
 "会议 %@" = "Meeting %@";
 "未识别" = "Unidentified";
-"不到 1 分钟" = "Under 1 min";
 
 /* SettingsWindow */
 "语言" = "Language";
 "通用" = "General";
 "存储空间" = "Storage";
-"AI 服务" = "AI Service";
 "诊断" = "Diagnostics";
 "有人说话时" = "While someone talks";
 "始终显示" = "Always";
@@ -511,7 +632,6 @@
 "还差一步：允许“输入监控”" = "One more step: allow “Input Monitoring”";
 "“按住右 ⌥ 说话”需要此权限。请在系统设置中勾选 %@，返回此处即可生效" = "“Hold right ⌥ to talk” needs this. Turn on %@ in System Settings, then come back";
 "去允许" = "Allow";
-"知了" = "Cicada";
 "再试一次" = "Try Again";
 "虚拟麦克风已就绪" = "Virtual microphone ready";
 "%@ · 试音通过，对方听得到" = "%@ · sound test passed, they can hear you";
@@ -571,17 +691,23 @@
 "切换显示方式" = "Switch display";
 "被其他应用占用了，点右边换一个" = "Taken by another app; click to change";
 "实时纪要 → 字幕条 → 不显示" = "Live notes → Subtitle bar → None";
-"共享屏幕时让对方看到" = "Show when sharing screen";
 "录屏也一样；关着时只有你看得到纪要窗口" = "Recordings too. When off, only you see the notes window";
 "字幕条显示时机" = "Show subtitle bar";
 "安静多久后收起" = "Tuck away after quiet for";
 "位置和大小" = "Position and size";
 "鼠标悬停可拖动位置，拖拽右下角可缩放大小" = "Hover to drag it; drag the bottom-right corner to resize";
 "恢复默认" = "Reset";
+"导入的文件" = "Imported files";
 "保存会议录音" = "Save meeting audio";
 "只存在这台 Mac 上" = "Stored only on this Mac";
+"说话人识别" = "Speaker identification";
+"按声音标出说话人 1、2…，只在这台 Mac 上处理" = "Labels lines Speaker 1, 2… by voice, on this Mac only";
 "记录文件夹" = "Records folder";
 "打开" = "Open";
+"文件里说的" = "Spoken in the file";
+"译成“翻译成”里的语言" = "Translated into your Translate to language";
+"转完后生成纪要" = "Write notes when done";
+"需要 Ling key；没有也能转出文字记录" = "Needs a Ling key; the transcript works without one";
 "会议应用挂断后结束" = "End when the meeting app hangs up";
 "Zoom、腾讯会议、飞书、Teams 等" = "Zoom, Tencent Meeting, Lark, Teams and others";
 "没人说话时" = "When no one speaks";
@@ -590,27 +716,21 @@
 "提醒后结束" = "Ask, then end";
 "直接结束" = "End";
 "一直记录" = "Keep going";
-"实验功能" = "Experimental";
-"还在打磨，可能出错；随时能关，关掉不影响别的功能。" = "Still being tuned and may get things wrong. Turn it off any time; nothing else is affected.";
-"按声音标出说话人 1、2…，只在这台 Mac 上处理" = "Labels lines Speaker 1, 2… by voice, on this Mac only";
-"说话人识别" = "Speaker identification";
 
 /* Shortcuts */
 "右 ⌥" = "Right ⌥";
 "请包含 ⌃ 或 ⌘，否则会影响正常打字" = "Include ⌃ or ⌘, or it would get in the way of typing";
 
 /* SpaceSettings */
-"文字记录和纪要只占很少空间，大头是录音" = "Transcripts and notes are tiny; the recordings are the bulk of it.";
-"共 %@，其中录音 %@" = "%@ total, %@ of it recordings";
-"%@，其中录音 %@" = "%@, %@ of it recordings";
-"云端校对中" = "Proofreading";
+"文字记录和纪要只占很少空间，大头是录音" = "Transcripts and notes take little space; recordings are the bulk";
+"共 %@，其中录音 %@" = "%@ in total, %@ of it recordings";
+"%@，其中录音 %@" = "%@, of which %@ recordings";
+"云端校对中" = "Cloud proofreading";
 "无录音" = "No recording";
 
 /* SpeakEngine */
 "无法准备语音识别：%@" = "Can't prepare speech recognition: %@";
 "语音识别仍在准备中，请再按一次" = "Speech recognition is still getting ready; press again";
-"没有可用的麦克风" = "No microphone available";
-"麦克风无法启动，请在系统设置里允许%@使用麦克风" = "The microphone won't start. Allow %@ to use it in System Settings";
 "翻译失败，这句话未发送" = "Translation failed; this sentence wasn't sent";
 
 /* SpeakTest */
@@ -653,7 +773,7 @@
 "麦克风峰值 %lld dB" = "Mic peak %lld dB";
 "本机转写定稿" = "Final transcript on this Mac";
 "没有译文" = "No translation";
-"本机（Ming 未成功）" = "This Mac (Ming failed)";
+"本机（%@ 失败）" = "On-device (%@ failed)";
 "本机声音" = "Mac voice";
 "只录到静音" = "Only silence recorded";
 "录到 %@ 秒声音" = "Recorded %@ s of sound";
@@ -699,20 +819,23 @@
 
 /* SpeakerID */
 "说话人 %lld" = "Speaker %lld";
+
+/* SpeakerViews */
 "没认出是谁：太短，或和已知的声音都不像" = "Not recognised: too short, or unlike the known voices";
-"实验" = "Beta";
 "关掉说话人识别，记录里的名字一起收起" = "Turn off speaker identification; the names in your records are hidden too";
 "Ling 从对话里认出，点一下可以改" = "Ling found this name in the conversation; click to change";
 "改名字，或和别人合并" = "Rename, or merge with someone else";
 "不准？关掉" = "Wrong? Turn off";
 "说了 %lld 句" = "%lld lines";
-"名字" = "Name";
+"是谁" = "Who";
+"键盘暂时在这里，会议软件收不到 · 回车保存 · Esc 交还" = "Typing here, not in your meeting app · Return to save · Esc to give it back";
 "Ling 正在从对话里找名字…" = "Ling is looking for names in the conversation…";
 "输入名字" = "Type a name";
 "Ling 从对话里认出" = "Found by Ling in the conversation";
 "Ling 从对话里认出：%@" = "Found by Ling in the conversation: %@";
 "不是 TA" = "Not them";
 "其实是同一个人" = "Actually the same person";
+"更多" = "More";
 "并入 %@" = "Merge into %@";
 
 /* SystemAudioTap */
@@ -729,11 +852,13 @@
 "无法创建系统音频 Tap（%d）" = "Can't create the system audio tap (%d)";
 
 /* UpdateViews */
-"下载进度" = "Download progress";
 "新版本 %@" = "Version %@";
+"更新说明" = "Release Notes";
+"下载进度" = "Download progress";
 "正在下载 %lld%%，完成后自动重新打开" = "Downloading %lld%%, reopens when done";
 "没能自动更新：%@。已打开下载页" = "Couldn’t update automatically: %@. Opened the download page";
 "安装后自动重新打开" = "Reopens after installing";
+"安装并重新打开" = "Install and Reopen";
 "登录时打开" = "Open at Login";
 "版本 %@" = "Version %@";
 "首次引导" = "Getting started";
@@ -741,11 +866,14 @@
 "开机后在菜单栏待命，不弹窗口" = "Waits in the menu bar, no windows";
 "正在下载 %@：%lld%%" = "Downloading %@: %lld%%";
 "没能自动更新：%@" = "Couldn’t update automatically: %@";
+"已是最新版本" = "You’re up to date";
 "连不上 GitHub，请稍后再试" = "GitHub can’t be reached; try again later";
+"上次检查 %@" = "Last checked %@";
 "检查更新" = "Check for Updates";
 "重新看" = "Show Again";
 
 /* Updater */
+"新版本需要 macOS %@ 或更新版本" = "The new version needs macOS %@ or later";
 "下载的不是预期的版本" = "The download isn’t the expected version";
 "下载的文件校验不通过" = "The download didn’t match its checksum";
 "请先把应用拖进“应用程序”文件夹" = "Move the app to Applications first";
@@ -755,34 +883,44 @@
 "更新包无效" = "The update package is invalid";
 
 /* Updates */
+"知了有新版本 %@" = "Cicada %@ is available";
+"点按安装，完成后自动重新打开" = "Click to install. Cicada reopens when it's done.";
+"刚刚查过" = "checked now";
+"%lld 分钟前查过" = "checked %lld min ago";
+"%lld 小时前查过" = "checked %lld h ago";
+"%lld 天前查过" = "checked %lld days ago";
 "安装更新会结束这场记录，已记下的内容会保存。" = "Installing the update ends this recording. What has been recorded is kept.";
 "结束并更新" = "End and Update";
 
 /* Views */
 "自动识别（%@）" = "Auto-detect (%@)";
+"要先加进系统的听写语言" = "Add it to the system's Dictation languages first";
 "选中后自动下载语音模型" = "Downloads its speech model when chosen";
-"正在导入 %@（%lld%%）" = "Importing %@ (%lld%%)";
 "会议已自动结束" = "Meeting ended by itself";
-"声源" = "Source";
-"系统音频" = "System Audio";
-"现场" = "In the room";
-"系统音频（线上会议）" = "System Audio (online meeting)";
-"麦克风（现场会议）" = "Microphone (meeting in the room)";
+"听哪里" = "Listen to";
+"会议室" = "Room";
+"电脑声音" = "This Mac";
+"电脑声音（线上会议、视频）" = "This Mac (online meetings, videos)";
+"会议室（用麦克风听桌边的人）" = "Room (the mic hears people at the table)";
 "系统" = "System";
-"内容" = "Content";
-"仅本场" = "This meeting";
 "系统麦克风还是 %@" = "System mic is still %@";
 "别的软件现在听不到你说话" = "Other apps can't hear you now";
 "跟随系统的网页听不到译文" = "Pages on the default mic won't hear the translation";
 "显示方式" = "Display";
 "轮换" = "to switch";
-"导入录音" = "Import Recording";
+"再点收起" = "Click to hide";
+"再点打开" = "Click to show";
+"导入文件…" = "Import…";
+"在会议室里开会？" = "Meeting in the room?";
+"电脑里 1 分钟没放出声音" = "Nothing has played on this Mac for a minute";
+"改听会议室" = "Listen to the room";
+"不是" = "No";
+"后台转写 %@ · %lld%%" = "Transcribing %@ · %lld%%";
+"后台转写 %@ · %lld%%，还有 %lld 个" = "Transcribing %@ · %lld%%, %lld more";
 "屏幕上不出字幕，文字记录照常保存" = "Nothing on screen; the transcript is still saved";
-"什么时候出现" = "Appears";
 "填入 API key 后可生成纪要；文字记录照常保存" = "Add an API key for notes; the transcript is saved either way";
-"纪要窗口已打开" = "Notes window is open";
-"纪要窗口已收起" = "Notes window is hidden";
-"对方现在能看到纪要窗口" = "Others can see the notes window now";
+"什么时候出现" = "Appears";
+"译文从扬声器念出来" = "Translations are read out from the speakers";
 "系统麦克风换成 %@" = "System mic switches to %@";
 "译文送进 %@" = "Translations go into %@";
 "先装好虚拟麦克风，对方才听得到" = "Install the virtual mic first so others can hear";
@@ -793,6 +931,7 @@
 "正在翻译…" = "Translating…";
 "正在播出…" = "Playing…";
 "松开后播出%@" = "Release to play in %@";
+"扬声器念出%@" = "Speakers say it in %@";
 "打开后：" = "When on:";
 "按住" = "Hold";
 "说话，松开后播出译文" = "to talk, release to play the translation";
@@ -802,45 +941,40 @@
 "对方听到 %@ · %@" = "They hear %@ · %@";
 "对方听到 %@" = "They hear %@";
 "线上会议" = "Online meeting";
-"收录 Mac 播放的声音" = "Captures the sound your Mac plays";
-"现场会议" = "In-person";
-"用麦克风收录房间里的说话声" = "Uses the microphone to capture the room";
-"导入会议录音" = "Import a Meeting Recording";
+"收录 Mac 播放的声音" = "Capture what the Mac plays";
+"现场会议" = "In-person meeting";
+"用麦克风收录房间里的说话声" = "Use the microphone for the voices in the room";
+"导入会议录音" = "Import a meeting recording";
 "把录好的音频文件变成一场会议记录" = "Turn a recorded audio file into a meeting record";
 "搜索" = "Search";
 "没有找到“%@”" = "Nothing found for “%@”";
-"今天" = "Today";
-"昨天" = "Yesterday";
-"本周" = "This Week";
 "收起更早的会议" = "Hide earlier meetings";
 "更早的会议" = "Earlier meetings";
+"只有录音" = "Recording only";
 "未命名会议" = "Untitled meeting";
-"%lld 小时" = "%lld h";
-"%lld 小时 %lld 分" = "%lld h %lld min";
+"转写中 %lld%%" = "%lld%%";
+"翻译中" = "Translating";
+"准备中" = "Preparing";
+"显示原文件" = "Show Original File";
 "在 Finder 中显示" = "Show in Finder";
 "恢复自动标题" = "Restore Automatic Title";
 "删除" = "Delete";
-"英语" = "English";
-"日语" = "Japanese";
-"中文" = "Chinese";
-"繁中" = "Trad. Chinese";
-"韩语" = "Korean";
-"西语" = "Spanish";
-"法语" = "French";
-"德语" = "German";
-"葡语" = "Portuguese";
 "正在听，说话的内容会出现在这里" = "Listening; what's said will appear here";
+"转出的文字会陆续出现在这里" = "The transcript will appear here as it's made";
+"还没有文字记录" = "No transcript yet";
 "这场会议没有记录到内容" = "Nothing was recorded in this meeting";
 "还没有会议" = "No meetings yet";
 "打开会议或视频，开始听后，每一场都会存在这里。" = "Open a meeting or a video and start listening: each one is kept here.";
 "先听一段示例" = "Try a sample first";
-"把每句话的录音发给云端识别，用更准的文字替换记录并重译" = "Sends each sentence's audio to the cloud and replaces the record with the more accurate text, retranslated";
-"删除录音文件，文字记录和纪要保留" = "Deletes the audio files; the transcript and notes are kept";
+"或导入录音、视频…" = "Or import a recording or video…";
+"转完后生成" = "After transcribing";
+"把每句话的录音发给云端识别，用更准的文字替换记录并重译" = "Send each sentence's audio to the cloud, replace the record with more accurate text and retranslate";
+"删除录音文件，文字记录和纪要保留" = "Delete the recording file; the transcript and notes stay";
 "用当前文字记录重新生成纪要" = "Regenerate the notes from the current transcript";
-"修改纪要的文字，完成后保存" = "Edit the notes text; Done saves it";
+"修改纪要的文字，完成后保存" = "Edit the notes' text; save when done";
 "收起原话" = "Hide original";
 "在纪要旁显示原话" = "Show the original beside the notes";
-"云端校对中 %lld/%lld" = "Cloud checking %lld/%lld";
+"云端校对中 %lld/%lld" = "Cloud proofreading %lld/%lld";
 "正在整理纪要…" = "Writing notes…";
 "复制为 Markdown" = "Copy as Markdown";
 "导出 Markdown…" = "Export Markdown…";
@@ -852,12 +986,27 @@
 "标题" = "Title";
 "全部 %lld 句" = "All %lld lines";
 "翻译中…" = "Translating…";
+"从这里播放" = "Play from here";
 "纪要会在会议进行中自动生成" = "Notes are written during the meeting";
-"使用 Ling 将文字记录整理为总结、议题、结论和人名，约需半分钟。" = "Ling turns the transcript into a summary, topics, conclusions and names. Takes about half a minute.";
+"用 %@ 整理出总结、议题、结论和人名，约半分钟。" = "Uses %@ to organize summary, topics, conclusions, and names in ~30s.";
 "前往 设置 › AI 服务 填入 Ling 的 API key 后即可生成。" = "Add a Ling API key in Settings › AI Service to generate them.";
 "正在生成…" = "Generating…";
 "生成纪要" = "Generate Notes";
 "去填 key" = "Add Key";
+"听着不像 %@" = "Doesn't sound like %@";
+"听着不像 %@ 或 %@" = "Doesn't sound like %@ or %@";
+"听着不像已装的语言" = "Doesn't sound like a language installed here";
+"听不出是哪种语言，你来选一下" = "Can't tell which language this is. Pick one:";
+"更多…" = "More…";
+"正在补装 %@ 语音模型，装好后自动判断语言" = "Adding the %@ speech model; the language is detected once it's in";
+"选了就下载它的语音模型，开头这段也会补上" = "Pick one to download its speech model; the start is filled in too";
+"其实是：" = "It's actually:";
+"网络连不上，连上后会自动继续" = "No internet. It carries on once you're back online";
+"这台 Mac 的磁盘空间不够了" = "This Mac is low on disk space";
+"这台 Mac 上的语音模型已满 5 种" = "This Mac already holds the most speech models it allows (5)";
+"先用已装的：" = "Use one already here:";
+"打开存储空间" = "Open Storage";
+"打开听写设置" = "Open Dictation Settings";
 
 /* VirtualMic */
 "%@要安装虚拟麦克风，让会议里的人听到你的翻译。" = "%@ wants to install a virtual microphone so people in the meeting can hear your translation.";
@@ -868,25 +1017,30 @@
 "%@要让系统认出虚拟麦克风，声音会断约 1 秒。" = "%@ needs to load the virtual microphone; audio will cut out for about 1 second.";
 
 /* VoicePicker */
-"声音" = "Voice";
 "选择对方听到的声音" = "Choose the voice they hear";
 "试听" = "Preview";
 "系统声音" = "System voice";
 "你的音色" = "Your voice";
 "填入 Ling key：声音更自然，还能用你自己的声音" = "Add a Ling key for more natural voices, including your own";
+"填好 AI 服务的 key，声音更自然" = "Add an AI Service key for a more natural voice";
 "去填写" = "Add key";
 "每种语言各记一个声音" = "Each language remembers its voice";
 "对方说%@时用" = "Used when they speak %@";
 "（当前）" = " (now)";
+"%@ 用不了时，自动换本机声音" = "Falls back to on-device voice if %@ is unavailable";
+"这个服务不出声音，用本机声音" = "This service has no voice; using on-device voice";
 "Ling 不可用时自动换成本机声音" = "Falls back to the Mac's voice when Ling is unavailable";
 "填入 Ling key 后可用 Ming 声音和你自己的声音" = "With a Ling key you can use Ming voices and your own voice";
 "慢约 1 秒" = "~1 s slower";
 "最快" = "Fastest";
+"去换成 Ling" = "Switch to Ling";
+"我自己的声音" = "My own voice";
+"只有 Ling 能用你自己的声音" = "Only Ling supports your own voice";
 "用我自己的声音" = "Use my own voice";
 "录制" = "Record";
-"我自己的声音" = "My own voice";
 "录 15 秒原声，对方听到你的音色，晚约 3 秒" = "Record 15 s so they hear your own voice, about 3 s later";
 "已录 %lld 秒 · %@" = "Recorded %lld s · %@";
+"读得偏慢" = "Read slowly";
 "重录" = "Re-record";
 "最像你" = "sounds most like you";
 "会带你的口音" = "keeps your accent";
@@ -908,10 +1062,8 @@
 "用这个声音" = "Use This Voice";
 
 /* Voices */
-"女" = "Female";
 "美式" = "American";
 "自然对话" = "Conversational";
-"男" = "Male";
 "英式" = "British";
 "稳重" = "Steady";
 "平稳" = "Even";
@@ -929,4 +1081,36 @@
 "麦克风没收到声音，请检查麦克风权限" = "The microphone got no sound; check microphone permission";
 "无法打开麦克风：%@" = "Can't open the microphone: %@";
 "录音太短了，请至少朗读 %lld 秒" = "Too short; read for at least %lld seconds";
+"读得有点慢，克隆的声音也会这么慢。请用平时说话的语速再录一次" = "Read a bit slowly: your cloned voice would be just as slow. Record again at your usual pace";
 "没听清录音内容，请换个安静的地方再录一次" = "Couldn't make out the recording; try again somewhere quiet";
+
+/* Debug */
+"导入录音或视频" = "Import a Recording or Video";
+
+/* LiveViews */
+"正在听 · %@" = "Listening · %@";
+"对方说和翻译成" = "They speak, and translate into";
+"%lld 人在说" = "%lld people talking";
+"纪要 · %lld 条新" = "Notes · %lld new";
+"开始说话后，字幕会出现在这里" = "Subtitles show up here once people start talking";
+
+/* RecordView */
+"只看 %@ · %lld 段 · 再点一下取消" = "Only %@ · %lld turns · tap again to clear";
+"只看这个人；按住可改名字，或和别人合并" = "Shows only this person; press and hold to rename or merge";
+"改名字" = "Rename";
+
+/* RecordsView */
+"%lld 人" = "%lld people";
+
+/* RoomListen */
+"正在准备…" = "Getting ready…";
+"请在设置里允许知了使用麦克风" = "Allow Cicada to use the microphone in Settings";
+"识别中断了，请重新开始听" = "Recognition stopped. Start listening again";
+
+/* RootView */
+"下一版就能用" = "Coming in the next version";
+
+/* SettingsView */
+"在 Ling 开放平台点“创建令牌”，复制以 sk- 开头的那串。" = "On the Ling platform, click “Create token” and copy the string that starts with sk-.";
+"打开 Ling 开放平台 ↗" = "Open the Ling platform ↗";
+"Ling 提示此令牌无效，请检查是否复制完整，或重新创建一个" = "Ling says this token is invalid. Check that you copied all of it, or create a new one";

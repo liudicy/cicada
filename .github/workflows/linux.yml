@@ -1,0 +1,87 @@
+name: linux
+
+# The Linux app (linux/). The tarball is built once (with the voiceprint library for x86_64 and
+# aarch64, both from 22.04), then installed with its own install.sh on every Ubuntu we support and on
+# both architectures: unit tests against the shipped library, then a smoke test of the installed GTK
+# app under Xvfb with a PulseAudio null sink (windows open, the speakers' monitor is heard, 说话人识别
+# loads). The real desktop (GNOME, XWayland, focus, a real sound card) is tested in the VM and by hand.
+on:
+  push:
+    branches: [main]
+    paths: ["linux/**", "Resources/**/Localizable.strings", "VERSION", ".github/workflows/linux.yml"]
+  pull_request:
+    paths: ["linux/**", "Resources/**/Localizable.strings", "VERSION", ".github/workflows/linux.yml"]
+  workflow_dispatch:
+
+jobs:
+  # The voiceprint library for each architecture, on 22.04 so it loads on 22.04 and 24.04 (glibc).
+  native:
+    strategy:
+      matrix:
+        runner: [ubuntu-22.04, ubuntu-22.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: linux/native/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-${{ matrix.runner }}
+          path: linux/native/out/libcicada-voice-*.so
+
+  package:
+    needs: native
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: voice-*
+          path: linux/native/out
+          merge-multiple: true
+      - name: Build
+        # ffmpeg turns the sample meeting into WAV (no afconvert on Linux).
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg && linux/scripts/build.sh
+      - name: Both architectures are in it
+        run: |
+          tar -tzf linux/build/cicada-linux-*.tar.gz | grep -q 'lib/libcicada-voice-x86_64.so$'
+          tar -tzf linux/build/cicada-linux-*.tar.gz | grep -q 'lib/libcicada-voice-aarch64.so$'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cicada-linux
+          path: linux/build/cicada-linux-*.tar.gz
+
+  # What a user gets: the tarball, installed by install.sh, on each supported Ubuntu and architecture.
+  check:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Cicada-linux
+      # What Ubuntu desktop ships (a CI runner is a server image), plus Xvfb and a sound server.
+      - name: Desktop libraries
+        run: sudo apt-get update -q && sudo apt-get install -y -q python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 libpulse0 pulseaudio pulseaudio-utils xvfb
+      - name: Install
+        run: |
+          tar -xzf cicada-linux-*.tar.gz
+          sh cicada-linux/install.sh
+          test -x ~/.local/lib/cicada/bin/cicada
+      - name: Unit tests against the shipped voiceprint library
+        working-directory: linux
+        # A missing library would only skip the voiceprint test, so check it's there first.
+        run: |
+          lib="$HOME/.local/lib/cicada/lib/libcicada-voice-$(uname -m).so"
+          test -f "$lib"
+          CICADA_VOICE_LIB="$lib" scripts/test.sh
+      - name: Smoke test of the installed app
+        run: |
+          cp linux/scripts/smoke.sh linux/scripts/cicadactl ~/.local/lib/cicada/bin/
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=speakers
+          pactl set-default-sink speakers
+          SMOKE_VOICES=1 xvfb-run -a ~/.local/lib/cicada/bin/smoke.sh

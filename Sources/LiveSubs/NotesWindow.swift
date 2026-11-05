@@ -45,7 +45,7 @@ final class NotesWindowController: NSObject, NSWindowDelegate {
     func show() {
         guard let model else { return }
         if panel == nil {
-            let p = NSPanel(contentRect: defaultFrame(), styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
+            let p = NotesPanel(contentRect: defaultFrame(), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             p.titleVisibility = .hidden
             p.titlebarAppearsTransparent = true
@@ -53,6 +53,8 @@ final class NotesWindowController: NSObject, NSWindowDelegate {
             p.isFloatingPanel = onTop
             p.level = onTop ? .floating : .normal
             p.delegate = self
+            p.onMiniaturize = { [weak self] in self?.hide() }
+            p.standardWindowButton(.miniaturizeButton)?.isEnabled = true
             // Clicking it leaves the meeting app active and our other windows where they are;
             // it only takes the keyboard for its text fields.
             p.hidesOnDeactivate = false
@@ -101,10 +103,19 @@ final class NotesWindowController: NSObject, NSWindowDelegate {
         p.setFrame(f, display: true, animate: true)
     }
 
+    /// After a name is typed: the keyboard goes back to the meeting app, which never stopped being active.
+    func returnKeyboard() {
+        guard let panel, panel.isKeyWindow else { return }
+        panel.makeFirstResponder(nil)
+        if !NSApp.isActive { NSWorkspace.shared.frontmostApplication?.activate() }
+    }
+
     func place(_ r: NSRect) { panel?.setFrame(r, display: true) }
 
     /// Debug control only: what the close button does.
     func performClose() { panel?.performClose(nil) }
+    /// Debug control only: what the minimize button does.
+    func performMiniaturize() { panel?.performMiniaturize(nil) }
 
     /// 录屏时可见, and the debug command that flips it for one screenshot without saving it.
     func setCapturable(_ on: Bool) { panel?.sharingType = on ? .readOnly : .none }
@@ -114,6 +125,20 @@ final class NotesWindowController: NSObject, NSWindowDelegate {
         let v = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
         return NSRect(x: v.maxX - 460 - 16, y: v.minY + 16, width: 460, height: v.height - 32)
     }
+}
+
+/// The yellow button tucks the window away to the menu bar, like 收起: with only the menu bar
+/// item there is no Dock to minimize into, and the panel's 打开 brings it back either way.
+private final class NotesPanel: NSPanel {
+    var onMiniaturize: (() -> Void)?
+    // AppKit greys the button out for a floating, all-Spaces panel, and re-greys it on every
+    // titlebar update; it hides instead of minimizing, so keep it lit.
+    override func update() {
+        super.update()
+        if let b = standardWindowButton(.miniaturizeButton), !b.isEnabled { b.isEnabled = true }
+    }
+    override func performMiniaturize(_ sender: Any?) { onMiniaturize?() }
+    override func miniaturize(_ sender: Any?) { onMiniaturize?() }
 }
 
 // MARK: - Views
@@ -137,10 +162,14 @@ struct NotesWindowView: View {
     @State private var catchUp = false
     @State private var matchIndex = 0
     @State private var now = Date()
+    @State private var badgeHover = false
+    @State private var badgeHint = false
     @State private var width: CGFloat = 460
     /// "结束" was clicked during a meeting with lines: the confirmation strip is showing.
     @State private var confirmEnd = false
     @State private var languageOpen = false
+    /// The voice whose editor is open under the people row.
+    @State private var editingVoice: Int?
     /// When the reader last scrolled the notes: a live update only brings the current topic into
     /// view when they haven't just been reading something else.
     @State private var notesScrolledAt = Date.distantPast
@@ -161,6 +190,9 @@ struct NotesWindowView: View {
                         header(wide: geo.size.width >= 760)
                         meetingBar.padding(.horizontal, 24).padding(.bottom, 4)
                         banner.padding(.horizontal, 24).padding(.bottom, 4)
+                        if live { LanguageNotice(model: model).padding(.horizontal, 24).padding(.bottom, 8) }
+                        // Where the scrolling starts: a hairline, and each column fades in under it (`topFade`).
+                        Rectangle().fill(MainWindowView.hairline).frame(height: 1)
                         if geo.size.width >= 760 {
                             HStack(alignment: .top, spacing: 0) {
                                 notesPane.frame(maxWidth: .infinity)
@@ -177,6 +209,7 @@ struct NotesWindowView: View {
                     }
                     // The title bar is transparent: start the header beside its buttons, not below a blank band.
                     .ignoresSafeArea(.container, edges: .top)
+                    .overlay(alignment: .bottom) { SpeakerUndoToast(model: model, session: session?.id) }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -243,11 +276,7 @@ struct NotesWindowView: View {
                     Text(live || session == nil ? L("实时纪要") : L("会议纪要")).font(.system(size: 24, weight: .bold))
                         .lineLimit(1).minimumScaleFactor(0.75)
                     Spacer(minLength: 8)
-                    if engine.state == .updating, !engine.notes.isEmpty {
-                        UpdatingPill().padding(.trailing, 4)
-                    }
                     if live {
-                        languageChip.padding(.trailing, 2)
                         Button(action: askToEnd) {
                             Text("结束").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
                                 .padding(.horizontal, 12).frame(height: 28)
@@ -261,13 +290,29 @@ struct NotesWindowView: View {
                     }
                     iconButton("minus", help: L("收成小卡")) { collapse() }
                 }
-                HStack(spacing: 6) {
-                    if live { LiveDot() }
-                    Text(statusLine).font(.system(size: 12)).foregroundStyle(Palette.tertiary).lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if settings.notesCapturable { capturableBadge }
+                // State lives here, not in buttons beside 结束: the meeting's languages as a text link
+                // and a small spinner while the notes are being written. The sharing mark sits apart on
+                // the right, so turning it on or off doesn't move the text.
+                HStack(alignment: .top, spacing: 6) {
+                    FlowLayout(spacing: 6) {
+                        if live { LiveDot().frame(height: 22) }
+                        Text(statusLine).font(.system(size: 12)).foregroundStyle(Palette.tertiary).frame(height: 22)
+                        if live {
+                            dotSeparator
+                            languageLink
+                        }
+                        if live, engine.state == .updating, !engine.notes.isEmpty {
+                            dotSeparator
+                            HStack(spacing: 5) {
+                                Spinner(size: 10)
+                                Text("整理中").font(.system(size: 12)).foregroundStyle(Palette.tertiary)
+                            }
+                            .frame(height: 22)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    capturableBadge
                 }
-                .frame(minHeight: 22)
             }
             if !wide {
                 HStack(spacing: 0) {
@@ -284,25 +329,39 @@ struct NotesWindowView: View {
         .padding(.horizontal, 24).padding(.top, 34).padding(.bottom, 12)
     }
 
-    /// Shown while 录屏时可见 is on, so it isn't left on into a shared screen: a record mark (ring
-    /// around a dot, like the menu bar's while recording) whose ring breathes. No words, since
-    /// recordings and screen sharing both see the window. A click turns it off.
+    /// 共享屏幕时让对方看到, always here so it can be turned back on: an orange lamp while shared
+    /// screens and recordings see the window, a hollow grey one while only you do (the window
+    /// isn't captured then, so nobody else sees it). No words beside it except a hint while the
+    /// pointer rests on it: once on, words would show in the shared screen; the lamp's first wide
+    /// breath confirms the click instead.
     private var capturableBadge: some View {
-        Button { model.setNotesCapturable(false) } label: {
-            TimelineView(.animation(minimumInterval: 1 / 15)) { ctx in
-                let t = 0.5 + 0.5 * cos(phase(ctx.date, period: 2.4) * 2 * .pi)
-                ZStack {
-                    Circle().stroke(Palette.accent, lineWidth: 1.5).frame(width: 13, height: 13)
-                        .opacity(0.35 + 0.65 * t)
-                    Circle().fill(Palette.accent).frame(width: 6, height: 6)
-                }
+        let on = settings.notesCapturable
+        return Button { model.setNotesCapturable(!on) } label: {
+            CapturableMark(on: on)
                 .frame(width: 22, height: 22)
-            }
-            .contentShape(Circle())
+                .background(Circle().fill(badgeHover ? Palette.fill : .clear))
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .help("录屏和共享屏幕都看得到纪要窗口，点一下关闭")
-        .accessibilityLabel(Text("录屏可见"))
+        // Drawn here rather than .help: the window never activates the app, and macOS doesn't
+        // show tooltips for an app in the background.
+        .onHover { inside in
+            badgeHover = inside
+            if !inside { badgeHint = false; return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if badgeHover { badgeHint = true } }
+        }
+        .overlay(alignment: .trailing) {
+            if badgeHint {
+                Text(on ? L("对方可见 · 点击关闭") : L("仅自己可见 · 点击共享"))
+                    .font(.system(size: 11)).foregroundStyle(.white).lineLimit(1).fixedSize()
+                    .padding(.horizontal, 8).frame(height: 20)
+                    .background(Capsule().fill(Palette.ink.opacity(0.88)))
+                    .offset(x: -28).allowsHitTesting(false).transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: badgeHint)
+        .accessibilityLabel(Text("共享屏幕时让对方看到"))
+        .accessibilityValue(on ? Text("对方可见") : Text("仅自己可见"))
     }
 
     private var searchField: some View {
@@ -380,7 +439,6 @@ struct NotesWindowView: View {
         if live {
             var parts = [(heard == 0 ? L("正在听 · ") : L("正在记录 · ")) + NotesEngine.clock(elapsed)]
             if heard > 0 { parts.append(L("\(heard) 句")) }
-            if !engine.notes.isEmpty, lastCovered > 0 { parts.append(L("纪要已更新至 \(NotesEngine.clock(lastCovered))")) }
             return parts.joined(separator: " · ")
         }
         let clock = session.map { L("已结束 · ") + TranscriptExport.header($0) } ?? L("没有在记录")
@@ -394,21 +452,20 @@ struct NotesWindowView: View {
     /// "EN → 中": what the meeting speaks → what the notes are written in. Opens this meeting's
     /// choices below the header (not a popover: the panel never activates the app, and a popover in
     /// an inactive app closes as soon as it opens); the defaults live in 设置 › 语言.
-    private var languageChip: some View {
+    private var languageLink: some View {
         let id = session?.id ?? ""
-        let from = model.meetingLanguage(store.liveID).map(Self.short) ?? L("自动")
+        let from = model.meetingLanguage(store.liveID).map(targetName) ?? L("自动")
         return Button { languageOpen.toggle() } label: {
-            HStack(spacing: 4) {
-                Text(from)
-                Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold))
-                Text(Self.short(model.notesLanguageCode(id)))
-            }
-            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.accentInk)
-            .padding(.horizontal, 9).frame(height: 28)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Palette.accentPale))
-            .contentShape(Rectangle())
+            Text("\(from) → \(targetName(model.notesLanguageCode(id)))")
+                .font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                .underline(color: Palette.line)
+                .frame(height: 22).contentShape(Rectangle())
         }
         .buttonStyle(.plain).help("这场会议的语言").accessibilityLabel(L("这场会议的语言"))
+    }
+
+    private var dotSeparator: some View {
+        Text("·").font(.system(size: 12)).foregroundStyle(Palette.tertiary).frame(height: 22)
     }
 
     private func languageCard(_ id: String) -> some View {
@@ -448,16 +505,6 @@ struct NotesWindowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(Palette.fill))
         .foregroundStyle(Palette.ink)
-    }
-
-    static func short(_ code: String) -> String {
-        switch code {
-        case "zh-CN": L("中")
-        case "zh-TW": L("繁")
-        case "ja": L("日")
-        case "ko": L("韩")
-        default: code.prefix(2).uppercased()
-        }
     }
 
     // MARK: Ending a meeting
@@ -557,6 +604,13 @@ struct NotesWindowView: View {
         }
     }
 
+    /// Lines the notes don't cover yet, once they are two minutes behind the meeting (between
+    /// ordinary 45 s updates there is always a little that isn't in yet).
+    private var behind: Int {
+        guard live, let s = session, lastCovered > 0, elapsed - lastCovered >= 120 else { return 0 }
+        return max(0, s.lines.count - engine.notes.covered)
+    }
+
     private var lastCovered: Double {
         guard let s = session, engine.notes.covered > 0, engine.notes.covered <= s.lines.count else { return 0 }
         return s.lines[engine.notes.covered - 1].t
@@ -574,7 +628,7 @@ struct NotesWindowView: View {
     private var keyEntry: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("生成纪要需要 API key").font(.system(size: 15, weight: .bold))
-            Text("文字记录仍在正常保存。填入 Ling 的 key 后，会从头开始整理整场会议的内容。")
+            Text(L("文字记录仍在保存。填好 \(model.ling.provider.name) 的 key 后，会从头整理出整场纪要。"))
                 .font(.system(size: 12)).foregroundStyle(Palette.secondary).lineSpacing(2)
             HStack(spacing: 8) {
                 SecureField("sk-…", text: $keyDraft)
@@ -585,10 +639,10 @@ struct NotesWindowView: View {
                     .onSubmit(saveKey)
                 SoftButton(L("保存并开始"), dark: true, action: saveKey)
             }
-            Button("获取 Ling key ↗") {
-                if let url = URL(string: "https://chat.ant-ling.com/platform/api") { NSWorkspace.shared.open(url) }
+            if let site = model.ling.provider.site {
+                Button(L("获取 \(model.ling.provider.name) key ↗")) { NSWorkspace.shared.open(site) }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Palette.secondary)
             }
-            .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Palette.secondary)
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16).fill(Palette.raised))
@@ -635,15 +689,18 @@ struct NotesWindowView: View {
     private var notesScroll: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                NotesContentView(notes: engine.notes, fresh: engine.fresh, live: live,
+                NotesContentView(notes: session.map { SpeakerLabels.named(engine.notes, SpeakerLabels.names($0)) } ?? engine.notes,
+                                 fresh: engine.fresh, live: live,
                                  updating: engine.state == .updating,
                                  summaryJustChanged: engine.summaryChangedAt.map { now.timeIntervalSince($0) < 20 } ?? false,
                                  coveredUntil: lastCovered > 0 ? lastCovered : nil,
                                  endedAt: session?.lines.last?.t,
+                                 behind: behind,
                                  onJump: { t in jumpTo = t; tab = "transcript" })
-                    .padding(.horizontal, 24).padding(.vertical, 12)
+                    .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 12)
             }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, _ in
+            .topFade()
+            .onScrolled {
                 if UserScroll.recent { notesScrolledAt = Date() }
             }
             // Each live update lands on the topic being discussed now, which is the last one and
@@ -671,12 +728,15 @@ struct NotesWindowView: View {
         let speakers = model.settings.speakerVoices ? SpeakerLabels.numbers(lines) : [:]
         return VStack(alignment: .leading, spacing: 10) {
             if !speakers.isEmpty, let s = session {
-                SpeakerStrip(model: model, session: s) { voice in model.editSpeaker(session: s.id, voice: voice) }
+                SpeakerStrip(model: model, session: s, editing: $editingVoice)
             }
             TranscriptListView(lines: lines, topics: engine.notes.topics, terms: searchTerms,
                                currentMatch: ms.isEmpty ? nil : ms[currentIndex], live: live,
                                partialShown: TranscriptPartial.shows(model.liveSource, live: live, after: lines.last?.src),
-                               jumpTo: jumpTo, speakers: speakers, startedAt: store.liveStart) {
+                               jumpTo: jumpTo, speakers: speakers, startedAt: store.liveStart,
+                               identifying: model.identifyingLanguage,
+                               voices: speakers.isEmpty ? [:] : SpeakerLabels.voiceNumbers(lines), marked: editingVoice,
+                               onAssign: { ids, voice in if let s = session { model.assignLines(session: s.id, ids, to: voice) } }) {
                 LivePartialRow(model: model, startedAt: store.liveStart)
             }
             .equatable()
@@ -717,7 +777,7 @@ struct NotesWindowView: View {
                         .font(.system(size: 12)).foregroundStyle(Palette.tertiary)
                 }
                 Spacer()
-                if settings.notesCapturable { capturableBadge }
+                capturableBadge
                 iconButton("arrow.up.left.and.arrow.down.right", help: L("展开纪要")) { setWidth(460, 760) }
             }
             if live, let p = model.ending {

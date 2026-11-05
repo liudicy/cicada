@@ -45,6 +45,10 @@ enum Updater {
                   info?["CFBundleShortVersionString"] as? String == update.version else {
                 throw Failure(L("下载的不是预期的版本"))
             }
+            // A later version may need a newer macOS than this Mac has: swapped in, it wouldn't open.
+            if let minimum = info?["LSMinimumSystemVersion"] as? String, !Self.runs(minimum) {
+                throw Failure(L("新版本需要 macOS \(minimum) 或更新版本"))
+            }
             try await run("/usr/bin/codesign", "--verify", "--deep", "--strict", newApp.path)
 
             let script = work.appendingPathComponent("swap.sh")
@@ -70,6 +74,13 @@ enum Updater {
         open "$2"
         rm -rf "$4"
         """
+
+    /// Whether this Mac's macOS is at least `minimum` ("14.4").
+    nonisolated static func runs(_ minimum: String,
+                                 on os: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion) -> Bool {
+        let p = minimum.split(separator: ".").map { Int($0) ?? 0 } + [0, 0, 0]
+        return (os.majorVersion, os.minorVersion, os.patchVersion) >= (p[0], p[1], p[2])
+    }
 
     /// The hash listed for `name` in a `shasum -a 256` file.
     nonisolated static func expectedHash(of name: String, in checksums: Data) -> String? {

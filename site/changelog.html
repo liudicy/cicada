@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>知了更新日志：Mac 实时字幕、同声传译、AI 会议纪要的每次更新</title>
+<title>知了更新日志：实时字幕、同声传译、AI 会议纪要的每次更新</title>
 <meta name="description" content="知了（Cicada）每个版本新增、改进和修复了什么。最新版本 {{LATEST_VERSION}}：{{LATEST_TITLE}}。">
 <link rel="canonical" href="{{SITE}}changelog/">
 <link rel="icon" href="{{ROOT}}icon.svg" type="image/svg+xml">
@@ -16,6 +16,8 @@
 <meta property="og:description" content="最新版本 {{LATEST_VERSION}}：{{LATEST_TITLE}}">
 <meta property="og:url" content="{{SITE}}changelog/">
 <meta property="og:image" content="{{SITE}}og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:locale" content="zh_CN">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:creator" content="@wquguru">
@@ -31,7 +33,7 @@
   <section class="wrap cl-head">
     <nav class="crumbs" aria-label="面包屑"><a href="{{ROOT}}">知了</a> › 更新日志</nav>
     <h1>知了更新日志</h1>
-    <p>知了是 Mac 上的<strong>实时字幕</strong>、<strong>同声传译</strong>和 <strong>AI 会议纪要</strong>工具，在腾讯会议、Zoom、飞书、X Spaces、YouTube 直播里都能用。每个版本新增、改进和修复了什么，都记在这里。</p>
+    <p>知了是 Mac、Windows、Linux 和 Android 上的<strong>实时字幕</strong>、<strong>同声传译</strong>和 <strong>AI 会议纪要</strong>工具，在腾讯会议、Zoom、飞书、X Spaces、YouTube 直播里都能用。每个版本新增、改进和修复了什么，都记在这里。</p>
     <div class="cl-meta">
       <span class="pill"><span class="dot"></span>最新版本 {{LATEST_VERSION}}</span>
       <a class="rss" href="{{ROOT}}feed.xml"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/></svg>RSS 订阅</a>
@@ -39,6 +41,7 @@
     </div>
   </section>
 
+  <div class="wrap filters" role="group" aria-label="按平台筛选">{{PFILTERS}}</div>
   <div class="wrap filters" role="group" aria-label="按类型筛选">{{FILTERS}}</div>
 
   <div class="wrap cl-body">
@@ -54,16 +57,25 @@
 </main>
 {{FOOTER}}
 <script>
-// Filter by kind; groups and versions with nothing left are hidden.
+// Filter by platform and by kind, both at once; lines, groups and versions with nothing left are hidden.
 (function () {
-  var buttons = document.querySelectorAll('.filters button');
-  buttons.forEach(function (b) {
-    b.addEventListener('click', function () {
-      var k = b.dataset.kind;
-      buttons.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
-      document.querySelectorAll('.group').forEach(function (g) { g.hidden = k !== 'all' && g.dataset.kind !== k; });
-      document.querySelectorAll('.release').forEach(function (r) {
-        r.hidden = !r.querySelector('.group:not([hidden])');
+  var kind = 'all', platform = 'all';
+  function apply() {
+    document.querySelectorAll('.group li').forEach(function (li) {
+      li.hidden = platform !== 'all' && li.dataset.platforms.split(' ').indexOf(platform) < 0;
+    });
+    document.querySelectorAll('.group').forEach(function (g) {
+      g.hidden = (kind !== 'all' && g.dataset.kind !== kind) || !g.querySelector('li:not([hidden])');
+    });
+    document.querySelectorAll('.release').forEach(function (r) { r.hidden = !r.querySelector('.group:not([hidden])'); });
+  }
+  document.querySelectorAll('.filters').forEach(function (row) {
+    var buttons = row.querySelectorAll('button');
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () {
+        buttons.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        if (b.dataset.kind) kind = b.dataset.kind; else platform = b.dataset.platform;
+        apply();
       });
     });
   });

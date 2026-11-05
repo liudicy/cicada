@@ -20,3 +20,14 @@ test-shots/
 tools/*
 !tools/*.swift
 !tools/README.md
+!tools/macos-vm/
+
+# Windows: build output, spike results and clips (windows/spike/make-clips.sh, ming_asr.py)
+windows/**/bin/
+windows/**/obj/
+windows/spike/out/
+windows/spike/clips/*.wav
+
+# Signing keys never enter the repo (android/scripts/keystore.sh keeps them in ~/.cicada-android)
+*.jks
+*.keystore

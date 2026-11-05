@@ -1,0 +1,42 @@
+#cloud-config
+# The test VM: user "cicada", the host's key, a minimal GNOME desktop logged in automatically
+# (Wayland, Ubuntu's default). Apt goes through the host's proxy at 10.0.2.2:7890 when it's there.
+users:
+  - name: cicada
+    groups: [sudo, audio, video]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    plain_text_passwd: cicada
+    ssh_authorized_keys: ["@KEY@"]
+ssh_pwauth: false
+bootcmd:
+  - "sh -c 'nc -z -w2 10.0.2.2 7890 && printf \"Acquire::http::Proxy \\\"http://10.0.2.2:7890\\\";\\nAcquire::https::Proxy \\\"http://10.0.2.2:7890\\\";\\n\" > /etc/apt/apt.conf.d/90proxy || true'"
+write_files:
+  # No screen lock or blanking: screenshots and tests run unattended.
+  - path: /etc/dconf/profile/user
+    content: |
+      user-db:user
+      system-db:local
+  - path: /etc/dconf/db/local.d/00-cicada-test
+    content: |
+      [org/gnome/desktop/session]
+      idle-delay=uint32 0
+      [org/gnome/desktop/screensaver]
+      lock-enabled=false
+      idle-activation-enabled=false
+  - path: /etc/gdm3/custom.conf
+    content: |
+      [daemon]
+      AutomaticLoginEnable=true
+      AutomaticLogin=cicada
+# The desktop is installed in runcmd rather than `packages:` so a slow mirror is retried and logged
+# (/var/log/cicada-provision.log), then GDM starts in place: no reboot, which hung under HVF.
+runcmd:
+  - "sh -c 'for i in 1 2 3; do DEBIAN_FRONTEND=noninteractive apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q -o Dpkg::Options::=--force-confold ubuntu-desktop-minimal linux-modules-extra-$(uname -r) pulseaudio-utils xdotool x11-utils && break; sleep 10; done > /var/log/cicada-provision.log 2>&1'"
+  - dconf update
+  - systemctl set-default graphical.target
+  - sudo -u cicada mkdir -p /home/cicada/.config
+  - "sh -c 'echo yes > /home/cicada/.config/gnome-initial-setup-done'"
+  - "sh -c 'chown -R cicada:cicada /home/cicada/.config'"
+  - systemctl isolate graphical.target --no-block

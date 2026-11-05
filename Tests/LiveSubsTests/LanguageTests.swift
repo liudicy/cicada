@@ -68,4 +68,15 @@ import Testing
         #expect(speakLocale(forLanguage: "ja") == "ja-JP")
         #expect(speakLocale(forLanguage: "it") == "en-US")
     }
+
+    @Test func likelyLanguagesPutLastThenSystemThenEnglish() {
+        let locales = { (l: [Lang]) in l.map(\.locale) }
+        // A Chinese Mac with nothing detected yet: Chinese first, English to compare it with.
+        #expect(locales(likelySourceLanguages(last: nil, systemLanguages: ["zh-Hans-CN"])) == ["zh-CN", "en-US"])
+        // Traditional Chinese still listens with the Mandarin model.
+        #expect(locales(likelySourceLanguages(last: nil, systemLanguages: ["zh-Hant-TW", "en-US"])) == ["zh-CN", "en-US"])
+        #expect(locales(likelySourceLanguages(last: "ja-JP", systemLanguages: ["fr-FR", "en-GB"])) == ["ja-JP", "fr-FR", "en-US"])
+        // Languages with no speech model are skipped; English is always there.
+        #expect(locales(likelySourceLanguages(last: "xx", systemLanguages: ["it-IT"])) == ["en-US"])
+    }
 }

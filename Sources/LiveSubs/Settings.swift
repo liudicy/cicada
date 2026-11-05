@@ -62,6 +62,25 @@ final class AppSettings: ObservableObject {
     @Published var recordAudio: Bool {
         didSet { save() }
     }
+    /// 云端语音识别校对: each heard sentence's audio also goes to an OpenAI-compatible ASR
+    /// endpoint (preset: Xiaomi MiMo) and the record takes the more accurate text.
+    @Published var cloudASREnabled: Bool {
+        didSet { save() }
+    }
+    @Published var cloudASRBase: String {
+        didSet { save() }
+    }
+    @Published var cloudASRModel: String {
+        didSet { save() }
+    }
+    /// Imported files: the language they are in ("auto" or a locale), and whether notes are written
+    /// once one is transcribed.
+    @Published var importLanguage: String {
+        didSet { save() }
+    }
+    @Published var importNotes: Bool {
+        didSet { save() }
+    }
     /// Subtitle bar: show only while someone talks ("auto") or always.
     @Published var overlayAuto: Bool {
         didSet { save() }
@@ -79,12 +98,6 @@ final class AppSettings: ObservableObject {
         didSet { save() }
     }
 
-    /// Where the meeting is heard: "system" (the Mac's own sound, online meetings) or "mic"
-    /// (a microphone, a meeting in the room). Asked every time listening starts; the last
-    /// choice is the default answer, and the panel's 声源 row switches mid-meeting.
-    @Published var listenSource: String {
-        didSet { save() }
-    }
     /// What shows while listening: "notes" (live notes window, default), "bar" (subtitle bar), "none".
     @Published var displayMode: String {
         didSet { save() }
@@ -98,26 +111,54 @@ final class AppSettings: ObservableObject {
     @Published var aiModel: String {
         didSet { save() }
     }
-    /// Custom OpenAI-compatible chat providers the user added (Ling itself is built in).
-    @Published var aiProviders: [AIProvider] {
+    /// The AI service: an `AIProvider.Kind` ("ling" unless the user picked another).
+    @Published var aiProvider: String {
         didSet { save() }
     }
-    /// Which provider translation and notes use: "ling" or a custom provider's id.
-    @Published var aiActiveProvider: String {
+    /// Text and speech model per service other than Ling ("openrouter": "qwen/qwen3.8-flash"); a
+    /// service not listed uses its first recommended model. "custom" in `aiVoiceModels` is the
+    /// custom service's speech model, empty for none.
+    @Published var aiModels: [String: String] {
         didSet { save() }
     }
-    /// Send each finished sentence's audio to a cloud speech service (MiMo preset) and replace the
-    /// on-device transcript with its more accurate text. Off by default; needs its own key.
-    @Published var cloudASREnabled: Bool {
+    @Published var aiVoiceModels: [String: String] {
         didSet { save() }
     }
-    /// OpenAI-compatible base of the cloud speech service (preset: Xiaomi MiMo).
-    @Published var cloudASRBase: String {
+    /// The custom service: its address (an OpenAI-compatible `/v1`), and optionally another
+    /// address for speech (empty: the same one) and the voice to ask for.
+    @Published var aiCustomBase: String {
         didSet { save() }
     }
-    @Published var cloudASRModel: String {
+    @Published var aiCustomVoiceBase: String {
         didSet { save() }
     }
+    @Published var aiCustomVoice: String {
+        didSet { save() }
+    }
+
+    var provider: AIProvider { AIProvider.named(aiProvider) }
+
+    /// What `LingClient` calls with: the service, its address and models.
+    var aiConfig: AIConfig {
+        let p = provider
+        switch p.id {
+        case .ling:
+            return AIConfig(provider: p, base: p.base, textModel: aiModel, voiceModel: p.voiceModels.first?.id, voiceBase: p.base)
+        case .custom:
+            let base = AIProvider.customBase(aiCustomBase)
+            let voice = (aiVoiceModels["custom"] ?? "").trimmingCharacters(in: .whitespaces)
+            let voiceBase = aiCustomVoiceBase.isEmpty ? base : AIProvider.customBase(aiCustomVoiceBase)
+            let name = aiCustomVoice.trimmingCharacters(in: .whitespaces)
+            return AIConfig(provider: p, base: base, textModel: aiModels["custom"] ?? "", voiceModel: voice.isEmpty ? nil : voice,
+                            voiceBase: voiceBase, customVoice: name.isEmpty ? nil : name)
+        default:
+            return AIConfig(provider: p, base: p.base, textModel: aiModels[p.id.rawValue] ?? p.textModels.first?.id ?? "",
+                            voiceModel: p.hasVoices ? aiVoiceModels[p.id.rawValue] ?? p.voiceModels.first?.id : nil, voiceBase: p.base)
+        }
+    }
+
+    /// The text model in use, for display.
+    var textModel: String { aiConfig.textModel }
 
     /// End the meeting when the meeting app it was heard through hangs up.
     @Published var endWithApp: Bool {
@@ -138,12 +179,18 @@ final class AppSettings: ObservableObject {
         didSet { save() }
     }
 
-    /// Experimental: tell the other side's voices apart (说话人 1、2…). Off by default.
+    /// Tell the other side's voices apart (说话人 1、2…). On by default.
     @Published var speakerVoices: Bool {
         didSet { save() }
     }
 
     /// Record per-sentence timings (never text) and show the 诊断 tab. On by default in dev builds.
+    /// 听哪里: "system" (what the Mac plays) or "room" (a real microphone, for a meeting in the room).
+    @Published var listenSource: String {
+        didSet { save() }
+    }
+    var listensToRoom: Bool { listenSource == "room" }
+
     @Published var diagnostics: Bool {
         didSet { save() }
     }
@@ -171,26 +218,39 @@ final class AppSettings: ObservableObject {
         speakMic = defaults.string(forKey: "speakMic") ?? ""
         savedSystemInput = defaults.string(forKey: "savedSystemInput") ?? ""
         recordAudio = defaults.object(forKey: "recordAudio") as? Bool ?? true
+        cloudASREnabled = defaults.bool(forKey: "cloudASREnabled")
+        cloudASRBase = defaults.string(forKey: "cloudASRBase") ?? CloudASRClient.defaultBase
+        cloudASRModel = defaults.string(forKey: "cloudASRModel") ?? CloudASRClient.defaultModel
+        importLanguage = defaults.string(forKey: "importLanguage") ?? "auto"
+        importNotes = defaults.object(forKey: "importNotes") as? Bool ?? true
         overlayAuto = defaults.object(forKey: "overlayAuto") as? Bool ?? true
         overlayHideAfter = defaults.object(forKey: "overlayHideAfter") as? Double ?? 4
         talkKey = Shortcut(stored: defaults.string(forKey: "talkKey")) ?? .defaultTalk
         toggleKey = Shortcut(stored: defaults.string(forKey: "toggleKey")) ?? .defaultToggle
         aiModel = defaults.string(forKey: "aiModel") ?? "Ling-3.1-flash"
-        aiProviders = (defaults.data(forKey: "aiProviders")
-            .flatMap { try? JSONDecoder().decode([AIProvider].self, from: $0) }) ?? []
-        aiActiveProvider = defaults.string(forKey: "aiActiveProvider") ?? "ling"
-        cloudASREnabled = defaults.bool(forKey: "cloudASREnabled")
-        cloudASRBase = defaults.string(forKey: "cloudASRBase") ?? CloudASRClient.defaultBase
-        cloudASRModel = defaults.string(forKey: "cloudASRModel") ?? CloudASRClient.defaultModel
-        listenSource = defaults.string(forKey: "listenSource") ?? "system"
+        aiProvider = defaults.string(forKey: "aiProvider") ?? "ling"
+        aiModels = defaults.dictionary(forKey: "aiModels") as? [String: String] ?? [:]
+        aiVoiceModels = defaults.dictionary(forKey: "aiVoiceModels") as? [String: String] ?? [:]
+        aiCustomBase = defaults.string(forKey: "aiCustomBase") ?? ""
+        aiCustomVoiceBase = defaults.string(forKey: "aiCustomVoiceBase") ?? ""
+        aiCustomVoice = defaults.string(forKey: "aiCustomVoice") ?? ""
         displayMode = defaults.string(forKey: "displayMode") ?? "notes"
         speakVoices = defaults.dictionary(forKey: "speakVoices") as? [String: String] ?? [:]
         endWithApp = defaults.object(forKey: "endWithApp") as? Bool ?? true
         silenceEnd = defaults.string(forKey: "silenceEnd") ?? "prompt"
         silenceMinutes = defaults.object(forKey: "silenceMinutes") as? Double ?? 10
+        listenSource = defaults.string(forKey: "listenSource") == "room" ? "room" : "system"
         diagnostics = defaults.object(forKey: "diagnostics") as? Bool ?? DevBuild.isDev
         notesCapturable = defaults.bool(forKey: "notesCapturable")
-        speakerVoices = defaults.bool(forKey: "speakerVoices")
+        // Off by default while it was an experiment, and save() stores every key, so a stored false
+        // mostly means "never touched": turn it on once for everyone when it became a regular feature.
+        if defaults.bool(forKey: "speakerVoicesRegular") {
+            speakerVoices = defaults.bool(forKey: "speakerVoices")
+        } else {
+            speakerVoices = true
+            defaults.set(true, forKey: "speakerVoices")
+            defaults.set(true, forKey: "speakerVoicesRegular")
+        }
     }
 
     private func save() {
@@ -210,22 +270,28 @@ final class AppSettings: ObservableObject {
         defaults.set(speakMic, forKey: "speakMic")
         defaults.set(savedSystemInput, forKey: "savedSystemInput")
         defaults.set(recordAudio, forKey: "recordAudio")
+        defaults.set(cloudASREnabled, forKey: "cloudASREnabled")
+        defaults.set(cloudASRBase, forKey: "cloudASRBase")
+        defaults.set(cloudASRModel, forKey: "cloudASRModel")
+        defaults.set(importLanguage, forKey: "importLanguage")
+        defaults.set(importNotes, forKey: "importNotes")
         defaults.set(overlayAuto, forKey: "overlayAuto")
         defaults.set(overlayHideAfter, forKey: "overlayHideAfter")
         defaults.set(talkKey.stored, forKey: "talkKey")
         defaults.set(toggleKey.stored, forKey: "toggleKey")
         defaults.set(aiModel, forKey: "aiModel")
-        defaults.set(try? JSONEncoder().encode(aiProviders), forKey: "aiProviders")
-        defaults.set(aiActiveProvider, forKey: "aiActiveProvider")
-        defaults.set(cloudASREnabled, forKey: "cloudASREnabled")
-        defaults.set(cloudASRBase, forKey: "cloudASRBase")
-        defaults.set(cloudASRModel, forKey: "cloudASRModel")
-        defaults.set(listenSource, forKey: "listenSource")
+        defaults.set(aiProvider, forKey: "aiProvider")
+        defaults.set(aiModels, forKey: "aiModels")
+        defaults.set(aiVoiceModels, forKey: "aiVoiceModels")
+        defaults.set(aiCustomBase, forKey: "aiCustomBase")
+        defaults.set(aiCustomVoiceBase, forKey: "aiCustomVoiceBase")
+        defaults.set(aiCustomVoice, forKey: "aiCustomVoice")
         defaults.set(displayMode, forKey: "displayMode")
         defaults.set(speakVoices, forKey: "speakVoices")
         defaults.set(endWithApp, forKey: "endWithApp")
         defaults.set(silenceEnd, forKey: "silenceEnd")
         defaults.set(silenceMinutes, forKey: "silenceMinutes")
+        defaults.set(listenSource, forKey: "listenSource")
         defaults.set(diagnostics, forKey: "diagnostics")
         defaults.set(notesCapturable, forKey: "notesCapturable")
         defaults.set(speakerVoices, forKey: "speakerVoices")

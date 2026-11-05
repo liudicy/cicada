@@ -1,37 +1,98 @@
 <!doctype html>
-<!-- The website's share card (site/og.png, 1200×630). Rendered by scripts/site-images.sh. -->
+<!-- The website's share cards, 1200×630: site-og.html?lang=zh → site/og.png, ?lang=en|ja|ko → site/og-<lang>.png.
+     Rendered by scripts/site-images.sh. The right half shows what the app does (notes + a subtitle) rather than
+     leaving room empty; its wording follows the app's own UI strings in Resources/<lang>.lproj. -->
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&amp;family=Noto+Sans+SC:wght@500;700;900&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&amp;family=Noto+Sans+SC:wght@500;700;900&amp;family=Noto+Sans+JP:wght@500;700;900&amp;family=Noto+Sans+KR:wght@500;700;900&amp;display=swap">
 <style>
 html, body { margin: 0; }
-.card { width: 1200px; height: 630px; box-sizing: border-box; padding: 64px 72px; background: #F6F7F9; font-family: Inter, "Noto Sans SC", "PingFang SC", sans-serif; color: #15171C; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
+body { word-break: keep-all; } /* Korean wraps at spaces, not mid-word */
+.card { width: 1200px; height: 630px; box-sizing: border-box; padding: 64px 72px 72px; background: #F3F4F6; font-family: Inter, var(--cjk), sans-serif; color: #15171C; display: flex; gap: 40px; position: relative; overflow: hidden; }
+.left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
 .top { display: flex; align-items: center; gap: 16px; }
-.top img { width: 64px; height: 64px; border-radius: 15px; }
-.name { font-size: 40px; font-weight: 900; }
-.en { font-size: 26px; font-weight: 700; color: #5A5F6B; }
-.pill { margin-left: auto; padding: 8px 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E4E6EA; font-size: 17px; font-weight: 600; color: #5A5F6B; }
-.slogan { font-size: 72px; line-height: 1.1; font-weight: 900; letter-spacing: -0.03em; }
-.sub { margin-top: 14px; font-size: 26px; font-weight: 600; color: #3B3F48; }
-.bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
-.bar { padding: 16px 24px; border-radius: 18px; background: #15171C; color: #FFFFFF; min-width: 520px; }
-.bar .s { display: flex; align-items: center; gap: 10px; font-size: 17px; color: #A9AEB8; }
-.bar .s i { width: 9px; height: 9px; border-radius: 50%; background: #E8552B; }
-.bar .t { margin-top: 6px; font-size: 28px; font-weight: 700; }
-.apps { font-size: 17px; line-height: 1.6; color: #5A5F6B; font-weight: 600; text-align: right; }
+.top img { width: 60px; height: 60px; }
+.name { font-size: 38px; font-weight: 900; }
+.en { font-size: 24px; font-weight: 700; color: #5A5F6B; }
+.slogan { font-size: var(--slogan, 60px); line-height: 1.12; font-weight: 900; letter-spacing: -0.02em; }
+.sub { margin-top: 18px; font-size: 26px; font-weight: 700; }
+.sub b { color: #E8552B; font-weight: 700; }
+.foot { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 600; color: #5A5F6B; white-space: nowrap; }
+.pill { padding: 8px 14px; border-radius: 999px; background: #FFFFFF; color: #15171C; }
+.right { flex: 0 0 420px; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+.notes { background: #FFFFFF; border-radius: 20px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(21,23,28,.06), 0 12px 32px rgba(21,23,28,.08); }
+.head { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
+.head span:last-child { margin-left: auto; font-size: 14px; font-weight: 600; color: #6B7080; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: #E8552B; flex: none; }
+.label { font-size: 15px; font-weight: 700; color: #6B7080; }
+.decision { font-size: 19px; font-weight: 700; line-height: 1.45; }
+.todos { display: flex; flex-direction: column; gap: 8px; font-size: 17px; font-weight: 600; line-height: 1.4; }
+.todos div { display: flex; gap: 10px; align-items: center; }
+.todos div::before { content: ""; width: 16px; height: 16px; box-sizing: border-box; border: 2px solid #15171C; border-radius: 5px; flex: none; }
+.bar { background: #15171C; color: #FFFFFF; border-radius: 18px; padding: 16px 22px; }
+.bar .s { display: flex; align-items: center; gap: 10px; font-size: 16px; color: #A9AEB8; }
+.bar .s .dot { width: 8px; height: 8px; }
+.bar .t { margin-top: 6px; font-size: 24px; font-weight: 700; text-wrap: balance; }
 .stripe { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; background: #E8552B; }
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="top"><img src="../site/icon.svg" alt=""><span class="name">知了</span><span class="en">Cicada</span><span class="pill">免费开源 · macOS</span></div>
-  <div><div class="slogan">任何会议、任何直播，<br>没有语言障碍。</div><div class="sub">听得懂，说得出，记得住。</div></div>
-  <div class="bottom">
-    <div class="bar"><div class="s"><i></i>So the launch moves to next Thursday, right?</div><div class="t">所以发布挪到下周四了，对吧？</div></div>
-    <div class="apps">Zoom · Teams · 飞书 · 腾讯会议<br>X Spaces · YouTube 直播 · Discord</div>
+  <div class="left">
+    <div class="top"><img src="../site/icon.svg" alt=""><span class="name" id="name"></span><span class="en" id="en"></span></div>
+    <div><div class="slogan" id="slogan"></div><div class="sub" id="sub"></div></div>
+    <div class="foot"><span class="pill" id="pill"></span><span id="apps"></span></div>
+  </div>
+  <div class="right">
+    <div class="notes">
+      <div class="head"><span class="dot"></span><span id="notes"></span><span id="meeting"></span></div>
+      <div class="label" id="decisionLabel"></div>
+      <div class="decision" id="decision"></div>
+      <div class="label" id="todoLabel"></div>
+      <div class="todos" id="todos"></div>
+    </div>
+    <div class="bar"><div class="s"><span class="dot"></span><span id="heard"></span></div><div class="t" id="said"></div></div>
   </div>
   <div class="stripe"></div>
 </div>
+<script>
+// sub is [before, accent, after]: 说得出 (speaking into the room) is the part only Cicada does.
+const CARDS = {
+  zh: { lang: "zh-CN", cjk: "'Noto Sans SC', 'PingFang SC'", name: "知了", en: "Cicada",
+    slogan: "任何会议、任何直播，<br>没有语言障碍。", sub: ["听得懂，", "说得出", "，记得住。"],
+    pill: "免费开源 · macOS", apps: "Zoom · Teams · 飞书 · 腾讯会议 · YouTube",
+    notes: "实时纪要", meeting: "发布同步会 · 23:14", decisionLabel: "结论", decision: "发布挪到下周四，周二前冻结功能。",
+    todoLabel: "待办", todos: ["Emma：周一前出发布说明", "我：确认日文字幕"],
+    heard: "So the launch moves to next Thursday, right?", said: "所以发布挪到下周四了，对吧？" },
+  en: { lang: "en", cjk: "'Noto Sans SC'", name: "Cicada", en: "", slogan: "Any call, any stream,<br>no language barrier.", size: "54px",
+    sub: ["Understand. ", "Speak up.", " Remember."],
+    pill: "Free · Open source · macOS", apps: "Zoom · Teams · Meet · YouTube",
+    notes: "Live notes", meeting: "Launch sync · 23:14", decisionLabel: "Conclusions", decision: "Launch moves to next Thursday; feature freeze by Tuesday.",
+    todoLabel: "To-dos", todos: ["Lin: release notes by Monday", "Me: check the Japanese subtitles"],
+    heard: "所以发布挪到下周四了，对吧？", said: "So the launch moves to next Thursday?" },
+  ja: { lang: "ja", cjk: "'Noto Sans JP'", name: "Cicada", en: "", slogan: "どんな会議も、<br>どんな配信も、<br>言葉の壁なく。", size: "54px",
+    sub: ["聞き取り、", "話し、", "記録する。"],
+    pill: "無料・オープンソース · macOS", apps: "Zoom · Teams · Meet · YouTube",
+    notes: "ライブ議事メモ", meeting: "ローンチ定例 · 23:14", decisionLabel: "結論", decision: "ローンチは来週木曜に延期、火曜に機能凍結。",
+    todoLabel: "ToDo", todos: ["Emma：月曜までにリリースノート", "自分：字幕の訳語を確認"],
+    heard: "So the launch moves to next Thursday, right?", said: "来週木曜に延期ですね？" },
+  ko: { lang: "ko", cjk: "'Noto Sans KR'", name: "Cicada", en: "", slogan: "어떤 회의도,<br>어떤 방송도<br>언어 장벽 없이", size: "54px",
+    sub: ["알아듣고, ", "말하고,", " 기록합니다"],
+    pill: "무료 오픈 소스 · macOS", apps: "Zoom · Teams · Meet · YouTube",
+    notes: "실시간 회의록", meeting: "출시 회의 · 23:14", decisionLabel: "결론", decision: "출시는 다음 주 목요일, 화요일까지 기능 동결.",
+    todoLabel: "할 일", todos: ["Emma: 월요일까지 릴리스 노트", "나: 자막 용어 확인"],
+    heard: "So the launch moves to next Thursday, right?", said: "출시가 다음 주 목요일로 미뤄지죠?" },
+};
+const c = CARDS[new URLSearchParams(location.search).get("lang")] || CARDS.zh;
+const $ = id => document.getElementById(id);
+document.documentElement.lang = c.lang;
+document.body.style.setProperty("--cjk", c.cjk);
+if (c.size) document.body.style.setProperty("--slogan", c.size);
+for (const k of ["name", "en", "pill", "apps", "notes", "meeting", "decisionLabel", "decision", "todoLabel", "heard", "said"]) $(k).textContent = c[k];
+$("slogan").innerHTML = c.slogan;
+$("sub").append(c.sub[0], Object.assign(document.createElement("b"), { textContent: c.sub[1] }), c.sub[2]);
+for (const t of c.todos) $("todos").appendChild(Object.assign(document.createElement("div"), { textContent: t }));
+</script>
 </body>
 </html>

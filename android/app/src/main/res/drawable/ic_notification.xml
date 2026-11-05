@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status-bar icon: the launcher mark's silhouette (ic_launcher_monochrome), filling 24dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="100" android:viewportHeight="100">
+    <group android:translateX="-25" android:translateY="-30" android:scaleX="1.5" android:scaleY="1.5">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M30,40h40a13,13 0 0,1 13,13v14a13,13 0 0,1 -13,13h-40a13,13 0 0,1 -13,-13v-14a13,13 0 0,1 13,-13zM49.75,40L24.25,40A12.75,12.75 0 0,0 49.75,40ZM75.75,40L50.25,40A12.75,12.75 0 0,0 75.75,40ZM28,59.5a2.5,2.5 0 0,0 0,5h44a2.5,2.5 0 0,0 0,-5zM28,68.5a2.5,2.5 0 0,0 0,5h23a2.5,2.5 0 0,0 0,-5z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M24.25,40a12.75,12.75 0 1,1 25.5,0a12.75,12.75 0 1,1 -25.5,0zM27.75,40a9.25,9.25 0 1,0 18.5,0a9.25,9.25 0 1,0 -18.5,0zM33,41.5a5.5,5.5 0 1,1 11,0a5.5,5.5 0 1,1 -11,0zM50.25,40a12.75,12.75 0 1,1 25.5,0a12.75,12.75 0 1,1 -25.5,0zM53.75,40a9.25,9.25 0 1,0 18.5,0a9.25,9.25 0 1,0 -18.5,0zM59,41.5a5.5,5.5 0 1,1 11,0a5.5,5.5 0 1,1 -11,0z" />
+    </group>
+</vector>

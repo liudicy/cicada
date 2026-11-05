@@ -25,6 +25,8 @@ cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp -R Resources/zh-Hans.lproj "$APP/Contents/Resources/zh-Hant.lproj"
 
 PLIST="$APP/Contents/Info.plist"
+# One version for every platform, in VERSION at the repo root (the committed Info.plist value is unused).
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(tr -d '[:space:]' < VERSION)" "$PLIST"
 if [[ "${RELEASE:-}" != 1 ]]; then
   STAMP="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo local) @ $(git rev-parse --short HEAD 2>/dev/null || echo none)"
   [[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]] && STAMP+="+"

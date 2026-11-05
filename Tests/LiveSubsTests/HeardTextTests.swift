@@ -24,6 +24,31 @@ import Testing
         #expect(HeardText.clean("........") == "")
     }
 
+    @Test func keepTheDraftWhenTheFinalDroppedPhrases() {
+        // Issue #1, from a 200 wpm run: the final pass lost "the support team asked", "numbers", "foxtrot 6".
+        let final = "for a new escalation process for enterprise customers, and Echo 5 Finance, needs the budget. for next year by the end. of this month. in."
+        let draft = "to for the support team asked for a new escalation process for enterprise customers and echo 5 Finance needs the budget numbers for next year by the end of this month in foxtrot 6"
+        #expect(HeardText.fuller(final: final, draft: draft) == draft)
+    }
+
+    @Test func keepTheFinalWhenItHasAboutAsMuch() {
+        let final = "We need the design review finished by Tuesday, and the audit too."
+        #expect(HeardText.fuller(final: final, draft: "We need the design review finished by Tuesday and the the audit too") == final)
+        #expect(HeardText.fuller(final: final, draft: "") == final)
+        #expect(HeardText.fuller(final: "我们周五之前把文案定下来。", draft: "我们周五之前把落地页的文案定下来") == "我们周五之前把文案定下来。")
+        #expect(HeardText.fuller(final: "我们周五。", draft: "我们周五之前把落地页的文案定下来") == "我们周五之前把落地页的文案定下来")
+    }
+
+    @Test func englishHeardByAChineseModelEndsInLatin() {
+        // From test runs: English after Chinese, still on the zh-CN model.
+        #expect(HeardText.endsInLatin("提前准备一下会议室和午餐。reigifridadeinali"))
+        #expect(HeardText.endsInLatin("下会议室和午餐ouchrivesignin of Fridayndeledinalrin cop foretinge"))
+        // English terms in Chinese speech.
+        #expect(!HeardText.endsInLatin("Want还在做 onbording的 UIAtaging环境不太稳定。"))
+        #expect(!HeardText.endsInLatin("我们这个 featur的 rroatemape下周要定下来 datline是月底 backent那边的 API已经 bready了"))
+        #expect(!HeardText.endsInLatin("必要 dev帮忙看一下 Quberned的配置，另外 productmanager希望我们在 sprintreview之前把 Demo准备好"))
+    }
+
     @Test func joinOnlyWhatCarriesOn() {
         // Cut mid-sentence by a pause, carried on at once.
         #expect(HeardText.continues("that… in increased production that you would have expected at this",

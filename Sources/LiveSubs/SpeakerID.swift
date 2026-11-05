@@ -1,10 +1,10 @@
 import Accelerate
 import AVFoundation
 import CoreML
+import Combine
 import Foundation
-import SwiftUI
 
-// Experimental 说话人识别: telling the other side's voices apart (设置 › 通用 › 实验功能). Each heard line's
+// 说话人识别: telling the other side's voices apart (设置 › 通用). Each heard line's
 // audio becomes a voiceprint (WeSpeaker ResNet34-LM, VoxCeleb, CC BY 4.0, bundled as Core ML),
 // voiceprints are grouped as they arrive, and a voice is only named once it has a few lines. The
 // thresholds were tuned on AMI meetings; the model comes from `scripts/convert-voiceprint.py`.
@@ -264,6 +264,25 @@ enum SpeakerLabels {
     /// "George", else "说话人 2".
     static func label(_ number: Int, _ names: [Int: String]) -> String { names[number] ?? L("说话人 \(number)") }
 
+    /// The notes as shown: Ling wrote "说话人 6" before anyone named them; show the name since given.
+    static func named(_ notes: MeetingNotes, _ names: [Int: String]) -> MeetingNotes {
+        guard !names.isEmpty else { return notes }
+        func swap(_ text: String) -> String {
+            guard text.contains("说话人") || text.contains("Speaker") else { return text }
+            var out = text
+            for (n, name) in names.sorted(by: { $0.key > $1.key }) {   // 说话人 12 before 说话人 1
+                for form in ["说话人 \(n)", "说话人\(n)", "Speaker \(n)"] { out = out.replacingOccurrences(of: form, with: name) }
+            }
+            return out
+        }
+        var n = notes
+        n.summary = swap(n.summary)
+        n.topics = n.topics.map { t in var t = t; t.title = swap(t.title); t.summary = swap(t.summary); t.points = t.points.map(swap); return t }
+        n.conclusions = n.conclusions.map { var i = $0; i.text = swap(i.text); i.owner = i.owner.map(swap); return i }
+        n.todos = n.todos.map { var i = $0; i.text = swap(i.text); i.owner = i.owner.map(swap); return i }
+        return n
+    }
+
     /// Distinct voices on show, for the people row.
     static func shownCount(_ lines: [TranscriptLine]) -> Int { Set(numbers(lines).values).count }
 }
@@ -389,10 +408,12 @@ enum SpeakerNameGuess {
     }
 }
 
-/// The notes window asking the records window to open the editor for one voice.
-struct SpeakerEditRequest: Equatable {
+/// A speaker edit that can still be taken back.
+struct SpeakerUndo: Identifiable {
+    let id = UUID()
     let session: String
-    let voice: Int
+    let snapshot: SessionStore.VoiceSnapshot
+    var text: String
 }
 
 /// Asks Ling for names on its own: once two voices are on show, again every 20 lines, and once more
@@ -424,7 +445,7 @@ final class SpeakerNamer: ObservableObject {
             defer { busy.remove(id) }
             do {
                 let reply = try await ling.chat(content: content, instruction: SpeakerNameGuess.instruction,
-                                                priority: .notes, json: true, maxTokens: 300)
+                                                priority: .notes, json: true, maxTokens: 300, role: "speakers")
                 let (found, read) = SpeakerNameGuess.read(reply, s)
                 var refuted = read
                 for (key, g) in s.voiceGuesses ?? [:] {
@@ -437,215 +458,5 @@ final class SpeakerNamer: ObservableObject {
                 debugLog("speaker names: ling failed \(error)")
             }
         }
-    }
-}
-
-// MARK: - Views
-
-/// Colours for 说话人 1, 2, 3…, cycling after four: not the accent ("live", and 你) nor link blue
-/// (times in the records window), distinct in lightness, all ≥ 4.5:1 on white.
-enum SpeakerColor {
-    private static let inks: [Color] = [Color(red: 0.059, green: 0.482, blue: 0.424), Color(red: 0.478, green: 0.298, blue: 0.761),
-                                        Color(red: 0.690, green: 0.227, blue: 0.478), Color(red: 0.541, green: 0.353, blue: 0)]
-    static func ink(_ n: Int) -> Color { inks[(n - 1) % inks.count] }
-}
-
-/// "说话人 2" above a line.
-/// The names given to voices in the meeting on show, by speaker number (set on the transcript's container).
-private struct SpeakerNamesKey: EnvironmentKey { static let defaultValue: [Int: String] = [:] }
-extension EnvironmentValues {
-    var speakerNames: [Int: String] {
-        get { self[SpeakerNamesKey.self] }
-        set { self[SpeakerNamesKey.self] = newValue }
-    }
-}
-
-struct SpeakerTag: View {
-    let number: Int
-    @Environment(\.speakerNames) private var names
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle().fill(SpeakerColor.ink(number)).frame(width: 6, height: 6)
-            Text(SpeakerLabels.label(number, names)).font(.system(size: 11, weight: .semibold)).foregroundStyle(SpeakerColor.ink(number))
-        }
-    }
-}
-
-/// A line from the other side whose voice isn't one of the people on show.
-struct UnknownSpeakerTag: View {
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle().strokeBorder(Palette.tertiary, lineWidth: 1).frame(width: 6, height: 6)
-            Text("未识别").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.tertiary)
-        }
-        .help(L("没认出是谁：太短，或和已知的声音都不像"))
-    }
-}
-
-/// The small orange "实验" mark on experimental features.
-struct ExperimentBadge: View {
-    var body: some View {
-        Text("实验").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.accentInk)
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(RoundedRectangle(cornerRadius: 4).fill(Palette.accentPale))
-    }
-}
-
-/// Above the transcript once voices are told apart: who is speaking, that it's an experiment, and a
-/// one-click way out. Each person opens `SpeakerEditor`: in the records window right there; the notes
-/// window never takes focus, so there it opens the records window instead (`edit`).
-struct SpeakerStrip: View {
-    @ObservedObject var model: AppModel
-    let session: Session
-    /// Set in the notes window: a click hands the voice over instead of editing in place.
-    var edit: ((Int) -> Void)? = nil
-    @State private var editing: Int?
-
-    var body: some View {
-        let numbers = SpeakerLabels.voiceNumbers(session.lines)
-        let names = SpeakerLabels.names(session)
-        HStack(alignment: .top, spacing: 8) {
-          FlowLayout(spacing: 6) {
-            ForEach(numbers.sorted { $0.value < $1.value }, id: \.key) { voice, n in
-                Button { if let edit { edit(voice) } else { editing = voice } } label: {
-                    HStack(spacing: 5) {
-                        Circle().fill(SpeakerColor.ink(n)).frame(width: 6, height: 6)
-                        Text(SpeakerLabels.label(n, names)).font(.system(size: 11, weight: .semibold)).foregroundStyle(SpeakerColor.ink(n))
-                    }
-                    .fixedSize()
-                    .padding(.horizontal, 8).frame(height: 22)
-                    .background(Capsule().fill(SpeakerColor.ink(n).opacity(0.08)))
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .help(SpeakerLabels.guessed(session)[n].map { _ in L("Ling 从对话里认出，点一下可以改") } ?? L("改名字，或和别人合并"))
-                .popover(isPresented: Binding(get: { editing == voice }, set: { if !$0 { editing = nil } }), arrowEdge: .bottom) {
-                    SpeakerEditor(model: model, namer: model.speakerNamer, sessionID: session.id, voice: voice) { editing = nil }
-                }
-            }
-            ExperimentBadge().frame(height: 22)
-          }
-            Spacer(minLength: 0)
-            Button { model.settings.speakerVoices = false } label: {
-                Text("不准？关掉").font(.system(size: 11)).foregroundStyle(Palette.secondary).underline().fixedSize()
-            }
-            .buttonStyle(.plain)
-            .frame(height: 22)
-            .help(L("关掉说话人识别，记录里的名字一起收起"))
-        }
-        .onAppear {
-            openRequested()
-            model.speakerNamer.guess(session.id)
-        }
-        .onChange(of: model.speakerEdit) { _, _ in openRequested() }
-    }
-
-    /// The notes window asked to edit a voice of this meeting.
-    private func openRequested() {
-        guard edit == nil, let req = model.speakerEdit, req.session == session.id else { return }
-        model.speakerEdit = nil
-        DispatchQueue.main.async { editing = req.voice }
-    }
-}
-
-/// Correct one voice: its name (Ling's guess is already filled in), or merge it into another voice.
-struct SpeakerEditor: View {
-    @ObservedObject var model: AppModel
-    @ObservedObject var namer: SpeakerNamer
-    let sessionID: String
-    let voice: Int
-    let close: () -> Void
-    @State private var draft = ""
-
-    private var session: Session? { model.store.session(sessionID) }
-
-    var body: some View {
-        if let s = session {
-            let numbers = SpeakerLabels.voiceNumbers(s.lines)
-            let names = SpeakerLabels.names(s)
-            let n = numbers[voice] ?? 0
-            let guess = SpeakerLabels.guessed(s)[n]
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 6) {
-                    Circle().fill(SpeakerColor.ink(n)).frame(width: 8, height: 8)
-                    Text(SpeakerLabels.label(n, names)).font(.system(size: 14, weight: .bold))
-                    Spacer()
-                    Text("说了 \(s.lines.filter { $0.voice == voice }.count) 句").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
-                }
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("名字").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
-                    TextField(L("输入名字"), text: $draft).textFieldStyle(.roundedBorder).onSubmit { save(s, guess) }
-                    if let guess {
-                        HStack(alignment: .top, spacing: 8) {
-                            Text(guess.evidence.isEmpty ? L("Ling 从对话里认出") : L("Ling 从对话里认出：\(guess.evidence)"))
-                                .font(.system(size: 11)).foregroundStyle(Palette.tertiary).lineLimit(2)
-                            Spacer(minLength: 6)
-                            Button(L("不是 TA")) {
-                                model.store.setVoiceName(s.id, voice: voice, "")
-                                close()
-                            }
-                            .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Palette.secondary)
-                        }
-                    } else if namer.busy.contains(s.id) {
-                        Text("Ling 正在从对话里找名字…").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
-                    }
-                }
-                let others = numbers.filter { $0.key != voice }.sorted { $0.value < $1.value }
-                if !others.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("其实是同一个人").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
-                        HStack(spacing: 6) {
-                            ForEach(others, id: \.key) { other, on in
-                                SoftButton(L("并入 \(SpeakerLabels.label(on, names))")) {
-                                    model.store.mergeVoice(s.id, voice, into: other)
-                                    if s.id == model.store.liveID { model.speakers.merge(voice, into: other) }
-                                    close()
-                                }
-                            }
-                        }
-                    }
-                }
-                HStack(spacing: 8) {
-                    Spacer()
-                    SoftButton(L("取消")) { close() }
-                    SoftButton(L("完成"), dark: true) { save(s, guess) }
-                }
-            }
-            .padding(16)
-            .frame(width: 320)
-            .onAppear { draft = names[n] ?? "" }
-        }
-    }
-
-    /// Keeping Ling's name stores nothing, so a later, better guess can still replace it.
-    private func save(_ s: Session, _ guess: VoiceGuess?) {
-        let name = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let guess, name == guess.name { model.store.setVoiceName(s.id, voice: voice, nil) }
-        else if s.voiceNames?[String(voice)] != nil || !name.isEmpty { model.store.setVoiceName(s.id, voice: voice, name) }
-        close()
-    }
-}
-
-/// Debug render (`speakersRender`): the people row and the first lines, labelled as the transcript
-/// labels them (a name only where the speaker changes).
-struct SpeakerPreview: View {
-    @ObservedObject var model: AppModel
-    let session: Session
-    var body: some View {
-        let numbers = SpeakerLabels.numbers(session.lines)
-        let starts = SpeakerLabels.runStarts(session.lines, numbers)
-        VStack(alignment: .leading, spacing: 10) {
-            if !numbers.isEmpty { SpeakerStrip(model: model, session: session) }
-            ForEach(session.lines.prefix(12)) { l in
-                VStack(alignment: .leading, spacing: 3) {
-                    if !starts.contains(l.id) {
-                    } else if l.speaker == "me" { Text("你").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.accentInk) }
-                    else if let n = numbers[l.id] { SpeakerTag(number: n) }
-                    else if !numbers.isEmpty { UnknownSpeakerTag() }
-                    Text(l.src).font(.system(size: 13)).foregroundStyle(Palette.ink)
-                }
-            }
-        }
-        .padding(16)
     }
 }

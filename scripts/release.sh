@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Cuts a release: scripts/release.sh 1.0.1
-# Writes the CHANGELOG.md section from the commits since the last tag, sets the version in
-# Resources/Info.plist, commits, tags v<version> and pushes; the release workflow builds and
-# publishes the DMG with that section as its notes.
+# Writes the CHANGELOG.md section from the commits since the last tag, sets VERSION (one version
+# for every platform: Mac, Windows, Android, Linux all build from it), commits, tags v<version> and
+# pushes; the release workflow builds a draft release with that section as its notes.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -18,11 +18,11 @@ if ! grep -q "^## $VERSION — $(date +%Y-%m-%d)" CHANGELOG.md; then
   git commit -m "docs: changelog for $VERSION" CHANGELOG.md
 fi
 
-CURRENT=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)
+CURRENT=$(tr -d '[:space:]' < VERSION)
 if [[ "$CURRENT" != "$VERSION" ]]; then
-  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
-  git commit -m "chore: release v$VERSION" Resources/Info.plist
+  echo "$VERSION" > VERSION
+  git commit -m "chore: release v$VERSION" VERSION
 fi
 git tag -a "v$VERSION" -m "Cicada $VERSION"
 git push origin main "v$VERSION"
-echo "Pushed v$VERSION; follow it at https://github.com/wquguru/cicada/actions/workflows/release.yml"
+echo "Pushed v$VERSION; follow it at https://github.com/wquguru/cicada/actions/workflows/release.yml, then try the draft and scripts/publish-release.sh $VERSION"

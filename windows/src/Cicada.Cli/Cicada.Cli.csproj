@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- cicada-cli: runs the Windows listening pipeline on any OS (the Mac included) from a WAV
+       file, and checks records written by either app. A development tool, not shipped. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>cicada-cli</AssemblyName>
+    <RootNamespace>Cicada.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The Mac app's translations, used as they are (Chinese text is the key). -->
+    <None Include="../../../Resources/**/Localizable.strings" LinkBase="Resources" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="../Cicada.Core/Cicada.Core.csproj" />
+  </ItemGroup>
+</Project>

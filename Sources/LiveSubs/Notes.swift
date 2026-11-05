@@ -71,6 +71,16 @@ struct NoteTerm: Codable, Equatable, Identifiable {
     static func ordered(_ terms: [NoteTerm]) -> [NoteTerm] {
         terms.filter { !$0.heard.isEmpty } + terms.filter { $0.heard.isEmpty }
     }
+
+    /// Roles that say a term is a person, for offering it as a speaker's name.
+    private static let roles = ["首席", "执行官", "主席", "总裁", "董事", "经理", "创始人", "记者", "主持", "研究员",
+                                "分析师", "教授", "老师", "教师", "官员", "部长", "议员", "候选人", "嘉宾", "发言人",
+                                "CEO", "CFO", "CTO", "host", "analyst", "reporter", "founder"]
+
+    /// Names of people the notes mention, by their note ("BGN 集团首席运营官").
+    static func people(_ terms: [NoteTerm]) -> [String] {
+        terms.filter { t in roles.contains { t.note.localizedCaseInsensitiveContains($0) } }.map(\.name)
+    }
 }
 
 // MARK: - Engine
@@ -108,8 +118,9 @@ final class NotesEngine: ObservableObject {
     private(set) var shownID: String?
     private var timer: Timer?
     private var inFlight = false
-    /// A final pass asked for while another call was running; it runs right after.
-    private var pendingFinal: String?
+    /// Final passes asked for while another call was running, in order; each runs after it.
+    /// Several can wait: an imported file can finish while the meeting's own pass is queued.
+    private var pendingFinals: [String] = []
     /// A language change that arrived while another update was running: rewrite after it.
     private var pendingRewrite: String?
     private var lastAttempt = Date.distantPast
@@ -206,7 +217,10 @@ final class NotesEngine: ObservableObject {
     private func update(_ id: String, final: Bool, upto: Int? = nil, fresh: Bool = false) async {
         if inFlight {
             // Never drop the end-of-meeting pass or a "生成纪要" request: queue it.
-            if final { pendingFinal = id; generatingID = id }
+            if final {
+                if !pendingFinals.contains(id) { pendingFinals.append(id) }
+                if generatingID == nil { generatingID = id }
+            }
             if fresh { pendingRewrite = id }
             return
         }
@@ -219,9 +233,9 @@ final class NotesEngine: ObservableObject {
         defer {
             inFlight = false
             if final, generatingID == id { generatingID = nil }
-            if let next = pendingFinal {
-                pendingFinal = nil
-                pendingRewrite = nil // the final pass starts from nothing anyway
+            if !pendingFinals.isEmpty {
+                let next = pendingFinals.removeFirst()
+                if pendingRewrite == next { pendingRewrite = nil } // the final pass starts from nothing anyway
                 Task { await update(next, final: true) }
             } else if let next = pendingRewrite {
                 pendingRewrite = nil

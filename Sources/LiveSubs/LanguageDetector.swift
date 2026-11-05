@@ -3,7 +3,6 @@ import AVFoundation
 import AudioToolbox
 import CoreAudio
 import CoreMedia
-import Speech
 
 // MARK: - Spoken language detection
 
@@ -32,43 +31,9 @@ enum LanguageDetector {
     }
 
     private static func evaluate(_ clip: [AVAudioPCMBuffer], lang: Lang) async -> Candidate? {
-        let transcriber = SpeechTranscriber(locale: Locale(identifier: lang.locale),
-                                            transcriptionOptions: [],
-                                            reportingOptions: [],
-                                            attributeOptions: [.transcriptionConfidence])
-        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else { return nil }
-        let converter = PCMConverter()
-        let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
-        for buffer in clip {
-            if let b = converter.convert(buffer, to: format) { continuation.yield(AnalyzerInput(buffer: b)) }
-        }
-        continuation.finish()
-
-        let collector = Task { () -> (String, Double, Int) in
-            var text = ""
-            var weighted = 0.0
-            var chars = 0
-            for try await result in transcriber.results {
-                text += String(result.text.characters)
-                for run in result.text.runs {
-                    guard let c = run.transcriptionConfidence else { continue }
-                    let len = result.text[run.range].characters.filter { !$0.isWhitespace && !$0.isPunctuation }.count
-                    weighted += c * Double(len)
-                    chars += len
-                }
-            }
-            return (text, chars > 0 ? weighted / Double(chars) : 0, chars)
-        }
-        do {
-            let analyzer = SpeechAnalyzer(inputSequence: stream, modules: [transcriber])
-            try await analyzer.finalizeAndFinishThroughEndOfInput()
-            let (text, conf, chars) = try await collector.value
-            return Candidate(lang: lang, confidence: conf, chars: chars, text: text,
-                             score: score(conf: conf, chars: chars, text: text, lang: lang))
-        } catch {
-            collector.cancel()
-            return nil
-        }
+        guard let heard = await Recognition.transcribe(clip, locale: lang.locale) else { return nil }
+        return Candidate(lang: lang, confidence: heard.confidence, chars: heard.letters, text: heard.text,
+                         score: score(conf: heard.confidence, chars: heard.letters, text: heard.text, lang: lang))
     }
 
     static func score(conf: Double, chars: Int, text: String, lang: Lang) -> Double {

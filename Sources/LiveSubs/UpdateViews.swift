@@ -1,33 +1,52 @@
 import SwiftUI
 
-/// The panel's update strip, shown only while there is a newer release: install it, watch it
-/// download, or read why installing in place failed (the release page was opened instead).
+/// The panel's update strip, under the header while there is a newer release: install it, watch
+/// it download, or read why installing in place failed (the release page was opened instead).
+/// While a meeting is on it shrinks to one line, so it doesn't push the meeting's controls down.
 struct UpdateBanner: View {
     @ObservedObject var updates: Updates
-    let model: AppModel
+    @ObservedObject var model: AppModel
 
     var body: some View {
         if let update = updates.update {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Circle().fill(Palette.accent).frame(width: 7, height: 7)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("新版本 \(update.version)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
-                        Text(detail(update)).font(.system(size: 11)).foregroundStyle(Palette.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+            Group {
+                if model.running && updates.progress == nil && updates.failure == nil {
+                    HStack(spacing: 8) {
+                        Circle().fill(Palette.accent).frame(width: 7, height: 7)
+                        Text("新版本 \(update.version)").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
+                        Spacer()
+                        SoftButton(L("安装"), onGrey: true) { updates.install(model: model) }
                     }
-                    Spacer()
-                    if updates.progress == nil {
-                        SoftButton(updates.failure == nil ? L("安装") : L("重试")) { updates.install(model: model) }
-                    }
-                }
-                if let p = updates.progress {
-                    ProgressView(value: p).controlSize(.small).tint(Palette.accent).accessibilityLabel(L("下载进度"))
+                } else {
+                    full(update)
                 }
             }
             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 9).fill(Palette.accentPale))
             .contextMenu { Button("更新说明") { NSWorkspace.shared.open(update.url) } }
+        }
+    }
+
+    private func full(_ update: UpdateChecker.Update) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle().fill(Palette.accent).frame(width: 7, height: 7)
+                Text("新版本 \(update.version)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                Spacer()
+            }
+            Text(detail(update)).font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let p = updates.progress {
+                ProgressView(value: p).controlSize(.small).tint(Palette.accent).accessibilityLabel(L("下载进度"))
+            } else {
+                HStack(spacing: 12) {
+                    SoftButton(updates.failure == nil ? L("安装并重新打开") : L("重试"), dark: true) { updates.install(model: model) }
+                    Button { NSWorkspace.shared.open(update.url) } label: {
+                        Text("更新说明").font(.system(size: 12)).foregroundStyle(Palette.accentInk)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 
@@ -82,7 +101,9 @@ struct AppRows: View {
         case .checking: return L("正在检查…")
         case .upToDate: return L("已是最新版本")
         case .failed: return L("连不上 GitHub，请稍后再试")
-        case .idle: return nil
+        case .idle:
+            guard let d = updates.lastChecked else { return nil }
+            return L("上次检查 \(dateText(d, Calendar.current.isDateInToday(d) ? "HHmm" : "MMMdHHmm"))")
         }
     }
 }

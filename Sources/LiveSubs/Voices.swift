@@ -3,15 +3,16 @@ import Foundation
 
 // MARK: - Catalog
 
-/// A voice the room can hear: one of Ming's (through the Ling key), a voice installed on this Mac,
-/// or the user's own voice cloned from a recording.
+/// A voice the room can hear: one of Ming's (through the Ling key), one of another service's speech
+/// model, a voice installed on this Mac, or the user's own voice cloned from a recording.
 struct VoiceOption: Identifiable, Equatable {
     enum Kind: Equatable {
         case ming(String)
+        case cloud(String)
         case system(String)
         case clone
     }
-    /// Stored in settings: "ming:US_Emma", "system:<AVSpeechSynthesisVoice identifier>", "clone".
+    /// Stored in settings: "ming:US_Emma", "cloud:Kore", "system:<AVSpeechSynthesisVoice identifier>", "clone".
     let id: String
     let name: String
     let tags: [String]
@@ -25,6 +26,15 @@ struct VoiceOption: Identifiable, Equatable {
 /// George speak it with `language_id`. The Mac's own best female and male voices follow, so there is
 /// always something without a key.
 enum VoiceCatalog {
+    /// The cloud voices of the AI service in use. Set by the app when the service changes.
+    enum Service: Equatable {
+        case ming
+        /// `label`: where they come from, shown next to each ("Gemini").
+        case cloud(label: String, voices: [CloudVoice])
+        case none
+    }
+    nonisolated(unsafe) static var service: Service = .ming
+
     /// Tabs in settings: (key, title). The key is the translation code without region ("zh" for zh-CN / zh-TW).
     static let languages: [(key: String, title: String)] = [
         ("en", "English"), ("zh", "中文"), ("ja", "日本語"), ("ko", "한국어"),
@@ -78,11 +88,22 @@ enum VoiceCatalog {
         return out
     }
 
-    static func options(for language: String) -> [VoiceOption] { ming(for: language) + system(for: language) }
+    /// The service's voices for a language: Ming's, a speech model's (the same in every language), or none.
+    static func remote(for language: String) -> [VoiceOption] {
+        switch service {
+        case .ming: return ming(for: language)
+        case .cloud(let label, let voices):
+            return voices.map { VoiceOption(id: "cloud:\($0.id)", name: $0.id, tags: [$0.gender, label].filter { !$0.isEmpty },
+                                            kind: .cloud($0.id)) }
+        case .none: return []
+        }
+    }
 
-    /// What a language uses until the user picks: Ming's first voice with a key, else the Mac's.
+    static func options(for language: String) -> [VoiceOption] { remote(for: language) + system(for: language) }
+
+    /// What a language uses until the user picks: the service's first voice with a key, else the Mac's.
     static func defaultID(for language: String, hasKey: Bool) -> String? {
-        (hasKey ? ming(for: language).first : nil)?.id ?? system(for: language).first?.id
+        (hasKey ? remote(for: language).first : nil)?.id ?? system(for: language).first?.id
     }
 
     static let cloneOption = VoiceOption(id: "clone", name: L("我自己的声音"), tags: [], kind: .clone)
@@ -151,6 +172,72 @@ enum VoiceReference {
         try? FileManager.default.removeItem(at: folder)
     }
 
+    // MARK: Pace
+
+    #if !CICADA_IOS
+    // Mac app only, with the voice recorder below: it scores with the speak test's tokens (SpeakTest.swift).
+
+    /// Ming copies the recording's pace into every sentence: a recital at 1.7 characters a second
+    /// made each sentence about 4× as long as the built-in voice says it. Below these (characters
+    /// for Chinese, Japanese and Korean, words otherwise, per second of speech) the clone is too
+    /// slow for a meeting; reading the passage at an ordinary pace gives 3.5–5 and 2.3–3.
+    static let slowCharacters = 2.5, slowWords = 1.6
+
+    /// How many characters or words a second the recording is read at, silence at both ends left
+    /// out; nil when there is no speech to measure.
+    static func pace(text: String, samples: [Float], sampleRate: Double) -> Double? {
+        let units = SpeakScore.tokens(text).count
+        guard units > 0, let span = speechSpan(samples, sampleRate: sampleRate), span > 0.5 else { return nil }
+        return Double(units) / span
+    }
+
+    static func isSlow(text: String, pace: Double) -> Bool {
+        let tokens = SpeakScore.tokens(text)
+        let characters = tokens.filter { $0.unicodeScalars.contains(where: SpeakScore.isCJK) }.count
+        return pace < (characters * 2 >= tokens.count ? slowCharacters : slowWords)
+    }
+
+    /// Seconds from the first to the last 20 ms window within 35 dB of the loudest one.
+    static func speechSpan(_ samples: [Float], sampleRate: Double) -> Double? {
+        let size = max(1, Int(sampleRate * 0.02))
+        var levels: [Float] = []
+        var i = 0
+        while i < samples.count {
+            let end = min(samples.count, i + size)
+            var sum: Float = 0
+            for k in i..<end { sum += samples[k] * samples[k] }
+            levels.append((sum / Float(end - i)).squareRoot())
+            i = end
+        }
+        guard let loudest = levels.max(), loudest > 0.003 else { return nil }
+        let floor = loudest * 0.0178
+        guard let first = levels.firstIndex(where: { $0 >= floor }),
+              let last = levels.lastIndex(where: { $0 >= floor }) else { return nil }
+        return Double(last - first + 1) * Double(size) / sampleRate
+    }
+
+    /// The pace of a WAV and what it says.
+    static func pace(of url: URL, text: String) -> Double? {
+        guard let f = try? AVAudioFile(forReading: url),
+              let buf = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: AVAudioFrameCount(f.length)),
+              (try? f.read(into: buf)) != nil, let ch = buf.floatChannelData?[0] else { return nil }
+        return pace(text: text, samples: Array(UnsafeBufferPointer(start: ch, count: Int(buf.frameLength))),
+                    sampleRate: f.processingFormat.sampleRate)
+    }
+
+    private static var savedPace: (date: Date, slow: Bool)?
+
+    /// The saved recording is read too slowly (worked out once per recording).
+    static var savedIsSlow: Bool {
+        guard let date = (try? audioURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+              let text else { return false }
+        if let c = savedPace, c.date == date { return c.slow }
+        let slow = pace(of: audioURL, text: text).map { isSlow(text: text, pace: $0) } ?? false
+        savedPace = (date, slow)
+        return slow
+    }
+    #endif
+
     /// The passage to read, in the user's own language.
     static func passage(for locale: String) -> String {
         switch VoiceCatalog.key(for: locale) {
@@ -161,6 +248,9 @@ enum VoiceReference {
     }
 }
 
+#if !CICADA_IOS
+// Mac app only (the iOS build sets CICADA_IOS): pinned to a Mac input device and checked with the
+// Mac recognizer. iOS records its own (docs/ios-plan.md, M3).
 /// Records the microphone for the voice clone: 16 kHz mono into a temporary WAV, with a level for
 /// the meter. Stops by itself at 30 s.
 @MainActor
@@ -256,7 +346,14 @@ final class VoiceRecorder: ObservableObject {
         Task {
             let text = await Self.transcribe(url, locale: locale)
             self.transcript = text
-            self.phase = text.count >= 6 ? .ready : .failed(L("没听清录音内容，请换个安静的地方再录一次"))
+            guard text.count >= 6 else { self.phase = .failed(L("没听清录音内容，请换个安静的地方再录一次")); return }
+            let pace = VoiceReference.pace(of: url, text: text)
+            debugLog("voice clone: \(text.count) chars, pace \(pace.map { String(format: "%.1f", $0) } ?? "-")/s")
+            if let pace, VoiceReference.isSlow(text: text, pace: pace) {
+                self.phase = .failed(L("读得有点慢，克隆的声音也会这么慢。请用平时说话的语速再录一次"))
+                return
+            }
+            self.phase = .ready
         }
     }
 
@@ -283,3 +380,4 @@ final class VoiceRecorder: ObservableObject {
         return await LoopbackTest.transcribe([buf], locale: locale)
     }
 }
+#endif

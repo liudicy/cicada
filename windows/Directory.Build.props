@@ -1,0 +1,14 @@
+<Project>
+  <!-- Shared by every Windows project. No NuGet packages anywhere: only the .NET SDK and Windows
+       APIs (the Mac app's "no third-party dependencies" rule). Builds on the Mac with `dotnet`. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- One version for every platform: VERSION at the repo root. -->
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../VERSION').Trim())</Version>
+  </PropertyGroup>
+</Project>

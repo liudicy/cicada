@@ -1,9 +1,5 @@
-import AppKit
-import AVFoundation
-import AudioToolbox
-import CoreAudio
-import CoreMedia
-import Speech
+// Pure Foundation: the iOS app shares this file (ios/shared-sources.txt).
+import Foundation
 
 // MARK: - Languages
 
@@ -64,6 +60,22 @@ func followSystemTarget(source: String?, systemLanguages prefs: [String]) -> Str
     guard let source, source == mine else { return mine }
     return prefs.map(translationCode(forSystemLanguage:)).first { $0 != mine }
         ?? (mine.hasPrefix("zh") ? "en" : "zh-CN")
+}
+
+/// The languages "auto" most likely hears, most likely first: the last one detected, the Mac's
+/// own languages, then English. Detection compares two or more models, so a Mac with fewer
+/// fetches the first ones of these it lacks; and they are what 听不出 offers to pick from.
+func likelySourceLanguages(last: String?, systemLanguages prefs: [String]) -> [Lang] {
+    var out: [Lang] = []
+    func add(_ lang: Lang?) { if let lang, !out.contains(lang) { out.append(lang) } }
+    add(sourceLanguages.first { $0.locale == last })
+    for id in prefs {
+        let code = translationCode(forSystemLanguage: id)
+        // The only Chinese model listed is Mandarin (zh-CN); it hears Taiwanese Mandarin as well.
+        add(sourceLanguages.first { $0.code == (code.hasPrefix("zh") ? "zh-CN" : code) })
+    }
+    add(sourceLanguages.first { $0.code == "en" })
+    return out
 }
 
 /// The speech locale to listen for when I speak my language (English when it isn't one we recognize).

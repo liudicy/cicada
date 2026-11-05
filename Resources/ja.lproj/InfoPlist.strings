@@ -1,5 +1,5 @@
 CFBundleName = "Cicada";
 CFBundleDisplayName = "Cicada";
 NSAudioCaptureUsageDescription = "ライブ字幕を作るため、Cicada は Mac で再生中の音声を読み取ります。";
-NSMicrophoneUsageDescription = "話すキーを押している間、Cicada はマイクを使ってあなたの言葉を相手の言語に翻訳します。";
+NSMicrophoneUsageDescription = "話すキーを押している間、Cicada はマイクを使ってあなたの言葉を相手の言語に翻訳します。会議室を聞くときは、マイクでその場の人の声を聞きます。";
 NSSpeechRecognitionUsageDescription = "Cicada は音声をテキストにするために音声認識を使います。";

@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Windows app: tray icon, notes window / subtitle bar, records, settings, onboarding.
+       WPF in code (no XAML), WinForms only for the tray icon; no NuGet packages. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Cicada</AssemblyName>
+    <RootNamespace>Cicada.App</RootNamespace>
+    <ApplicationIcon>Assets/cicada.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Self-contained WPF is ~200 MB; compressed ~half. Starts a little slower the first time. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <Product>Cicada</Product>
+    <Company>wquguru</Company>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- WinForms is only here for the tray icon: keep its names out of the WPF code. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="System.IO" />
+    <!-- The UI text, inside the exe (Bundled.cs reads it): Cicada-Setup.exe is this one file, so it
+         must speak the user's language before anything is installed. -->
+    <EmbeddedResource Include="../../../Resources/**/Localizable.strings" LogicalName="strings/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Strings/**/Windows.strings" LogicalName="strings/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Both made by scripts/build.sh from docs/icon.png and Resources/sample/sample.m4a; committed so CI on Windows needs no Mac tools. -->
+    <Resource Include="Assets/cicada.ico" Link="cicada.ico" />
+    <!-- The voiceprint model (scripts/compress-voiceprint.py; WeSpeaker, CC BY 4.0), inside the exe so
+         single-file compression shrinks it too. -->
+    <EmbeddedResource Include="Assets/voiceprint.onnx" LogicalName="voiceprint.onnx" />
+    <EmbeddedResource Include="Assets/sample.wav" LogicalName="sample.wav" />
+    <ProjectReference Include="../Cicada.Core/Cicada.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Cicada
+Name[zh_CN]=知了
+Name[ja]=知了
+Name[ko]=知了
+Comment=Live translated subtitles and meeting notes for what your computer plays
+Comment[zh_CN]=把电脑播放的声音变成双语字幕和会议纪要
+Exec=@BIN@
+Icon=cicada
+Terminal=false
+Categories=AudioVideo;Audio;
+StartupWMClass=Cicada
+StartupNotify=false

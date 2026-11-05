@@ -1,0 +1,18 @@
+# Mac sources compiled into the iOS app as they are (one module, so no `public`).
+# Keep these free of AppKit and of Mac-only APIs. Guard what needs AppKit with #if os(macOS), and what
+# needs the rest of the Mac app with #if !CICADA_IOS (the iOS build sets it). ios/scripts/typecheck.sh checks.
+Sources/LiveSubs/Ling.swift
+Sources/LiveSubs/AIProviders.swift
+Sources/LiveSubs/Notes.swift
+Sources/LiveSubs/HeardText.swift
+Sources/LiveSubs/MeetingEnd.swift
+Sources/LiveSubs/Localization.swift
+Sources/LiveSubs/Voices.swift
+Sources/LiveSubs/SessionStore.swift
+Sources/LiveSubs/SpeakerID.swift
+Sources/LiveSubs/AudioFiles.swift
+Sources/LiveSubs/Translator.swift
+Sources/LiveSubs/Diagnostics.swift
+Sources/LiveSubs/RecordList.swift
+Sources/LiveSubs/Languages.swift
+Sources/LiveSubs/Recognition.swift

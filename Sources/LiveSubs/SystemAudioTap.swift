@@ -10,6 +10,24 @@ import Speech
 /// Captures the audio that is currently going to the default output device.
 /// This uses Core Audio process taps, so it only needs the "System Audio
 /// Recording" privacy grant and never asks for Screen Recording.
+/// Whether 系统音频录制 was allowed. Refused, the tap still starts and hears only silence, so
+/// starting proves nothing; TCC's own preflight is the one way to tell (loaded at run time; nil
+/// when it isn't there, and then starting is taken as allowed, as before).
+enum SystemAudioPermission {
+    enum Status { case granted, denied, unknown }
+
+    static func status() -> Status? {
+        typealias Preflight = @convention(c) (CFString, CFDictionary?) -> Int32
+        guard let tcc = dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_LAZY),
+              let sym = dlsym(tcc, "TCCAccessPreflight") else { return nil }
+        switch unsafeBitCast(sym, to: Preflight.self)("kTCCServiceAudioCapture" as CFString, nil) {
+        case 0: return .granted
+        case 1: return .denied
+        default: return .unknown
+        }
+    }
+}
+
 final class SystemAudioTap {
     /// Called on the real-time audio thread. Must not block.
     var onAudio: ((AVAudioPCMBuffer) -> Void)?
@@ -46,6 +64,23 @@ final class SystemAudioTap {
         let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr,
                                                 UInt32(MemoryLayout<pid_t>.size), &pid, &size, &obj)
         return status == noErr && obj != kAudioObjectUnknown ? obj : nil
+    }
+
+    /// How many input channels a device has: a headset, AirPods or a virtual machine's sound
+    /// device has a microphone on the same device as its speakers.
+    static func inputChannels(_ device: AudioObjectID) -> Int {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioObjectPropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(device, &addr, 0, nil, &size) == noErr, size > 0 else { return 0 }
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { raw.deallocate() }
+        guard AudioObjectGetPropertyData(device, &addr, 0, nil, &size, raw) == noErr else { return 0 }
+        let list = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
+        return list.reduce(0) { $0 + Int($1.mNumberChannels) }
     }
 
     private static func defaultOutputUID() -> String? {
@@ -149,6 +184,17 @@ final class SystemAudioTap {
         status = AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1,
                                       &asbd, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
         guard status == noErr else { throw fail(Int(status), L("无法设置音频格式（\(status)）")) }
+
+        // The aggregate's inputs are the output device's own inputs first, then the tap. When the
+        // output device has a microphone (a headset, AirPods, a virtual machine's sound device),
+        // the first two channels are that microphone, not what the Mac plays: skip past them.
+        let mics = Self.defaultOutputDevice().map(Self.inputChannels) ?? 0
+        if mics > 0 {
+            var map: [Int32] = [Int32(mics), Int32(mics + 1)]
+            status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1,
+                                          &map, UInt32(MemoryLayout<Int32>.size * map.count))
+            debugLog("audio tap: output device has \(mics) input channels, reading the tap from channel \(mics) (\(status))")
+        }
 
         var callback = AURenderCallbackStruct(
             inputProc: { refCon, _, timestamp, bus, frames, _ in

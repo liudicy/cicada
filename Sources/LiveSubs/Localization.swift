@@ -18,3 +18,5 @@ func dateText(_ date: Date, _ template: String) -> String {
     f.setLocalizedDateFormatFromTemplate(template)
     return f.string(from: date)
 }
+
+let appDisplayName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? L("知了")

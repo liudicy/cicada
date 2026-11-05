@@ -4,6 +4,22 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Audio or video recording</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.audio</string>
+				<string>public.movie</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Cicada</string>
 	<key>CFBundleExecutable</key>
@@ -35,7 +51,7 @@
 	<key>LSHasLocalizedDisplayName</key>
 	<true/>
 	<key>LSMinimumSystemVersion</key>
-	<string>26.0</string>
+	<string>14.4</string>
 	<key>LSUIElement</key>
 	<false/>
 	<key>NSAudioCaptureUsageDescription</key>
@@ -45,7 +61,7 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 知了 Cicada</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>While you hold the talk key, Cicada uses the microphone to translate what you say into the other side's language.</string>
+	<string>While you hold the talk key, Cicada uses the microphone to translate what you say into the other side's language. When it listens to a meeting in the room, the microphone hears the people there.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Cicada uses speech recognition to turn audio into text.</string>
 </dict>

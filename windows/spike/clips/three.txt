@@ -1,0 +1,18 @@
+Samantha|Good morning everyone, let's go through the launch plan for this quarter.
+Daniel|Thanks. The payment migration finished last Thursday, and the error rate is down to point three percent.
+Tingting|安卓版本还有一个闪退问题，主要出现在三星手机上。
+Samantha|How long do you think it will take to fix the crash on those phones?
+Daniel|If the fix is ready by Monday, testing can sign off by Wednesday afternoon.
+Tingting|我这边可以周一之前把修复版本发给测试同事。
+Samantha|Great. Then we keep the twenty first as the release date for now.
+Daniel|I will update the release notes and send them to the design team today.
+Tingting|另外，我们需要确认一下客服那边的培训时间。
+Samantha|Let's ask the support lead to join tomorrow's meeting for that.
+Daniel|Sounds good. I will also check the marketing timeline with their team.
+Tingting|好的，那我把测试计划更新以后发到群里。
+Samantha|One more thing, please keep an eye on the server costs this month.
+Daniel|The costs went up a little after the migration, but it should settle soon.
+Tingting|我们下周可以再看一下成本的数据。
+Samantha|Perfect, thank you all. Let's meet again on Friday.
+Daniel|Thanks everyone, see you on Friday.
+Tingting|好的，周五见，大家辛苦了。

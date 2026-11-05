@@ -218,6 +218,12 @@ final class OverlayController {
         }
     }
 
+    /// The listening pill: back on screen however it went away (⌃⌥S, or tucked after a quiet spell).
+    func reveal() {
+        guard isShown else { show(); return }
+        if manualHidden || !expanded { toggleManual() }
+    }
+
     func modeChanged() {
         if !mode().auto { lastContentAt = Date(); expand() }
     }

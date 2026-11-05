@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Drives the running dev build through its control socket (cicada/app/debug.py has the commands):
+  cicadactl state | start | stop | feed <wav> | sample | view notes|subtitles | show records|notes|settings|onboarding
+            target <code> | key-reload | windows | quit
+            calls <program=name,…>|none|real | realcalls | endtimes <silence> <countdown> <grace>|off | endkeep
+            notes-tab notes|transcript | notes-search <text> | notes-wide on|off | onboarding-step <n> | settings-scroll <0-1>
+Run it inside the Linux session (linux/vm/vmctl.sh ssh does that for the test VM)."""
+import os
+import socket
+import sys
+
+if len(sys.argv) < 2:
+    print(__doc__)
+    sys.exit(2)
+path = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "cicada-dev.sock")
+args = sys.argv[1:]
+if args[0] == "feed" and len(args) > 1:
+    args[1] = os.path.abspath(args[1])
+s = socket.socket(socket.AF_UNIX)
+try:
+    s.connect(path)
+except OSError as e:
+    print('{"ok":false,"error":"no dev build running (%s)"}' % e)
+    sys.exit(1)
+s.sendall((" ".join(args) + "\n").encode())
+data = b""
+while not data.endswith(b"\n"):
+    chunk = s.recv(65536)
+    if not chunk:
+        break
+    data += chunk
+print(data.decode().strip())

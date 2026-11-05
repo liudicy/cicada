@@ -456,7 +456,7 @@ final class SpeakTester: ObservableObject {
             let instruction = "Score from 0 to 100 how faithfully what the listener heard conveys the original's meaning. "
                 + "Reply as JSON: {\"score\": <0-100>, \"issue\": \"<the main problem in at most 12 words of \(TranslationService.englishName(from)), or empty>\"}"
             if let reply = try? await ling.chat(content: content, instruction: instruction, priority: .translate, json: true,
-                                                maxTokens: 120, timeout: 10),
+                                                maxTokens: 120, timeout: 10, role: "test"),
                let v = SpeakScore.parseJudge(reply) {
                 return .score(v.score, v.issue)
             }
@@ -515,19 +515,7 @@ final class SpeakTester: ObservableObject {
         let lang = locale.hasPrefix("zh") ? "zh-CN" : locale
         u.voice = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == lang && !$0.voiceTraits.contains(.isNoveltyVoice) }
             .max { $0.quality.rawValue < $1.quality.rawValue } ?? AVSpeechSynthesisVoice(language: lang)
-        let buffers: [AVAudioPCMBuffer] = await withCheckedContinuation { cont in
-            var out: [AVAudioPCMBuffer] = []
-            var done = false
-            synth.write(u) { buf in
-                guard !done else { return }
-                guard let pcm = buf as? AVAudioPCMBuffer, pcm.frameLength > 0 else {
-                    done = true
-                    cont.resume(returning: out)
-                    return
-                }
-                out.append(pcm)
-            }
-        }
+        let buffers = await SpeechWriter.write(u, with: synth)
         _ = synth
         return buffers
     }
@@ -535,11 +523,7 @@ final class SpeakTester: ObservableObject {
     /// The room's audio transcribed again in its language, downloading the model if needed.
     private static func transcribe(_ buffers: [AVAudioPCMBuffer], code: String) async -> String {
         let locale = sourceLanguages.first { $0.code == code }?.locale ?? (code == "zh-TW" ? "zh-TW" : code)
-        let t = SpeechTranscriber(locale: Locale(identifier: locale), transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
-        if await AssetInventory.status(forModules: [t]) != .installed,
-           let req = try? await AssetInventory.assetInstallationRequest(supporting: [t]) {
-            try? await req.downloadAndInstall()
-        }
+        try? await Recognition.install(locale)
         return await LoopbackTest.transcribe(buffers, locale: locale)
     }
 }

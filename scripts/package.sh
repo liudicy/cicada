@@ -10,7 +10,7 @@ RELEASE=1 scripts/build.sh
 APP=build/Cicada.app
 ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP/Contents/Info.plist")
 [[ "$ID" == com.wquguru.cicada ]] || { echo "Not a release build: $ID" >&2; exit 1; }
-VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)
+VERSION=$(tr -d '[:space:]' < VERSION)
 NAME="Cicada-$VERSION-macOS-AppleSilicon"
 rm -f build/Cicada-*.zip build/Cicada-*.dmg build/LiveSubs-*.zip build/LiveSubs-*.dmg build/checksums.txt
 

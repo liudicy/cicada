@@ -22,6 +22,32 @@ enum HeardText {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// The final text, unless it lost a good part of what the last draft of the line had. In fast
+    /// speech without a break the recognizer's final pass drops whole phrases ("needs the budget.
+    /// for next year by the end. of this month. in.") that its drafts had heard (issue #1), whether
+    /// the line ended on its own or was cut. The draft may misspell a word; that beats losing five.
+    static func fuller(final: String, draft: String) -> String {
+        // Words, or characters in Chinese and Japanese (about two to a word).
+        let cjk = (final + draft).unicodeScalars.contains { $0.properties.isIdeographic }
+        func size(_ s: String) -> Int {
+            cjk ? s.filter { $0.isLetter || $0.isNumber }.count
+                : s.split(whereSeparator: { $0.isWhitespace }).filter { $0.contains(where: { $0.isLetter || $0.isNumber }) }.count
+        }
+        let f = size(final), d = size(draft)
+        guard d >= f + (cjk ? 6 : 3), Double(d) >= Double(f) * 1.15 else { return final }
+        return clean(draft)
+    }
+
+    /// The line ends in a run of Latin letters, the way a Chinese, Japanese or Korean model writes
+    /// English it hears: 15 letters or more after its last CJK character.
+    static func endsInLatin(_ text: String) -> Bool {
+        let isCJK: (Character) -> Bool = { c in
+            c.unicodeScalars.contains { (0x3040...0x9FFF).contains($0.value) || (0xAC00...0xD7AF).contains($0.value) }
+        }
+        let tail = text.reversed().prefix(while: { !isCJK($0) })
+        return tail.filter { $0.isASCII && $0.isLetter }.count >= 15
+    }
+
     /// The longest pause, in seconds, that still joins two pieces of one sentence.
     static let joinGap = 1.5
     /// A line this long takes nothing more: past it a translation is slow and the line hard to read.

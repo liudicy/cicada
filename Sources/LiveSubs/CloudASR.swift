@@ -31,7 +31,7 @@ final class CloudASRClient: ObservableObject {
     func setKey(_ raw: String) {
         let k = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !k.isEmpty else { return }
-        AIKey.save(k, provider: "asr")
+        AIKey.save(k, "asr")
     }
 
     func removeKey() { AIKey.remove("asr") }

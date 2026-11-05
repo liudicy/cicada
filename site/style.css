@@ -82,7 +82,7 @@ html[lang="ko"] body { font-family: Inter, "Noto Sans KR", -apple-system, "Apple
 .foot-langs b { color: #FFFFFF; font-weight: 600; }
 .navlinks.phone a { display: inline-flex; align-items: center; min-height: 44px; }
 
-/* Phone: the app is Mac only, so phones get a preview and a way to send the link to a Mac */
+/* Phone: phones get a preview and a way to send the link to a computer; Android phones get the APK instead (.apkcard). */
 .phone { display: none; }
 @media (max-width: 640px) {
   .desk { display: none !important; }
@@ -587,3 +587,55 @@ h2.big { margin: 0 0 14px; font-size: clamp(28px, 3.6vw, 52px); line-height: 1.2
   .window:not(.playing) .tile:first-child { border-color: var(--orange); }
 }
 [hidden] { display: none !important; }
+
+/* Other platforms. footer.html marks the system on <html> (os-android…) and that JS runs (js). */
+.hero .also { margin: 0; font-size: 14px; color: var(--grey); }
+.hero .also a { font-weight: 600; color: var(--ink); }
+.apkcard { display: none; }
+.os-android .apkcard { display: flex; }
+.os-android .sendcard.phone { display: none !important; }
+
+/* Setup guide: one platform's steps at a time once JS runs; without it every platform shows. */
+.ptabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.ptabs button { min-height: 44px; padding: 0 20px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card); color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.ptabs button[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: #FFFFFF; font-weight: 700; }
+.ptabs { display: none; }
+.js .ptabs { display: flex; }
+.js .pblock:not(.on) { display: none; }
+.pblock + .pblock { border-top: 1px solid var(--line2); padding-top: 32px; }
+.js .pblock + .pblock { border-top: 0; padding-top: 0; }
+.preq { margin: 0 auto 16px; text-align: center; font-size: 14px; color: var(--grey2); }
+.preq a { font-weight: 700; margin-left: 6px; }
+.gate p.note { font-size: 13px; color: var(--grey2); }
+.step-text .cmd, .dlcard .cmd { display: block; margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--soft); font: 500 13px/1.5 ui-monospace, Menlo, monospace; color: var(--dark2); word-break: break-all; }
+.aguide .rows { display: flex; flex-wrap: wrap; gap: 14px; }
+.aguide .card small { font-size: 12px; font-weight: 700; color: var(--orange-text); }
+.aguide .card h3 { margin-top: 6px; }
+.aguide .more { margin: 0 0 18px; }
+
+/* Downloads */
+.dlcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding-bottom: 24px; }
+.dlcard { padding: 24px; display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 90px; }
+.dlcard:target { border-color: var(--ink); }
+.dlhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dlcard h2 { margin: 0; font-size: 24px; font-weight: 800; }
+.dlcard .yours { padding: 3px 10px; border-radius: 999px; background: var(--orange-soft); color: var(--orange-text); font-size: 12px; font-weight: 700; }
+.dlcard .sys { margin: 0; font-size: 14px; color: var(--ink2); }
+.dlcard .btn { width: 100%; }
+.dlcard .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dlcard .pair .btn { flex-direction: column; gap: 0; line-height: 1.2; }
+.dlcard .pair small { font-size: 12px; font-weight: 500; opacity: .75; }
+.dlcard .alt { font-size: 13px; color: var(--grey); }
+.dlcard .note { margin: 0; font-size: 13px; line-height: 1.6; color: var(--grey2); }
+.dlcard .dlver { margin-top: auto; font-size: 12px; color: var(--grey2); }
+.dlcard .soon { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 14px; border: 1px dashed var(--line2); color: var(--grey); font-weight: 600; }
+.dlcmp { padding-bottom: 96px; }
+.dlcmp .card { padding: 24px; }
+.dlcmp h2 { margin: 0 0 12px; font-size: 22px; font-weight: 800; }
+.dlcmp .scroll { overflow-x: auto; }
+.cmp { width: 100%; min-width: 680px; border-collapse: collapse; }
+.cmp th, .cmp td { padding: 12px 14px; border-top: 1px solid var(--line); text-align: left; font-size: 14px; vertical-align: top; color: var(--ink2); }
+.cmp thead th, .cmp thead td { border-top: 0; font-size: 13px; color: var(--grey); }
+.cmp tbody th { font-weight: 600; white-space: nowrap; color: var(--ink); }
+.dlcmp .more { margin: 18px 0 0; font-size: 14px; color: var(--grey); }
+.pblock > .steps:last-child { padding-bottom: 96px; }

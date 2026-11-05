@@ -71,9 +71,11 @@ enum DMGBackground {
              color: secondary, centerX: size.width / 2, top: 298)
 
         let steps: [(title: String, hint: String, art: (CGContext, CGRect) -> Void)] = [
-            ("点完成", "别点移到废纸篓", drawAlert),
+            // macOS 14's sheet has only 好 (OK); 15 and later have 完成 and 移到废纸篓.
+            ("点完成或好", "别点移到废纸篓", drawAlert),
             ("打开系统设置", "左边选隐私与安全性", drawSettings),
-            ("点仍要打开", "在安全性一栏，输一次密码", drawOpenAnyway),
+            // 14 asks once more after the password: 打开.
+            ("点仍要打开", "在安全性一栏，按提示输密码确认", drawOpenAnyway),
         ]
         let w: CGFloat = 188, gap: CGFloat = 14
         var x = (size.width - w * 3 - gap * 2) / 2

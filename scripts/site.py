@@ -2,11 +2,15 @@
 """Builds the website (served from Cloudflare, see scripts/deploy-site.sh) from site/ into build/site/.
 
 Languages: Chinese at /, English, Japanese and Korean under /en/, /ja/, /ko/. Each has the home page
-(site/index.html) and the setup guide (site/start.html → start/); {{t.key}} in a template is filled
+(site/index.html), the downloads (site/download.html → download/) and the setup guide (site/start.html
+→ start/); {{t.key}} in a template is filled
 from site/i18n/<lang>.json, and the build stops if a language lacks a key the others have.
 header.html and footer.html are shared. site/changelog.json is the Chinese changelog (newest first;
 "date": null = not released yet) and only exists in Chinese: the other languages link to GitHub Releases.
 Also writes changelog/index.html, feed.xml (Atom), sitemap.xml and robots.txt.
+
+Download links go to each platform's own newest release (scripts/release_platforms.sh): since 1.1.2
+every release ships every platform, but 1.0.0 to 1.1.1 shipped only the ones that changed. A version counts once changelog.json gives it a date; a platform with none yet shows 即将发布.
 
     python3 scripts/site.py                 # → build/site
     python3 -m http.server -d build/site    # preview at http://localhost:8000/
@@ -27,9 +31,18 @@ OUT = os.path.join(ROOT_DIR, "build", "site")
 SITE = (os.environ.get("SITE_URL") or "https://cicada.indaloop.app/").rstrip("/") + "/"
 REPO = "https://github.com/wquguru/cicada"
 DOWNLOAD = REPO + "/releases/latest"
+# The files each platform's release carries (release.yml); {v} is the version. The Windows installer
+# has no version in its name: Cicada.exe installs and updates itself from it.
+PLATFORMS = ["mac", "windows", "linux", "android"]
+ASSETS = {
+    "mac": {"dmg": "Cicada-{v}-macOS-AppleSilicon.dmg", "zip": "Cicada-{v}-macOS-AppleSilicon.zip"},
+    "windows": {"x64": "Cicada-Setup.exe", "arm64": "Cicada-Setup-arm64.exe"},
+    "linux": {"tar": "Cicada-{v}-Linux.tar.gz"},
+    "android": {"apk": "Cicada-{v}-Android.apk"},
+}
 # The author on X: the app is not notarized yet, so a real person to ask helps people trust the first launch.
 X = "https://x.com/wquguru"
-STATIC = ["style.css", "icon.svg", "icon.png", "og.png", "img", "audio"]
+STATIC = ["style.css", "icon.svg", "icon.png", "og.png", "og-en.png", "og-ja.png", "og-ko.png", "img", "audio"]
 # The home page's meeting with sound, in the language its reader listens to (the English page's is
 # Chinese): file, length in seconds, and who talks when as (person, start, end), one turn per
 # subtitle. Both clips come from scripts/make-sample.sh; the English one is the app's onboarding
@@ -110,6 +123,70 @@ def rev():
         return "dev"
 
 
+def shipped_platforms():
+    """{version: platforms it shipped}, from CHANGELOG.md's groups as scripts/release_platforms.sh reads
+    them: a section with no platform group (1.0.0's Highlights) shipped the Mac app."""
+    out, cur = {}, None
+    for line in open(os.path.join(ROOT_DIR, "CHANGELOG.md"), encoding="utf-8"):
+        m = re.match(r"^## (\d+\.\d+\.\d+)\b", line)
+        if m:
+            cur = out.setdefault(m.group(1), set())
+            continue
+        m = re.match(r"^### (Mac|Windows|Android|Linux)\s*$", line)
+        if m and cur is not None:
+            cur.add(m.group(1).lower())
+    return {v: (ps or {"mac"}) for v, ps in out.items()}
+
+
+def downloads(released):
+    """{platform: (version, {asset: url})} for each platform's newest released version that has it."""
+    shipped, out = shipped_platforms(), {}
+    for r in released:  # newest first
+        for p in shipped.get(r["version"], ()):
+            if p not in out:
+                v = r["version"]
+                out[p] = (v, {k: f"{REPO}/releases/download/v{v}/{name.format(v=v)}" for k, name in ASSETS[p].items()})
+    return out
+
+
+PLATFORM_NAMES = {"mac": "Mac", "windows": "Windows", "linux": "Linux", "android": "Android"}
+
+
+def download_cards(t, dl):
+    """One card per platform: its system, its buttons for its own newest release, or 即将发布."""
+    arrow = ('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" '
+             'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M6 11l6 6 6-6"/><path d="M5 20h14"/></svg>')
+    cards = []
+    for p in PLATFORMS:
+        if p in dl:
+            v, urls = dl[p]
+            if p == "mac":
+                acts = (f'<a class="btn btn-orange" href="{urls["dmg"]}">{arrow}{t["dlp_mac_btn"]}</a>'
+                        f'<a class="alt" href="{urls["zip"]}">{t["dlp_mac_zip"]}</a>')
+            elif p == "windows":
+                acts = (f'<div class="pair"><a class="btn btn-dark" href="{urls["x64"]}">x64<small>{t["dlp_win_x64"]}</small></a>'
+                        f'<a class="btn btn-light" href="{urls["arm64"]}">ARM64<small>{t["dlp_win_arm"]}</small></a></div>')
+            elif p == "linux":
+                acts = (f'<a class="btn btn-dark" href="{urls["tar"]}">{arrow}{t["dlp_linux_btn"]}</a>'
+                        f'<code class="cmd">tar xzf Cicada-{v}-Linux.tar.gz &amp;&amp; cicada-linux/install.sh</code>')
+            else:
+                acts = f'<a class="btn btn-dark" href="{urls["apk"]}">{arrow}{t["dlp_android_btn"]}</a>'
+            ver = f'<span class="dlver">{t["version"]} {v}</span>'
+        else:
+            acts, ver = f'<span class="soon">{t["dlp_soon"]}</span>', ""
+        cards.append(f'<section class="card dlcard" id="{p}" data-platform="{p}"><div class="dlhead"><h2>{PLATFORM_NAMES[p]}</h2>'
+                     f'<span class="yours" hidden>{t["dlp_yours"]}</span></div>'
+                     f'<p class="sys">{t["dlp_" + p + "_sys"]}</p>{acts}<p class="note">{t["dlp_" + p + "_note"]}</p>{ver}</section>')
+    return "".join(cards)
+
+
+def compare_table(t):
+    head = "".join(f"<th scope=\"col\">{PLATFORM_NAMES[p]}</th>" for p in PLATFORMS)
+    rows = "".join(f'<tr><th scope="row">{e(row[0])}</th>' + "".join(f"<td>{e(c)}</td>" for c in row[1:]) + "</tr>"
+                   for row in t["cmp_rows"])
+    return f'<table class="cmp"><thead><tr><td></td>{head}</tr></thead><tbody>{rows}</tbody></table>'
+
+
 def release_html(r, latest_released):
     date = (f'<time datetime="{r["date"]}">{zh_date(r["date"])}</time>' if r["date"]
             else '<span>即将发布</span>')
@@ -121,7 +198,8 @@ def release_html(r, latest_released):
     for kind, name in KINDS:
         items = [i for i in r["items"] if i["kind"] == kind]
         if items:
-            lis = "".join(f'<li><strong>{e(i["title"])}</strong>{e(i["text"])}</li>' for i in items)
+            lis = "".join(f'<li data-platforms="{" ".join(i["platforms"])}"><strong>{e(i["title"])}</strong>{e(i["text"])}</li>'
+                          for i in items)
             groups.append(f'<div class="group" data-kind="{kind}"><h3><i></i>{name}</h3><ul>{lis}</ul></div>')
     a = anchor(r["version"])
     dl = (f'<a class="btn btn-dark desk" href="{REPO}/releases/tag/v{r["version"]}">下载 {r["version"]}</a>'
@@ -140,7 +218,13 @@ def main():
     if not released:
         sys.exit("site.py: changelog.json has no released version")
     latest = released[0]
-    common = {"SITE": SITE, "REPO": REPO, "DOWNLOAD": DOWNLOAD, "VERSION": latest["version"], "REV": rev(),
+    for r in log:
+        for i in r["items"]:
+            if not set(i.get("platforms") or ()) <= set(PLATFORMS) or not i.get("platforms"):
+                sys.exit(f"site.py: changelog.json {r['version']} “{i['title']}”: platforms must be some of {PLATFORMS}")
+    dl = downloads(released)
+    mac_dl = dl["mac"][1]["dmg"] if "mac" in dl else DOWNLOAD
+    common = {"SITE": SITE, "REPO": REPO, "DOWNLOAD": mac_dl, "VERSION": latest["version"], "REV": rev(),
               "X": X, "X_LINK": f'<a href="{X}">@wquguru</a>'}
 
     if os.path.isdir(OUT):
@@ -177,7 +261,14 @@ def main():
         hreflang = "\n".join(f'<link rel="alternate" hreflang="{tr[c]["html_lang"]}" href="{SITE}{p}{kind}">' for c, p in langs)
         if alternates:
             hreflang += f'\n<link rel="alternate" hreflang="x-default" href="{SITE}en/{kind}">'
+        # What the download buttons become on another system (footer.html's script); the page itself
+        # always works as the Mac download, without JS too.
+        primary = {"mac": "dmg", "windows": "x64", "linux": "tar", "android": "apk"}
+        dl_json = {p: {"url": dl[p][1][primary[p]], "label": t["dl_" + p]} for p in PLATFORMS if p in dl}
         v = dict(common, ROOT=root, HOME=root + prefix, LANG=code,
+                 DOWNLOAD_PAGE=root + prefix + "download/", DL_JSON=json.dumps(dl_json, ensure_ascii=False),
+                 DOWNLOAD_CURRENT=' aria-current="page"' if current == "download" else "",
+                 OG_IMAGE=SITE + ("og.png" if code == "zh" else f"og-{code}.png"),  # share card in the page's language (scripts/site-og.html)
                  CHANGELOG=(root + "changelog/") if code == "zh" else REPO + "/releases",
                  START_CURRENT=' aria-current="page"' if current == "start" else "",
                  CANONICAL=SITE + rel, HREFLANG=hreflang, LANG_LINKS=links, LANG_LINKS_FOOT=foot_links,
@@ -212,7 +303,8 @@ def main():
             "@context": "https://schema.org", "@type": "SoftwareApplication",
             "name": "知了 Cicada", "alternateName": ["知了", "Cicada"], "inLanguage": t["html_lang"],
             "description": t["ld_desc"],
-            "applicationCategory": "BusinessApplication", "operatingSystem": "macOS 26",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": ["macOS 14.4", "Windows 10", "Ubuntu 22.04", "Android 10"],
             "softwareVersion": latest["version"], "url": SITE + prefix, "downloadUrl": DOWNLOAD,
             "image": SITE + "icon.png", "license": "https://www.apache.org/licenses/LICENSE-2.0",
             "isAccessibleForFree": True, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
@@ -239,8 +331,12 @@ def main():
             "SPEAK_JSON": json.dumps({"src": "../" * prefix.count("/") + f"audio/speak-{'zh' if code == 'en' else 'en'}.m4a?v=" + common["REV"], "at": SPEAK_AT}), "SAMPLE_LEN": f"0:{round(length):02d}",
             "APPS": apps, "LATEST_SECTION": latest_section,
             "ROAD_NEXT": road_next, "ROAD_LATER": road(t["road_later_items"]), "ROAD_NONE": road(t["road_none_items"]),
+            "REQS": "".join(f"<div><dt>{e(k)}</dt><dd>{e(val)}</dd></div>" for k, val in t["reqs"]),
             "FAQ": faq, "FAQLD": json.dumps(faq_ld, ensure_ascii=False).replace("</", "<\\/"),
             "JSONLD": json.dumps(app_ld, ensure_ascii=False).replace("</", "<\\/")})
+        # Downloads
+        page("download.html", code, prefix + "download/", {
+            "CARDS": download_cards(t, dl), "CMP": compare_table(t)}, current="download")
         # Setup guide
         howto = {"@context": "https://schema.org", "@type": "HowTo", "name": t["start_h1"], "inLanguage": t["html_lang"],
                  "description": t["start_desc"], "totalTime": "PT5M",
@@ -253,6 +349,10 @@ def main():
     filters = f'<button type="button" data-kind="all" aria-pressed="true">全部<span>{sum(counts.values())}</span></button>'
     filters += "".join(f'<button type="button" data-kind="{k}" aria-pressed="false">{n}<span>{counts[k]}</span></button>'
                        for k, n in KINDS)
+    pcounts = {p: sum(1 for r in log for i in r["items"] if p in i["platforms"]) for p in PLATFORMS}
+    pfilters = '<button type="button" data-platform="all" aria-pressed="true">全部平台</button>'
+    pfilters += "".join(f'<button type="button" data-platform="{p}" aria-pressed="false">{PLATFORM_NAMES[p]}<span>{pcounts[p]}</span></button>'
+                        for p in PLATFORMS)
     versions = "".join(f'<a href="#{anchor(r["version"])}"><b>{r["version"]}</b>'
                        f'<span>{r["date"] or "即将发布"}</span></a>' for r in log)
     crumbs_ld = {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
@@ -260,7 +360,7 @@ def main():
         {"@type": "ListItem", "position": 2, "name": "更新日志", "item": SITE + "changelog/"}]}
     page("changelog.html", "zh", "changelog/", {
         "LATEST_VERSION": latest["version"], "LATEST_TITLE": e(latest["title"]),
-        "FILTERS": filters, "VERSIONS": versions,
+        "FILTERS": filters, "PFILTERS": pfilters, "VERSIONS": versions,
         "RELEASES": "".join(release_html(r, latest["version"]) for r in log),
         "JSONLD": json.dumps(crumbs_ld, ensure_ascii=False)}, alternates=False, current="changelog")
 

@@ -48,6 +48,8 @@ final class VirtualMicInstaller: ObservableObject {
     var speakThrough: ((_ text: String, _ language: String, _ device: OutputDevice) async -> Void)?
     /// Called once Core Audio has the device (after an install or reload).
     var onLoaded: (() -> Void)?
+    /// Tests swap in a session with a stub protocol.
+    var session: URLSession = .shared
 
     var device: OutputDevice? { AudioDevices.virtualMic }
     var isLoaded: Bool { device != nil }
@@ -120,7 +122,7 @@ final class VirtualMicInstaller: ObservableObject {
     private func download() async -> URL? {
         state = .downloading
         do {
-            let (tmp, response) = try await URLSession.shared.download(from: Self.packageURL)
+            let (tmp, response) = try await session.download(from: Self.packageURL)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                 state = .failed(L("下载失败，请检查网络"))
                 return nil
@@ -206,26 +208,7 @@ enum LoopbackTest {
     }
 
     static func transcribe(_ buffers: [AVAudioPCMBuffer], locale: String) async -> String {
-        let t = SpeechTranscriber(locale: Locale(identifier: locale), transcriptionOptions: [],
-                                  reportingOptions: [], attributeOptions: [])
-        guard await AssetInventory.status(forModules: [t]) == .installed,
-              let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [t]) else { return "" }
-        let (stream, cont) = AsyncStream.makeStream(of: AnalyzerInput.self)
-        let conv = PCMConverter()
-        for b in buffers { if let c = conv.convert(b, to: format) { cont.yield(AnalyzerInput(buffer: c)) } }
-        cont.finish()
-        let collector = Task { () -> String in
-            var parts: [String] = []
-            do {
-                for try await r in t.results where r.isFinal {
-                    parts.append(String(r.text.characters).trimmingCharacters(in: .whitespaces))
-                }
-            } catch {}
-            return parts.joined(separator: " ")
-        }
-        let analyzer = SpeechAnalyzer(inputSequence: stream, modules: [t])
-        try? await analyzer.finalizeAndFinishThroughEndOfInput()
-        return await collector.value
+        await Recognition.transcribe(buffers, locale: locale)?.text ?? ""
     }
 }
 

@@ -45,10 +45,13 @@ struct SettingsRow<Trailing: View>: View {
     let title: String
     var detail: String? = nil
     var divider = true
+    /// A small state mark before the title, e.g. 共享屏幕时让对方看到's.
+    var mark: AnyView? = nil
     @ViewBuilder var trailing: Trailing
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
+                if let mark { mark }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 13)).foregroundStyle(Palette.ink)
                     if let detail {
@@ -278,8 +281,6 @@ struct HealthMark: View {
     }
 }
 
-let appDisplayName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? L("知了")
-
 // MARK: - Virtual microphone checklist
 
 /// The one place the virtual mic is set up: onboarding step 4 and the settings window.
@@ -429,6 +430,7 @@ struct SettingsView: View {
             HStack {
                 Text(model.settingsSection.title).font(.system(size: 20, weight: .bold)).foregroundStyle(Palette.ink)
                 Spacer()
+                if model.settingsSection == .ai { AIServiceMenu(model: model, settings: settings) }
                 if model.settingsSection == .speak {
                     Toggle("把我说的翻译给对方", isOn: Binding(get: { settings.speakEnabled }, set: { model.enableSpeaking($0) }))
                         .toggleStyle(.switch).labelsHidden().tint(Palette.ink)
@@ -441,7 +443,7 @@ struct SettingsView: View {
             case .records: records
             case .space: SpaceSettingsView(model: model, store: model.store)
             case .ai: AISettingsView(model: model, ling: model.ling, settings: settings)
-            case .diagnostics: DiagnosticsView(diagnostics: model.diagnostics, model: settings.aiModel)
+            case .diagnostics: DiagnosticsView(diagnostics: model.diagnostics, service: settings.aiConfig)
             }
         }
         .padding(.leading, 12).padding(.trailing, 28).padding(.top, 40).padding(.bottom, 28)
@@ -691,7 +693,8 @@ struct SettingsView: View {
             }
             Text("实时纪要").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary).padding(.top, 4)
             SettingsCard {
-                SettingsRow(title: L("共享屏幕时让对方看到"), detail: L("录屏也一样；关着时只有你看得到纪要窗口"), divider: false) {
+                SettingsRow(title: L("共享屏幕时让对方看到"), detail: L("录屏也一样；关着时只有你看得到纪要窗口"), divider: false,
+                            mark: AnyView(CapturableMark(on: settings.notesCapturable, size: 8).frame(width: 16, height: 16))) {
                     Toggle("共享屏幕时让对方看到", isOn: Binding(get: { settings.notesCapturable }, set: { model.setNotesCapturable($0) }))
                         .toggleStyle(.switch).labelsHidden().tint(Palette.accent)
                 }
@@ -720,8 +723,26 @@ struct SettingsView: View {
                     Toggle("保存会议录音", isOn: $settings.recordAudio)
                         .toggleStyle(.switch).labelsHidden().controlSize(.small).tint(Palette.ink)
                 }
+                SettingsRow(title: L("说话人识别"), detail: L("按声音标出说话人 1、2…，只在这台 Mac 上处理")) {
+                    Toggle("说话人识别", isOn: $settings.speakerVoices)
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small).tint(Palette.ink)
+                }
                 SettingsRow(title: L("记录文件夹"), divider: false) {
                     SoftButton(L("打开")) { NSWorkspace.shared.open(model.store.root) }
+                }
+            }
+            Text("导入的文件").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary).padding(.top, 4)
+            SettingsCard {
+                SettingsRow(title: L("文件里说的"), detail: L("译成“翻译成”里的语言")) {
+                    Picker("文件里说的", selection: $settings.importLanguage) {
+                        Text("自动识别").tag("auto")
+                        ForEach(sourceLanguages, id: \.locale) { Text($0.name).tag($0.locale) }
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                SettingsRow(title: L("转完后生成纪要"), detail: L("需要 Ling key；没有也能转出文字记录"), divider: false) {
+                    Toggle("转完后生成纪要", isOn: $settings.importNotes)
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small).tint(Palette.ink)
                 }
             }
             Text("结束会议").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary).padding(.top, 4)
@@ -742,32 +763,6 @@ struct SettingsView: View {
                 }
             }
             AppRows(updates: model.updates, loginItem: model.loginItem, model: model)
-            experiments
-        }
-    }
-
-    /// Features still being tuned: off by default, each one switch, safe to turn off.
-    private var experiments: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("实验功能").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
-                Text("还在打磨，可能出错；随时能关，关掉不影响别的功能。").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
-            }
-            .padding(.top, 4)
-            SettingsCard {
-                HStack(spacing: 12) {
-                    HStack(spacing: 6) {
-                        Text("说话人识别").font(.system(size: 13)).foregroundStyle(Palette.ink)
-                        ExperimentBadge()
-                    }
-                    Spacer(minLength: 12)
-                    Toggle("说话人识别", isOn: $settings.speakerVoices)
-                        .toggleStyle(.switch).labelsHidden().controlSize(.small).tint(Palette.ink)
-                }
-                .padding(.horizontal, 16).padding(.vertical, 6).frame(minHeight: 46)
-                .contentShape(Rectangle())
-                .help(L("按声音标出说话人 1、2…，只在这台 Mac 上处理"))
-            }
         }
     }
 }

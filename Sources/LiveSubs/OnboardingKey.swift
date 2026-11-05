@@ -4,34 +4,111 @@ import SwiftUI
 /// Onboarding step 3: connect a Ling key. Notes, Ling translation and Ming voices all need it, but it
 /// comes after the sample video, once people have seen what the app does. Skipping is allowed: "先不接"
 /// first shows what still works and what waits for a key (the notes window asks again later).
+/// Ling is the whole path; "用不了 Ling？" opens another service as a way out, saying what it lacks.
 struct OnboardingKeyStep: View {
+    @ObservedObject var model: AppModel
     @ObservedObject var ling: LingClient
     @ObservedObject var settings: AppSettings
     /// "先不接" was clicked: the card shows what skipping leaves out until 回去接上 or 好，先这样.
     @Binding var skipping: Bool
     @State private var draft = ""
     @State private var clipboardEmpty = false
+    /// Showing another service instead of Ling: follows the setting, so a change made in Settings
+    /// while this step is open (or a reused window) never leaves the Ling title over another service.
+    private var other: Bool { settings.provider.id != .ling }
+
+    private static let others: [AIProvider] = [.openrouter, .zenmux, .openai]
 
     static let platform = URL(string: "https://chat.ant-ling.com/platform/api")!
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("接上 Ling，用上完整的知了").font(.system(size: 26, weight: .bold)).foregroundStyle(Palette.ink)
-                Text("纪要、更准的翻译和自然的同传语音都靠它，约 1 分钟。")
-                    .font(.system(size: 14)).foregroundStyle(Palette.secondary)
+            if other && !skipping {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("用其他服务").font(.system(size: 26, weight: .bold)).foregroundStyle(Palette.ink)
+                    Text("纪要和翻译都能用，模型已经选好。").font(.system(size: 14)).foregroundStyle(Palette.secondary)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("接上 Ling，一个 key 用上全部功能").font(.system(size: 26, weight: .bold)).foregroundStyle(Palette.ink)
+                    HStack(spacing: 6) {
+                        ForEach([L("实时纪要"), L("更准的翻译"), L("自然的同传声音"), L("用你自己的声音")], id: \.self) { item in
+                            Text("✓ " + item).font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ok)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Palette.okPale))
+                        }
+                    }
+                }
             }
-            if case .ok = ling.keyState { connected } else if skipping { withoutKey } else { entry }
-            if !skipping {
+            if case .ok = ling.keyState { connected } else if skipping { withoutKey } else if other { otherEntry } else { entry }
+            if !skipping, !isConnected {
                 HStack(spacing: 10) {
-                    Text("Ling 每月赠送 ¥10 额度").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.accentInk)
-                        .padding(.horizontal, 9).padding(.vertical, 3)
-                        .background(Capsule().fill(Palette.accentPale))
-                    Text("约够 10–50 小时会议")
-                        .font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                    if other {
+                        Button(L("‹ 还是用 Ling")) { switchTo(.ling) }.buttonStyle(.plain)
+                            .font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                    } else {
+                        Text("Ling 每月赠送 ¥10 额度").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.accentInk)
+                            .padding(.horizontal, 9).padding(.vertical, 3)
+                            .background(Capsule().fill(Palette.accentPale))
+                        Text("约够 10–50 小时会议")
+                            .font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                        Spacer()
+                        Button(L("用不了 Ling？")) { switchTo(.openrouter) }.buttonStyle(.plain)
+                            .font(.system(size: 12)).foregroundStyle(Palette.secondary).underline()
+                    }
                 }
             }
         }
+    }
+
+    private var isConnected: Bool { if case .ok = ling.keyState { true } else { false } }
+
+    private func switchTo(_ p: AIProvider) {
+        draft = ""
+        clipboardEmpty = false
+        guard settings.aiProvider != p.id.rawValue else { return }
+        settings.aiProvider = p.id.rawValue
+        model.applyAIService()
+    }
+
+    // MARK: Another service
+
+    private var otherEntry: some View {
+        let p = settings.provider
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Segments(options: Self.others.map { ($0.id.rawValue, $0.name) }, value: p.id.rawValue) { id in
+                    switchTo(AIProvider.named(id))
+                }
+                Spacer()
+                if let site = p.site {
+                    Button { NSWorkspace.shared.open(site) } label: {
+                        HStack(spacing: 5) {
+                            Text(L("打开 \(p.name)"))
+                            Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold))
+                        }
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 14).frame(height: 34)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(Palette.fill))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            keyField(placeholder: L("粘贴 \(p.name) 的 key"))
+            status
+            HStack(spacing: 4) {
+                Text("少了：").foregroundStyle(Palette.secondary)
+                Text(p.hasVoices ? L("用你自己的声音") : L("自然的同传声音、你自己的声音")).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                Text("（只有 Ling 支持）").foregroundStyle(Palette.secondary)
+            }
+            .font(.system(size: 12))
+            .padding(.horizontal, 10).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Palette.raised))
+        }
+        .padding(22)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Palette.line, lineWidth: 1))
     }
 
     // MARK: Not connected yet
@@ -42,7 +119,7 @@ struct OnboardingKeyStep: View {
                 number(1)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("在 Ling 开放平台创建 key").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
-                    Text("注册或登录后点“创建令牌”").font(.system(size: 12)).foregroundStyle(Palette.tertiary)
+                    Text("国内直接注册，不用代理；登录后点“创建令牌”").font(.system(size: 12)).foregroundStyle(Palette.tertiary)
                 }
                 Spacer()
                 Button { NSWorkspace.shared.open(Self.platform) } label: {
@@ -63,25 +140,7 @@ struct OnboardingKeyStep: View {
                 number(2)
                 VStack(alignment: .leading, spacing: 10) {
                     Text("复制 sk- 开头的 key，回来粘贴").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
-                    HStack(spacing: 8) {
-                        SecureField("sk-…", text: $draft)
-                            .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced))
-                            .padding(.horizontal, 12).frame(height: 36)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.ink.opacity(0.35), lineWidth: 1))
-                            .onSubmit { save(draft) }
-                        Button(action: pasteAndCheck) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "doc.on.clipboard").font(.system(size: 12))
-                                Text(draft.isEmpty ? L("粘贴并检查") : L("保存并检查"))
-                            }
-                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
-                            .padding(.horizontal, 14).frame(height: 36)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Palette.ink))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    keyField(placeholder: "sk-…")
                     status
                 }
             }
@@ -102,9 +161,10 @@ struct OnboardingKeyStep: View {
             line(Palette.error, why, Palette.accentInk)
         default:
             if clipboardEmpty {
-                line(Palette.error, L("剪贴板里没有 sk- 开头的 key，先在 Ling 开放平台复制。"), Palette.accentInk)
+                line(Palette.error, other ? L("剪贴板里没有 sk- 开头的 key，请先去 \(settings.provider.name) 复制。")
+                                          : L("剪贴板里没有 sk- 开头的 key，先在 Ling 开放平台复制。"), Palette.accentInk)
             } else {
-                Label("只保存在这台 Mac 上，只发给 Ling", systemImage: "lock")
+                Label(L("只保存在这台 Mac 上，只发给 \(settings.provider.name)"), systemImage: "lock")
                     .font(.system(size: 12)).foregroundStyle(Palette.tertiary)
             }
         }
@@ -119,7 +179,7 @@ struct OnboardingKeyStep: View {
                     .frame(width: 24, height: 24).background(Circle().fill(Palette.okPale))
                 Text("已连接").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink)
                 if case .ok(let s) = ling.keyState {
-                    Text(L("\(settings.aiModel) · 响应约 \(String(format: "%.1f", s)) 秒"))
+                    Text(L("\(settings.textModel) · 响应约 \(String(format: "%.1f", s)) 秒"))
                         .font(.system(size: 12)).foregroundStyle(Palette.secondary)
                 }
                 Spacer()
@@ -132,7 +192,7 @@ struct OnboardingKeyStep: View {
             HStack(spacing: 10) {
                 benefit(L("实时纪要"), L("会中每 45 秒更新"))
                 benefit(L("更准的翻译"), L("人名、术语前后一致"))
-                benefit(L("自然人声"), L("同传约 2 秒出声"))
+                if ling.speaks { benefit(L("自然人声"), L("同传约 2 秒出声")) }
             }
             Text("开会时，纪要会跟着字幕一起更新。").font(.system(size: 12)).foregroundStyle(Palette.secondary)
         }
@@ -174,6 +234,28 @@ struct OnboardingKeyStep: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 12).fill(fill))
+    }
+
+    private func keyField(placeholder: String) -> some View {
+        HStack(spacing: 8) {
+            SecureField(placeholder, text: $draft)
+                .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced))
+                .padding(.horizontal, 12).frame(height: 36)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.ink.opacity(0.35), lineWidth: 1))
+                .onSubmit { save(draft) }
+            Button(action: pasteAndCheck) {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.on.clipboard").font(.system(size: 12))
+                    Text(draft.isEmpty ? L("粘贴并检查") : L("保存并检查"))
+                }
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                .padding(.horizontal, 14).frame(height: 36)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Palette.ink))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+    }
     }
 
     // MARK: Pieces

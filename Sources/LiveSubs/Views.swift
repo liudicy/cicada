@@ -43,20 +43,22 @@ struct ChoiceRow: View {
     let label: String
     let value: String
     var badge: String? = nil
+    /// 40pt instead of 44, for the menu bar panel where four rows sit one above the other.
+    var compact = false
     /// Groups the menu separates; a header is its grey section title.
     let sections: [(header: String?, options: [ChoiceOption])]
     let onPick: (String) -> Void
 
-    init(label: String, value: String, badge: String? = nil,
+    init(label: String, value: String, badge: String? = nil, compact: Bool = false,
          sections: [(header: String?, options: [ChoiceOption])], onPick: @escaping (String) -> Void) {
-        self.label = label; self.value = value; self.badge = badge
+        self.label = label; self.value = value; self.badge = badge; self.compact = compact
         self.sections = sections.filter { !$0.options.isEmpty }
         self.onPick = onPick
     }
 
-    init(label: String, value: String, badge: String? = nil,
+    init(label: String, value: String, badge: String? = nil, compact: Bool = false,
          options: [ChoiceOption], onPick: @escaping (String) -> Void) {
-        self.init(label: label, value: value, badge: badge, sections: [(nil, options)], onPick: onPick)
+        self.init(label: label, value: value, badge: badge, compact: compact, sections: [(nil, options)], onPick: onPick)
     }
 
     var body: some View {
@@ -86,7 +88,7 @@ struct ChoiceRow: View {
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.tertiary)
             }
             .padding(.horizontal, 12)
-            .frame(height: 44)
+            .frame(height: compact ? 40 : 44)
             .background(RoundedRectangle(cornerRadius: 11).fill(Palette.ground))
             .contentShape(Rectangle())
         }
@@ -117,7 +119,8 @@ struct MenuPanelView: View {
         return [
             (nil, [("auto", auto.isEmpty ? L("自动识别") : L("自动识别（\(auto)）"))]),
             (nil, ready.map { ($0.locale, $0.name) }),
-            (L("选中后自动下载语音模型"), missing.map { ($0.locale, $0.name) }),
+            // macOS 14/15 can't download one: the language is added to Dictation in System Settings.
+            (Recognition.legacy ? L("要先加进系统的听写语言") : L("选中后自动下载语音模型"), missing.map { ($0.locale, $0.name) }),
         ]
     }
 
@@ -132,15 +135,26 @@ struct MenuPanelView: View {
         }
     }
 
-    /// Importing a recording counts as busy too: the dot and the line say so while it runs.
-    private var statusLine: String {
-        if let imp = model.importing { return L("正在导入 \(imp.name)（\(Int(imp.fraction * 100))%）") }
-        if model.running { return model.summary }
-        return model.autoEnded ? L("会议已自动结束") : L("已暂停")
-    }
+    /// The panel's natural height, measured; past what the screen can show it scrolls.
+    @State private var contentHeight: CGFloat = 0
+
+    /// A popover taller than the screen is cut off at the top (a small screen, the menu bar on it).
+    private var maxHeight: CGFloat { (NSScreen.main?.visibleFrame.height ?? 900) - 24 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let measured = panel.background(GeometryReader { g in
+            Color.clear.preference(key: PanelHeightKey.self, value: g.size.height)
+        })
+        .onPreferenceChange(PanelHeightKey.self) { contentHeight = $0 }
+        if contentHeight > maxHeight {
+            ScrollView { measured }.frame(width: 320, height: maxHeight).background(Color.white)
+        } else {
+            measured
+        }
+    }
+
+    private var panel: some View {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 LogoTile(size: 34)
                 VStack(alignment: .leading, spacing: 3) {
@@ -157,12 +171,13 @@ struct MenuPanelView: View {
                         Text(dev).font(.system(size: 10).monospaced()).foregroundStyle(Palette.tertiary).lineLimit(1)
                     }
                     HStack(spacing: 6) {
-                        Circle().fill(model.running || model.importing != nil ? Palette.accent : Color.gray.opacity(0.5)).frame(width: 7, height: 7)
+                        Circle().fill(model.running ? Palette.accent : Color.gray.opacity(0.5)).frame(width: 7, height: 7)
                         // Two lines: "English (detecting…) → 简体中文" doesn't fit one beside the switch.
-                        Text(statusLine)
+                        Text(model.running ? model.summary : model.autoEnded ? L("会议已自动结束") : L("已暂停"))
                             .font(.system(size: 12)).foregroundStyle(Palette.secondary).lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    PanelImportLine(importer: model.importer, store: model.store)
                 }
                 Spacer()
                 Toggle("字幕", isOn: Binding(get: { model.running }, set: { model.setRunning($0) }))
@@ -170,27 +185,26 @@ struct MenuPanelView: View {
             }
 
             if let p = model.ending { MeetingEndingStrip(model: model, pending: p, compact: true) }
+            // In subtitle-bar mode this is where the bar sends you to pick.
+            if model.running { LanguageNotice(model: model) }
+            if model.roomPrompt { roomPromptStrip }
+            // Right under the header: below the settings it was easy to miss.
+            UpdateBanner(updates: model.updates, model: model)
 
-            VStack(spacing: 8) {
-                ChoiceRow(label: L("声源"),
-                          value: settings.listenSource == "mic" ? L("麦克风") : L("系统音频"),
-                          badge: settings.listenSource == "mic" ? L("现场") : nil,
-                          options: [("system", L("系统音频（线上会议）")), ("mic", L("麦克风（现场会议）"))]) {
-                    model.setListenSource($0)
+            VStack(spacing: 6) {
+                ChoiceRow(label: L("听哪里"), value: settings.listensToRoom ? L("会议室") : L("电脑声音"),
+                          compact: true, options: [("system", L("电脑声音（线上会议、视频）")), ("room", L("会议室（用麦克风听桌边的人）"))]) {
+                    model.listenSourceSelection = $0
                 }
-                ChoiceRow(label: L("听到"), value: heardValue.0, badge: heardValue.1, sections: sourceSections) {
+                ChoiceRow(label: L("听到"), value: heardValue.0, badge: heardValue.1, compact: true, sections: sourceSections) {
                     model.sourceSelection = $0
                 }
                 ChoiceRow(label: L("翻译成"),
                           value: targetName(model.listen.resolvedTarget),
                           // "Follow system" leaves no room for the language name in the panel.
                           badge: settings.target == "system" ? (uiIsChinese ? L("跟随系统") : L("系统")) : nil,
-                          options: targetOptions) {
+                          compact: true, options: targetOptions) {
                     model.targetSelection = $0
-                }
-                ChoiceRow(label: L("内容"), value: subtitleOptions.first { $0.id == model.subtitles }?.title ?? L("原文 + 译文"),
-                          badge: model.meetingSubtitles != nil ? L("仅本场") : nil, options: subtitleOptions) {
-                    model.setSubtitles($0)
                 }
             }
 
@@ -225,33 +239,92 @@ struct MenuPanelView: View {
                 }
                 HStack(spacing: 8) {
                     ForEach(DisplayTile.modes, id: \.self) { mode in
-                        DisplayTile(mode: mode, selected: settings.displayMode == mode) { model.setDisplayMode(mode) }
+                        DisplayTile(mode: mode, selected: settings.displayMode == mode, caption: tileCaption(mode)) {
+                            pickDisplay(mode)
+                        }
                     }
                 }
-                displayCard
+                .fixedSize(horizontal: false, vertical: true)
+                if settings.displayMode != "notes" || !model.ling.hasKey { displayCard }
             }
-
-            UpdateBanner(updates: model.updates, model: model)
 
             Divider()
 
-            HStack(spacing: 14) {
-                Button { model.openMainWindow?() } label: {
-                    Label("会议记录", systemImage: "rectangle.stack")
-                }
-                Button { model.importRecording() } label: {
-                    Label(L("导入录音"), systemImage: "square.and.arrow.down")
-                }
-                Spacer()
-                Button("退出") { NSApp.terminate(nil) }
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 13))
-            .foregroundStyle(Palette.secondary)
+            footer
         }
-        .padding(18)
+        .padding(16)
         .frame(width: 320)
         .background(Color.white)
+    }
+
+    /// The panel's actions as three equal buttons, so they read as buttons rather than loose
+    /// grey words. No version line: an update shows its own strip above, and 设置 › 会议记录 checks.
+    private var footer: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                PanelAction(L("会议记录"), symbol: "doc.text") { model.openMainWindow?() }
+                PanelAction(L("导入文件…"), symbol: "square.and.arrow.down") { model.chooseImportFiles() }
+                PanelAction(L("退出"), symbol: "power", quiet: true) { NSApp.terminate(nil) }
+            }
+        }
+    }
+
+    /// The picked 实时纪要 tile is also the notes window's open/close switch, so the panel
+    /// needs no separate row for it.
+    private func pickDisplay(_ mode: String) {
+        if mode == "notes", settings.displayMode == "notes" {
+            model.notesShown ? model.hideNotesWindow() : model.openNotesWindow()
+        } else {
+            model.setDisplayMode(mode)
+        }
+    }
+
+    private func tileCaption(_ mode: String) -> String? {
+        guard mode == "notes", settings.displayMode == "notes" else { return nil }
+        return model.notesShown ? L("再点收起") : L("再点打开")
+    }
+}
+
+private struct PanelHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+extension MenuPanelView {
+    /// 在会议室里开会？: the Mac has played nothing for a minute. Asked once a meeting.
+    var roomPromptStrip: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("在会议室里开会？").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                Text("电脑里 1 分钟没放出声音").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+            }
+            HStack(spacing: 8) {
+                SoftButton(L("改听会议室"), dark: true) { model.answerRoomPrompt(true) }
+                SoftButton(L("不是")) { model.answerRoomPrompt(false) }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 11).fill(Palette.accentPale))
+    }
+}
+
+/// Under the panel's status: the file being transcribed in the background, if any.
+struct PanelImportLine: View {
+    @ObservedObject var importer: FileImporter
+    @ObservedObject var store: SessionStore
+
+    var body: some View {
+        if let job = importer.current {
+            let name = store.session(job.id)?.displayTitle ?? job.url.lastPathComponent
+            HStack(spacing: 6) {
+                ProgressView(value: importer.progress).progressViewStyle(.circular).controlSize(.mini).tint(Palette.ink)
+                    .frame(width: 10, height: 10)
+                Text(importer.queue.isEmpty ? L("后台转写 \(name) · \(Int(importer.progress * 100))%")
+                     : L("后台转写 \(name) · \(Int(importer.progress * 100))%，还有 \(importer.queue.count) 个"))
+                    .font(.system(size: 12)).foregroundStyle(Palette.secondary).lineLimit(1).truncationMode(.middle)
+            }
+        }
     }
 }
 
@@ -275,37 +348,10 @@ extension MenuPanelView {
                     .font(.system(size: 12)).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             default:
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.notesShown ? L("纪要窗口已打开") : L("纪要窗口已收起"))
-                            .font(.system(size: 12)).foregroundStyle(Palette.ink)
-                        if !model.ling.hasKey {
-                            Text("填入 API key 后可生成纪要；文字记录照常保存")
-                                .font(.system(size: 11)).foregroundStyle(Palette.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                    SoftButton(model.notesShown ? L("收起") : L("打开"), dark: !model.notesShown, onGrey: true) {
-                        model.notesShown ? model.hideNotesWindow() : model.openNotesWindow()
-                    }
-                }
-                Divider()
-                // Tinted while on: sharing the screen shows the notes too.
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("共享屏幕时让对方看到").font(.system(size: 12)).foregroundStyle(Palette.ink)
-                        if settings.notesCapturable {
-                            Text("对方现在能看到纪要窗口").font(.system(size: 11)).foregroundStyle(Palette.accentInk)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                    Toggle("共享屏幕时让对方看到", isOn: Binding(get: { settings.notesCapturable }, set: { model.setNotesCapturable($0) }))
-                        .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(Palette.accent)
-                }
-                .padding(.horizontal, 6).padding(.vertical, 4)
-                .background(RoundedRectangle(cornerRadius: 8).fill(settings.notesCapturable ? Palette.accentPale : .clear))
-                .padding(.horizontal, -6)
+                // Shown only without a Ling key: the notes window itself opens and closes from the tile.
+                Text("填入 API key 后可生成纪要；文字记录照常保存")
+                    .font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)
@@ -348,6 +394,7 @@ extension MenuPanelView {
 
     /// What the switch changes, on hover and in the one-time question.
     private var speakMicLine: String {
+        if settings.listensToRoom { return L("译文从扬声器念出来") }
         guard let mic = model.virtualMic?.name else { return L("先装好虚拟麦克风，对方才听得到") }
         return settings.autoSystemMic ? L("系统麦克风换成 \(mic)") : L("译文送进 \(mic)")
     }
@@ -382,7 +429,7 @@ extension MenuPanelView {
                 speakQuestion
             } else if settings.speakEnabled {
                 talkCard
-                if model.lastSpeakLatency == nil, model.virtualMic != nil, model.speakPhase == .idle {
+                if model.lastSpeakLatency == nil, model.virtualMic != nil, !settings.listensToRoom, model.speakPhase == .idle {
                     Button("先试一句 →") { model.openSettings(.speak); model.speakTestShown = true }
                         .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Palette.secondary)
                 }
@@ -436,6 +483,8 @@ extension MenuPanelView {
         if model.talkNeedsPermission {
             return (L("按键还需要“输入监控”权限"), L("去允许"), model.allowTalkKey)
         }
+        // In 会议室 the translation is read out loud: no virtual mic, no meeting app to set up.
+        if settings.listensToRoom { return nil }
         if model.virtualMic == nil {
             return (L("虚拟麦克风还没装好"), L("设置"), { model.openSettings(.speak) })
         }
@@ -461,6 +510,7 @@ extension MenuPanelView {
         let hearer = model.micUsers.first { $0.state == .virtualMic }?.name
         let detail = phase == .listening ? L("松开后播出\(speakTarget)")
             : live ? L("说\(speakFrom) → \(speakTarget)")
+            : settings.listensToRoom ? L("扬声器念出\(speakTarget)")
             : hearer.map { L("对方听到 \(speakTarget) · \($0)") } ?? L("对方听到 \(speakTarget)")
         return HStack(spacing: 12) {
             TalkKeyCap(text: talkKeyName, pressed: phase == .listening, live: live)
@@ -518,6 +568,8 @@ struct DisplayTile: View {
     static let modes = ["notes", "bar", "none"]
     let mode: String
     let selected: Bool
+    /// Under the picked tile's name: what clicking it again does.
+    var caption: String? = nil
     let action: () -> Void
 
     private var title: String {
@@ -536,9 +588,15 @@ struct DisplayTile: View {
                     .font(.system(size: 12, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Palette.ink : Palette.secondary)
                     .lineLimit(1).minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let caption {
+                    Text(caption).font(.system(size: 10)).foregroundStyle(Palette.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.8).padding(.top, -4)
+                }
             }
             .padding(.top, 10).padding(.bottom, 8).padding(.horizontal, 4)
-            .frame(maxWidth: .infinity)
+            // The row grows by the caption; every tile takes the row's height.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: 11).fill(selected ? Color.white : Palette.ground))
             .overlay(RoundedRectangle(cornerRadius: 11).stroke(selected ? Palette.ink : .clear, lineWidth: 2))
             .contentShape(Rectangle())
@@ -588,12 +646,44 @@ struct KeyCap: View {
     }
 }
 
+/// One of the panel's footer buttons: an icon over its name on a grey tile.
+struct PanelAction: View {
+    let title: String
+    let symbol: String
+    /// 退出: grey ink, it ends the app rather than opening something.
+    var quiet = false
+    let action: () -> Void
+    @State private var hover = false
+
+    init(_ title: String, symbol: String, quiet: Bool = false, action: @escaping () -> Void) {
+        self.title = title; self.symbol = symbol; self.quiet = quiet; self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 14, weight: .medium))
+                Text(title).font(.system(size: 12, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(quiet ? Palette.secondary : Palette.ink)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(RoundedRectangle(cornerRadius: 10).fill(hover ? Palette.line : Palette.ground))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+    }
+}
+
 // MARK: - Main window
 
 struct MainWindowView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var store: SessionStore
     @ObservedObject var settings: AppSettings
+    @ObservedObject var importer: FileImporter
+    @StateObject private var player = RecordingPlayer()
+    @State private var dropping = false
     @State private var selection: String?
     @State private var query = ""
     @State private var view = "both"
@@ -602,13 +692,13 @@ struct MainWindowView: View {
     @State private var jumpTo: Double?
     /// A topic's time picked in the notes, for the bilingual column beside them.
     @State private var quoteJump: Double?
-    /// 编辑 in the notes page: the working copy, saved on 完成 (nil = reading).
-    @State private var notesDraft: MeetingNotes?
     @State private var detailWidth: CGFloat = 0
     @FocusState private var searchFocused: Bool
     /// The bilingual column beside the notes is opt-in: three full columns of text read as crowded.
     @AppStorage("mainShowQuotes") private var showQuotes = false
     @State private var showOlder = false
+    /// The notes being edited （完成 keeps it, 取消 drops it); nil when just reading.
+    @State private var notesDraft: MeetingNotes?
 
     /// Wide enough for the notes and the bilingual transcript side by side.
     private var sideBySide: Bool { showQuotes && wideEnough }
@@ -637,9 +727,19 @@ struct MainWindowView: View {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth = $0 }
+                .overlay(alignment: .bottom) { SpeakerUndoToast(model: model, session: selection) }
         }
         .background(Color.white.ignoresSafeArea())
         .background(Button("") { searchFocused = true }.keyboardShortcut("f").opacity(0))
+        // Recordings and videos dropped anywhere on the window become records.
+        .dropDestination(for: URL.self) { urls, _ in
+            let files = urls.filter(FileImporter.importable)
+            guard !files.isEmpty else { return false }
+            model.importFiles(files)
+            return true
+        } isTargeted: { dropping = $0 }
+        .overlay { if dropping { ImportDropOverlay() } }
+        .onChange(of: current?.id, initial: true) { _, _ in player.load(current) }
         .onChange(of: model.mainShow) { _, show in
             guard let parts = show?.split(separator: ",").map(String.init), let id = parts.first else { return }
             selection = id
@@ -671,18 +771,24 @@ struct MainWindowView: View {
 
             // 开始听: the three ways a meeting starts. While one is running (or an import is
             // in flight) they grey out, so nobody starts a second meeting over the first.
-            let busy = model.running || model.importing != nil
+            let busy = model.running || importer.busy
             Text("开始听").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
                 .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, -2)
-            sidebarAction(L("线上会议"), icon: "desktopcomputer", help: L("收录 Mac 播放的声音"), enabled: !busy) { model.startListening("system") }
-            sidebarAction(L("现场会议"), icon: "mic", help: L("用麦克风收录房间里的说话声"), enabled: !busy) { model.startListening("mic") }
-            sidebarAction(L("导入会议录音"), icon: "square.and.arrow.down", help: L("把录好的音频文件变成一场会议记录"), enabled: !busy) { model.importRecording() }
+            sidebarAction(L("线上会议"), icon: "desktopcomputer", help: L("收录 Mac 播放的声音"), enabled: !busy) {
+                model.listenSourceSelection = "system"
+                model.start()
+            }
+            sidebarAction(L("现场会议"), icon: "mic", help: L("用麦克风收录房间里的说话声"), enabled: !busy) {
+                model.listenSourceSelection = "room"
+                model.start()
+            }
+            sidebarAction(L("导入会议录音"), icon: "square.and.arrow.down", help: L("把录好的音频文件变成一场会议记录"), enabled: !busy) { model.chooseImportFiles() }
                 .padding(.bottom, 4)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     // The newest day shows; older ones fold under one row until asked for (or searched).
-                    let all = groups
+                    let all = RecordList.groups(filtered)
                     let folded = query.isEmpty && !showOlder && all.count > 1
                     ForEach(Array((folded ? Array(all.prefix(1)) : all).enumerated()), id: \.element.title) { i, g in
                         Text(g.title).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
@@ -718,7 +824,7 @@ struct MainWindowView: View {
         .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 14)
         .onChange(of: selection) { _, id in
             // A meeting picked from elsewhere (search, the notes window) shouldn't hide in a fold.
-            if let id, let first = groups.first, !first.sessions.contains(where: { $0.id == id }) { showOlder = true }
+            if let id, let first = RecordList.groups(filtered).first, !first.sessions.contains(where: { $0.id == id }) { showOlder = true }
         }
     }
 
@@ -739,23 +845,6 @@ struct MainWindowView: View {
         .help(help)
     }
 
-    /// 今天 / 昨天 / 本周 / then one group per month, newest first.
-    private var groups: [(title: String, sessions: [Session])] {
-        let cal = Calendar.current
-        var out: [(title: String, sessions: [Session])] = []
-        for s in filtered {
-            let d = s.startedAt
-            let title: String
-            if cal.isDateInToday(d) { title = L("今天") }
-            else if cal.isDateInYesterday(d) { title = L("昨天") }
-            else if cal.isDate(d, equalTo: Date(), toGranularity: .weekOfYear) { title = L("本周") }
-            else if cal.isDate(d, equalTo: Date(), toGranularity: .year) { title = dateText(d, "MMMM") }
-            else { title = dateText(d, "yMMMM") }
-            if out.last?.title == title { out[out.count - 1].sessions.append(s) } else { out.append((title, [s])) }
-        }
-        return out
-    }
-
     private func sessionRow(_ s: Session) -> some View {
         let selected = s.id == (selection ?? store.sessions.first?.id)
         let live = s.id == store.liveID
@@ -767,74 +856,63 @@ struct MainWindowView: View {
             // stay grey so the one being read stands out.
             HStack(spacing: 8) {
                 if live { BreathingDot(size: 6) }
-                Text(Self.untitled(s) ? L("未命名会议") : Self.listTitle(s))
+                if s.sourceFile != nil {
+                    Image(systemName: "doc").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                } else if s.fromRecording, s.lines.isEmpty {
+                    Image(systemName: "waveform").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                        .help(L("只有录音"))
+                } else if s.room == true {
+                    Image(systemName: "mic").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                        .help(L("会议室"))
+                }
+                Text(RecordList.untitled(s) ? L("未命名会议") : RecordList.listTitle(s))
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected || live ? Palette.ink : Palette.secondary).lineLimit(1)
                 Spacer(minLength: 0)
+                if let status = importer.status(of: s) { Tag(rowTag(status), live: status == .running) }
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
             .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Color.white : Color.clear)
                 .shadow(color: selected ? Palette.ink.opacity(0.06) : .clear, radius: 1.5, y: 1))
             .contentShape(Rectangle())
         }
-        .help(live ? L("正在记录") : [when(s), Self.length(s)].joined(separator: " · "))
+        .help(live ? L("正在记录") : [RecordList.when(s), RecordList.length(s)].joined(separator: " · "))
         .buttonStyle(.plain)
         .contextMenu {
+            if let path = s.sourcePath, FileManager.default.fileExists(atPath: path) {
+                Button("显示原文件") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+            }
             Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([store.folder(s.id)]) }
+            if s.sourcePath != nil, !working(s) {
+                Button("重新转写") { importer.retry(s.id) }
+            }
             if s.renamed ?? !s.title.hasPrefix("会议 "), s.notes?.title != nil {
                 Button("恢复自动标题") { store.rename(s.id, to: "") }
             }
-            Button("删除", role: .destructive) { store.delete(s.id) }.disabled(live)
+            Button("删除", role: .destructive) { model.deleteSession(s.id) }.disabled(live)
         }
     }
 
-    private func when(_ s: Session) -> String {
-        let cal = Calendar.current
-        return dateText(s.startedAt, cal.isDateInToday(s.startedAt) || cal.isDateInYesterday(s.startedAt) ? "HHmm"
-            : cal.isDate(s.startedAt, equalTo: Date(), toGranularity: .weekOfYear) ? "EEE" : "MMMd")
-    }
-
-    /// Notes titles often start with the day ("11月2日 产品周会"); under a 今天 heading that only
-    /// pushes the real title out of the row.
-    static func listTitle(_ s: Session) -> String {
-        let title = s.displayTitle
-        for prefix in [dateText(s.startedAt, "MMMd"), dateText(s.startedAt, "MMMMd")] where title.hasPrefix(prefix) {
-            let rest = title.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
-            if !rest.isEmpty { return rest }
+    /// Being transcribed or waiting to be.
+    private func working(_ s: Session) -> Bool {
+        switch importer.status(of: s) {
+        case .running, .queued: return true
+        default: return false
         }
-        return title
     }
 
-    /// Still on the stored "会议 <date>" title: not renamed, and no notes title to show.
-    static func untitled(_ s: Session) -> Bool {
-        !(s.renamed ?? !s.title.hasPrefix("会议 ")) && (s.notes?.title ?? "").isEmpty
-    }
-
-    static func length(_ s: Session) -> String {
-        let mins = Int(s.duration / 60)
-        if mins < 1 { return L("不到 1 分钟") }
-        return mins < 60 ? L("\(mins) 分钟") : mins % 60 == 0 ? L("\(mins / 60) 小时") : L("\(mins / 60) 小时 \(mins % 60) 分")
-    }
-
-    /// "英 → 中" (short) or "英语 → 中文", from the most common pair among the lines.
-    static func pair(_ s: Session, short: Bool) -> String? {
-        let pairs = Dictionary(grouping: s.lines.filter { $0.speaker != "me" }, by: { "\(lang($0.srcLang))|\(lang($0.dstLang))" })
-        guard let top = pairs.max(by: { $0.value.count < $1.value.count })?.key else { return nil }
-        let p = top.split(separator: "|").map(String.init)
-        guard p.count == 2, p[0] != p[1] else { return nil }
-        func name(_ c: String) -> String {
-            let names = ["en": L("英语"), "ja": L("日语"), "zh-CN": L("中文"), "zh-TW": L("繁中"), "ko": L("韩语"),
-                         "es": L("西语"), "fr": L("法语"), "de": L("德语"), "pt": L("葡语")]
-            guard let n = names[c] else { return c.uppercased() }
-            guard short else { return n }
-            return uiIsChinese ? String(n.prefix(1)) : c == "zh-TW" ? "ZH-TW" : String(c.prefix(2)).uppercased()
+    /// The list row's word for an imported file still being worked on.
+    private func rowTag(_ status: FileImporter.Status) -> String {
+        switch status {
+        case .queued: return L("排队中")
+        case .unfinished: return L("没转完")
+        case .running:
+            switch importer.phase {
+            case .transcribing: return L("转写中 \(Int(importer.progress * 100))%")
+            case .translating: return L("翻译中")
+            default: return L("准备中")
+            }
         }
-        return "\(name(p[0])) → \(name(p[1]))"
-    }
-
-    private static func lang(_ code: String) -> String {
-        let base = String(code.split(whereSeparator: { $0 == "-" || $0 == "_" }).first ?? "")
-        return base == "zh" ? (code.contains("Hant") || code.hasSuffix("TW") || code.hasSuffix("HK") ? "zh-TW" : "zh-CN") : base
     }
 
     // MARK: Detail
@@ -843,26 +921,18 @@ struct MainWindowView: View {
     private var detail: some View {
         if let s = current {
             VStack(spacing: 0) {
-                if let imp = model.importing {
-                    HStack(spacing: 8) {
-                        Spinner()
-                        Text(L("正在导入 \(imp.name)（\(Int(imp.fraction * 100))%）"))
-                            .font(.system(size: 12)).foregroundStyle(Palette.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20).padding(.vertical, 8)
-                    .background(Palette.raised)
-                }
                 if s.lines.isEmpty {
                     ScrollView {
-                        header(s).frame(maxWidth: 680).padding(.horizontal, 40).padding(.vertical, 36)
+                        header(s).frame(maxWidth: 680).padding(.horizontal, 44).padding(.vertical, 36)
                             .frame(maxWidth: .infinity)
                     }
                         .overlay {
-                            Text(s.id == store.liveID ? L("正在听，说话的内容会出现在这里") : L("这场会议没有记录到内容"))
+                            Text(s.id == store.liveID ? L("正在听，说话的内容会出现在这里")
+                                 : working(s) ? L("转出的文字会陆续出现在这里")
+                                 : s.fromRecording ? L("还没有文字记录") : L("这场会议没有记录到内容"))
                                 .font(.system(size: 13)).foregroundStyle(Palette.secondary)
                         }
-                } else if tab == "notes" {
+                } else if tab == "notes", importer.status(of: s) == nil {
                     HStack(spacing: 0) {
                         SessionNotesView(model: model, engine: model.notes, ling: model.ling, session: s,
                                          header: AnyView(header(s)),
@@ -895,48 +965,20 @@ struct MainWindowView: View {
             Text("打开会议或视频，开始听后，每一场都会存在这里。")
                 .font(.system(size: 15)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
                 .padding(.top, 10)
-            HStack(spacing: 12) {
-                Button { model.startListening("system") } label: {
-                    HStack(spacing: 10) {
-                        Circle().fill(Palette.accent).frame(width: 9, height: 9)
-                        Text("线上会议").font(.system(size: 15, weight: .semibold))
-                    }
-                    .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 44)
-                    .background(Capsule().fill(Palette.ink))
-                    .contentShape(Capsule())
+            Button { model.setRunning(true) } label: {
+                HStack(spacing: 10) {
+                    Circle().fill(Palette.accent).frame(width: 9, height: 9)
+                    Text("开始听").font(.system(size: 15, weight: .semibold))
                 }
-                .buttonStyle(.plain)
-                .help(L("收录 Mac 播放的声音"))
-                Button { model.startListening("mic") } label: {
-                    Text("现场会议").font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Palette.ink).padding(.horizontal, 22).frame(height: 44)
-                        .background(Capsule().fill(Color.white))
-                        .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .help(L("用麦克风收录房间里的说话声"))
-                Button { model.importRecording() } label: {
-                    Text("导入会议录音").font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Palette.ink).padding(.horizontal, 22).frame(height: 44)
-                        .background(Capsule().fill(Color.white))
-                        .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .help(L("把录好的音频文件变成一场会议记录"))
+                .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 44)
+                .background(Capsule().fill(Palette.ink))
+                .contentShape(Capsule())
             }
-            .padding(.top, 32)
-            if let imp = model.importing {
-                HStack(spacing: 8) {
-                    Spinner()
-                    Text(L("正在导入 \(imp.name)（\(Int(imp.fraction * 100))%）"))
-                        .font(.system(size: 13)).foregroundStyle(Palette.secondary)
-                }
-                .padding(.top, 18)
-            }
+            .buttonStyle(.plain).padding(.top, 32)
             Button("先听一段示例") { model.ensureListening(); model.sample.play() }
                 .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.secondary).padding(.top, 16)
+            Button("或导入录音、视频…") { model.chooseImportFiles() }
+                .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.ink).padding(.top, 8)
         }
         .frame(maxWidth: 420)
         .padding(.bottom, 60)
@@ -946,7 +988,7 @@ struct MainWindowView: View {
     /// 此刻: the sentence being heard, pinned under the page while the meeting is live.
     @ViewBuilder private var liveNow: some View {
         let src = model.liveSource.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !src.isEmpty {
+        if !src.isEmpty || !model.languageAsk.isEmpty || model.modelFetch != nil {
             HStack(alignment: .top, spacing: 14) {
                 HStack(spacing: 6) {
                     BreathingDot(size: 6)
@@ -956,10 +998,12 @@ struct MainWindowView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(src).font(.system(size: 13)).foregroundStyle(Palette.secondary)
                         .lineLimit(2).truncationMode(.head)
-                    if !model.liveTranslation.isEmpty {
+                    // 听不出 replaces the stuck 正在识别语言…; it says what to do instead.
+                    if !model.liveTranslation.isEmpty, model.languageAsk.isEmpty {
                         Text(model.liveTranslation).font(.system(size: 15)).foregroundStyle(Palette.ink)
                             .lineLimit(2).truncationMode(.head)
                     }
+                    LanguageNotice(model: model).padding(.top, 4)
                 }
                 Spacer(minLength: 0)
             }
@@ -973,10 +1017,13 @@ struct MainWindowView: View {
     /// Text tabs, the transcript's language choice and 导出…, under the title: no toolbar band.
     private func tabsRow(_ s: Session) -> some View {
         HStack(alignment: .center, spacing: 22) {
-            tabButton(L("纪要"), id: "notes")
-            tabButton(L("文字记录"), id: "transcript", count: s.lines.count)
+            // Notes wait until an imported file is transcribed to the end.
+            let importing = importer.status(of: s) != nil
+            let active = importing ? "transcript" : tab
+            tabButton(L("纪要"), id: "notes", active: active, badge: importing ? L("转完后生成") : nil).disabled(importing)
+            tabButton(L("文字记录"), id: "transcript", active: active, count: s.lines.count)
             Spacer()
-            if tab == "transcript" {
+            if active == "transcript" {
                 if let p = model.proofreading, p.id == s.id {
                     HStack(spacing: 6) {
                         Spinner()
@@ -1073,13 +1120,15 @@ struct MainWindowView: View {
         }
     }
 
-    private func tabButton(_ title: String, id: String, count: Int? = nil) -> some View {        let on = tab == id
+    private func tabButton(_ title: String, id: String, active: String, count: Int? = nil, badge: String? = nil) -> some View {
+        let on = active == id
         // Leaving the notes page drops an unsaved edit, like its 取消.
         return Button { tab = id; notesDraft = nil } label: {
             HStack(spacing: 5) {
                 Text(title).font(.system(size: 13, weight: on ? .semibold : .regular))
                     .foregroundStyle(on ? Palette.ink : Palette.secondary)
                 if let count { Text("\(count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Palette.secondary) }
+                if let badge { Tag(badge) }
             }
             .padding(.bottom, 6)
             .overlay(alignment: .bottom) { Rectangle().fill(on ? Palette.ink : .clear).frame(height: 2) }
@@ -1093,18 +1142,19 @@ struct MainWindowView: View {
         let live = s.id == store.liveID
         let notes = live ? model.notes.notes : s.notes
         // When and how long up front; the languages and notes version wait in the tooltip.
-        let more = [Self.pair(s, short: false),
+        let more = [RecordList.pair(s, short: false),
                     notes.flatMap { $0.isEmpty ? nil : ($0.final ? L("完整版纪要") : L("速记版纪要")) }]
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 if live { Tag(L("正在记录"), live: true) }
-                Text([dateText(s.startedAt, "MMMdHHmm"), Self.length(s)].joined(separator: " · "))
+                Text(([dateText(s.startedAt, "MMMdHHmm"), RecordList.length(s)] + (s.sourceFile.map { [$0, L("导入")] } ?? [])
+                      + (s.room == true ? [L("会议室")] : [])).joined(separator: " · "))
                     .font(.system(size: 12).monospacedDigit()).foregroundStyle(Palette.tertiary).lineLimit(1)
                     .help(([dateLine(s, live: live)] + more.compactMap { $0 }).joined(separator: " · "))
             }
             TextField("标题", text: Binding(
                 // The date is on the line above; a notes title that starts with it shows without.
-                get: { titleDraft.isEmpty ? Self.listTitle(s) : titleDraft },
+                get: { titleDraft.isEmpty ? RecordList.listTitle(s) : titleDraft },
                 set: { titleDraft = $0 }
             ), axis: .vertical)
             .textFieldStyle(.plain)
@@ -1113,6 +1163,17 @@ struct MainWindowView: View {
             .onSubmit {
                 if !titleDraft.isEmpty { store.rename(s.id, to: titleDraft) }
                 titleDraft = ""
+            }
+            if s.sourcePath != nil {
+                VStack(alignment: .leading, spacing: 12) {
+                    if s.fromRecording, s.lines.isEmpty || s.importing == true, !working(s) {
+                        RecordingLanguageStrip(importer: importer, session: s)
+                    } else {
+                        ImportStatusStrip(model: model, importer: importer, session: s)
+                    }
+                    if player.sessionID == s.id { RecordingPlayerBar(player: player) }
+                }
+                .padding(.top, 16)
             }
             tabsRow(s).padding(.top, 24)
         }
@@ -1197,8 +1258,11 @@ struct MainWindowView: View {
                     let speakers = settings.speakerVoices ? SpeakerLabels.numbers(s.lines) : [:]
                     if !speakers.isEmpty { SpeakerStrip(model: model, session: s).padding(.bottom, 8) }
                     let starts = SpeakerLabels.runStarts(s.lines, speakers)
+                    let voices = SpeakerLabels.voiceNumbers(s.lines)
                     ForEach(s.lines) { l in
-                        lineRow(l, speaker: speakers[l.id], label: speakers.isEmpty || starts.contains(l.id), voices: !speakers.isEmpty).id(l.id)
+                        lineRow(l, speaker: speakers[l.id], label: speakers.isEmpty || starts.contains(l.id), voices: !speakers.isEmpty, in: s)
+                            .contextMenu { if !speakers.isEmpty, l.speaker == "them" { assignMenu(s, l, voices) } }
+                            .id(l.id)
                     }
                 }
                 .environment(\.speakerNames, SpeakerLabels.names(s))
@@ -1218,17 +1282,34 @@ struct MainWindowView: View {
         }
     }
 
-    private func lineRow(_ l: TranscriptLine, speaker: Int? = nil, label: Bool = true, voices: Bool = false) -> some View {
+    private func lineRow(_ l: TranscriptLine, speaker: Int? = nil, label: Bool = true, voices: Bool = false, in shownSession: Session? = nil) -> some View {
         let me = l.speaker == "me"
         return HStack(alignment: .top, spacing: 16) {
-            Text(TranscriptExport.clock(l.t))
-                .font(.system(size: 12).monospacedDigit()).foregroundStyle(Palette.tertiary)
-                .frame(width: 52, alignment: .leading).padding(.top, 1)
+            if let shownSession, player.sessionID == shownSession.id, player.ready {
+                // An imported file plays from this line.
+                Button { player.play(from: l.t) } label: {
+                    Text(TranscriptExport.clock(l.t))
+                        .font(.system(size: 12).monospacedDigit()).foregroundStyle(Palette.link)
+                        .frame(width: 52, alignment: .leading).padding(.top, 1).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).help(L("从这里播放"))
+            } else {
+                Text(TranscriptExport.clock(l.t))
+                    .font(.system(size: 12).monospacedDigit()).foregroundStyle(Palette.tertiary)
+                    .frame(width: 52, alignment: .leading).padding(.top, 1)
+            }
             VStack(alignment: .leading, spacing: 5) {
                 if !label {
+                } else if voices, !me, let s = shownSession {
+                    // A click on whose line it is: say it was someone else's.
+                    Menu { assignMenu(s, l, SpeakerLabels.voiceNumbers(s.lines)) } label: {
+                        if let speaker { SpeakerTag(number: speaker) } else { UnknownSpeakerTag() }
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
+                    .help(L("这句是谁说的"))
                 } else if let speaker { SpeakerTag(number: speaker) }
-                else if voices, !me { UnknownSpeakerTag() }
-                else {
+                else if shownSession?.sourceFile == nil {
+                    // An imported file has no "other side": its lines carry no label.
                     Text(me ? L("你") : L("对方")).font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(me ? Palette.accentInk : Palette.secondary)
                 }
@@ -1252,6 +1333,20 @@ struct MainWindowView: View {
     }
 }
 
+extension MainWindowView {
+    /// "这句是谁说的": the people on show; the line takes that voice.
+    @ViewBuilder
+    func assignMenu(_ s: Session, _ l: TranscriptLine, _ voices: [Int: Int]) -> some View {
+        let names = SpeakerLabels.names(s)
+        Section("这句是谁说的") {
+            ForEach(voices.sorted { $0.value < $1.value }, id: \.key) { v, n in
+                Button(SpeakerLabels.label(n, names) + (l.voice == v ? " ✓" : "")) {
+                    model.assignLines(session: s.id, [l.id], to: v)
+                }
+            }
+        }
+    }
+}
 
 /// A meeting's notes in the main window: the same notes view as the live window, or a way to
 /// make them for a meeting recorded without a key.
@@ -1262,12 +1357,12 @@ struct SessionNotesView: View {
     let session: Session
     /// The page's title block, scrolling with the notes.
     var header: AnyView = AnyView(EmptyView())
-    /// 编辑: the working copy the page shows and writes into (nil = reading).
+    /// Set while the notes are being edited: the working copy the editor writes into.
     var edit: Binding<MeetingNotes>? = nil
     let onJump: (Double) -> Void
 
     private var live: Bool { session.id == model.store.liveID }
-    private var notes: MeetingNotes? { edit?.wrappedValue ?? (live ? engine.notes : session.notes) }
+    private var notes: MeetingNotes? { live ? engine.notes : session.notes }
     private var generating: Bool { engine.generatingID == session.id }
 
     var body: some View {
@@ -1275,7 +1370,8 @@ struct SessionNotesView: View {
             VStack(alignment: .leading, spacing: 40) {
                 header
                 if let notes, !notes.isEmpty {
-                    NotesContentView(notes: notes, fresh: live && edit == nil ? engine.fresh : [], live: live, document: true,
+                    NotesContentView(notes: SpeakerLabels.named(edit?.wrappedValue ?? notes, SpeakerLabels.names(session)),
+                                     fresh: live ? engine.fresh : [], live: live, document: true,
                                      edit: edit, endedAt: session.lines.last?.t, onJump: onJump)
                 } else if generating || (live && ling.hasKey && !session.lines.isEmpty) {
                     NotesGeneratingView(heard: session.lines.count)
@@ -1283,7 +1379,7 @@ struct SessionNotesView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(generating ? L("正在整理纪要…") : live ? L("纪要会在会议进行中自动生成") : L("这场会议还没有纪要"))
                             .font(.system(size: 15, weight: .bold))
-                        Text(ling.hasKey ? L("使用 Ling 将文字记录整理为总结、议题、结论和人名，约需半分钟。")
+                        Text(ling.hasKey ? L("用 \(ling.provider.name) 整理出总结、议题、结论和人名，约半分钟。")
                                          : L("前往 设置 › AI 服务 填入 Ling 的 API key 后即可生成。"))
                             .font(.system(size: 13)).foregroundStyle(Palette.secondary)
                         if !live {
@@ -1303,10 +1399,125 @@ struct SessionNotesView: View {
                     .background(RoundedRectangle(cornerRadius: 18).fill(Palette.raised))
                 }
             }
-            // The transcript tab's exact measure, so switching tabs doesn't move the column.
-            .frame(maxWidth: 680, alignment: .leading)
-            .padding(.horizontal, 40).padding(.top, 36).padding(.bottom, 64)
+            // A narrow measure and a tall top margin: the page reads as one quiet column.
+            .frame(maxWidth: 600, alignment: .leading)
+            .padding(.horizontal, 44).padding(.top, 52).padding(.bottom, 64)
             .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+/// Under 此刻 while "auto" can't tell the language yet: the second speech model coming in, or,
+/// when nothing more will settle it, 听不出 with the likely languages to pick from.
+struct LanguageNotice: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        if let problem = model.modelProblem, !model.languageAsk.isEmpty || model.modelBlocked {
+            problemCard(problem)
+        } else if model.languageNotInstalled {
+            notInstalledCard
+        } else if !model.languageAsk.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("听不出是哪种语言，你来选一下").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                HStack(spacing: 8) {
+                    ForEach(model.languageAsk, id: \.locale) { lang in
+                        SoftButton(lang.name) { model.pickLanguage(lang) }
+                    }
+                    Menu {
+                        ForEach(sourceLanguages.filter { !model.languageAsk.contains($0) }, id: \.locale) { lang in
+                            Button(lang.name) { model.pickLanguage(lang) }
+                        }
+                    } label: {
+                        Text("更多…").font(.system(size: 12, weight: .semibold))
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .foregroundStyle(Palette.secondary)
+                }
+            }
+        } else if let fetch = model.modelFetch {
+            HStack(spacing: 10) {
+                ProgressView(value: max(0.02, fetch.fraction)).progressViewStyle(.linear).tint(Palette.tertiary).frame(width: 96)
+                Text("正在补装 \(fetch.name) 语音模型，装好后自动判断语言").font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                    .lineLimit(1).truncationMode(.tail)
+            }
+        }
+    }
+
+    /// None of the installed models hear their language: the likely ones not installed come first
+    /// (picking one downloads it and replays the start), the installed ones in case the check was wrong.
+    private var notInstalledCard: some View {
+        let installed = model.candidates
+        let names = installed.map(\.name)
+        let title = names.count == 1 ? L("听着不像 \(names[0])")
+            : names.count == 2 ? L("听着不像 \(names[0]) 或 \(names[1])") : L("听着不像已装的语言")
+        return VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                Text("选了就下载它的语音模型，开头这段也会补上").font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                ForEach(model.languageAsk, id: \.locale) { lang in
+                    SoftButton(lang.name) { model.pickLanguage(lang) }
+                }
+                Menu {
+                    ForEach(sourceLanguages.filter { !model.languageAsk.contains($0) && !installed.contains($0) }, id: \.locale) { lang in
+                        Button(lang.name) { model.pickLanguage(lang) }
+                    }
+                } label: {
+                    Text("更多…").font(.system(size: 12, weight: .semibold))
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .foregroundStyle(Palette.secondary)
+            }
+            HStack(spacing: 10) {
+                Text("其实是：").font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                ForEach(installed, id: \.locale) { lang in
+                    Button(lang.name) { model.pickLanguage(lang) }
+                        .buttonStyle(.plain).font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.secondary).underline()
+                }
+            }
+        }
+    }
+
+    /// The model 听不出 needed couldn't be had: why, the one thing that helps, and the languages
+    /// already on the Mac to go on with meanwhile.
+    private func problemCard(_ p: ModelProblem) -> some View {
+        // Chosen in settings, the language isn't swapped from here.
+        let installed = model.settings.sourceMode == .auto ? model.candidates.filter { $0 != p.lang } : []
+        return VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("没能下载 \(p.lang.name) 语音模型").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                if let reason = reason(p.cause) {
+                    Text(reason).font(.system(size: 12)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            HStack(spacing: 8) {
+                switch p.cause {
+                case .disk: SoftButton(L("打开存储空间"), dark: true) { model.openStorageSettings() }
+                case .dictation: SoftButton(L("打开听写设置"), dark: true) { model.openDictationSettings() }
+                case .other, .limit: SoftButton(L("再试一次"), dark: true) { model.retryModel() }
+                case .offline: EmptyView()
+                }
+                if !installed.isEmpty {
+                    Text("先用已装的：").font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                    ForEach(installed, id: \.locale) { lang in
+                        SoftButton(lang.name) { model.pickLanguage(lang) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func reason(_ cause: ModelProblem.Cause) -> String? {
+        switch cause {
+        case .offline: return L("网络连不上，连上后会自动继续")
+        case .disk: return L("这台 Mac 的磁盘空间不够了")
+        case .limit: return L("这台 Mac 上的语音模型已满 5 种")
+        case .dictation(let message), .other(let message?): return message
+        case .other(nil): return nil
         }
     }
 }

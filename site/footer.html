@@ -11,8 +11,8 @@
         <p>{{t.foot_desc}}</p>
       </div>
       <div class="foot-dl">
-        <a class="btn btn-orange desk" href="{{DOWNLOAD}}">{{t.dl_mac}}</a>
-        <span>{{t.foot_meta}} {{VERSION}}</span>
+        <a class="btn btn-orange desk" href="{{DOWNLOAD}}" data-dl>{{t.dl_mac}}</a>
+        <span>{{t.foot_meta}} · <a href="{{DOWNLOAD_PAGE}}">{{t.all_downloads}}</a></span>
       </div>
     </div>
 
@@ -55,6 +55,21 @@
   <div class="wordmark" aria-hidden="true">Cicada</div>
 </footer>
 <script>
+// Which system this is: the download buttons (data-dl) and the platform cards and tabs follow it.
+// Without JS, or on a system with nothing released yet, the page stays as built: the Mac download.
+(function () {
+  var ua = navigator.userAgent, os = /Android/i.test(ua) ? 'android'
+    : /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios'
+    : /Windows/.test(ua) ? 'windows' : /Linux|X11/.test(ua) && !/CrOS/.test(ua) ? 'linux' : 'mac';
+  var dl = {{DL_JSON}}, d = dl[os];
+  document.documentElement.classList.add('os-' + os, 'js');
+  if (d) document.querySelectorAll('[data-dl]').forEach(function (a) {
+    a.href = d.url;
+    var last = a.lastChild; if (last && last.nodeType === 3) last.nodeValue = ' ' + d.label; else a.textContent = d.label;
+  });
+  document.querySelectorAll('[data-platform="' + os + '"] .yours').forEach(function (el) { el.hidden = false; });
+  window.CICADA_OS = os;
+})();
 // Phones get no download: share the page (AirDrop / messages to yourself) or copy the link.
 var SEND = {{SEND_JSON}};
 document.querySelectorAll('[data-send]').forEach(function (b) {

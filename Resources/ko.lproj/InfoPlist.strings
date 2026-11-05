@@ -1,5 +1,5 @@
 CFBundleName = "Cicada";
 CFBundleDisplayName = "Cicada";
 NSAudioCaptureUsageDescription = "실시간 자막을 만들기 위해 Cicada가 Mac에서 재생 중인 소리를 읽습니다.";
-NSMicrophoneUsageDescription = "말하기 키를 누르고 있는 동안 Cicada가 마이크로 내 말을 상대의 언어로 번역합니다.";
+NSMicrophoneUsageDescription = "말하기 키를 누르고 있는 동안 Cicada가 마이크로 내 말을 상대의 언어로 번역합니다. 회의실을 들을 때는 마이크로 그 자리에 있는 사람들의 말을 듣습니다.";
 NSSpeechRecognitionUsageDescription = "Cicada는 음성을 텍스트로 바꾸기 위해 음성 인식을 사용합니다.";

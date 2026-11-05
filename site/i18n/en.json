@@ -11,16 +11,15 @@
   "nav_faq": "FAQ",
   "nav_changelog": "Changelog",
   "download_free": "Download free",
-  "mac_only": "Mac app",
   "suggest_label": "Language suggestion",
   "suggest_close": "Dismiss",
-  "home_title": "Cicada: live subtitles, interpreting and meeting notes for any call or stream | Free for Mac",
-  "home_desc": "Cicada listens to whatever your Mac is playing and gives you live translated subtitles, push-to-talk interpreting and AI meeting notes. Works in Zoom, Teams, Google Meet, X Spaces, YouTube Live and Discord, with no bot in the call. Audio stays on your Mac. Free and open source.",
+  "home_title": "Cicada: live subtitles, interpreting and meeting notes for any call or stream | Free for Mac, Windows, Linux and Android",
+  "home_desc": "Cicada listens to whatever your computer or phone is playing and gives you live translated subtitles, push-to-talk interpreting and AI meeting notes. Works in Zoom, Teams, Google Meet, X Spaces, YouTube Live and Discord, with no bot in the call. For Mac, Windows, Linux and Android, free and open source; on the Mac, audio never leaves your computer.",
   "og_title": "Cicada: any call, any stream, no language barrier",
-  "og_desc": "Live subtitles, interpreting and AI meeting notes on your Mac. Understand, speak up, remember.",
-  "ld_desc": "Live translated subtitles, interpreting and AI meeting notes on the Mac, for any call or stream.",
+  "og_desc": "Live subtitles, interpreting and AI meeting notes on Mac, Windows, Linux and Android. Understand, speak up, remember.",
+  "ld_desc": "Live translated subtitles, interpreting and AI meeting notes on Mac, Windows, Linux and Android, for any call or stream.",
   "feed_title": "Cicada changelog",
-  "pill": "Free and open source · macOS 26 · Apple silicon",
+  "pill": "Free and open source · Mac · Windows · Linux · Android",
   "kicker": "Cicada listens, speaks and remembers for you",
   "slogan": "Any call, any stream,<br>no language barrier.",
   "sub": "Understand. Speak up. Remember.",
@@ -30,11 +29,11 @@
   "version": "Version",
   "whats_new": "What’s new",
   "how_to_start": "Get started in three steps",
-  "send_head": "Cicada is a Mac app",
-  "send_text": "Have a look on your phone first. Send this page to your Mac to download it for free.",
-  "send_btn": "Send to my Mac",
-  "send_copied": "Link copied. Open it on your Mac",
-  "send_prompt": "Copy this link and open it on your Mac:",
+  "send_head": "The iPhone app is on its way",
+  "send_text": "Cicada runs on Mac, Windows and Linux computers and on Android phones. Send this page to your computer to download it for free.",
+  "send_btn": "Send to my computer",
+  "send_copied": "Link copied. Open it on your computer",
+  "send_prompt": "Copy this link and open it on your computer:",
   "demo_label": "Demo",
   "win_title": "Launch sync · 中文",
   "person1": "Lin",
@@ -67,7 +66,7 @@
   "n_todo": "To-do",
   "n_todo_text": "Design signs off by Fri",
   "speak_hold": "Hold <kbd>right ⌥</kbd>: speak English, they hear Chinese",
-  "works": "Works in all of these, as long as your Mac plays the sound",
+  "works": "Works in all of these, as long as your computer plays the sound",
   "apps": [
     "Zoom",
     "Microsoft Teams",
@@ -83,12 +82,12 @@
     "Podcasts"
   ],
   "why_h": "Teams and Meet have captions?<br><span class=\"strike\">Only inside their own apps.</span>",
-  "why_lead": "X Spaces, YouTube Live, Discord and podcasts don’t. Cicada listens to everything your Mac plays: no bot joins the call, and nobody else installs anything.",
+  "why_lead": "X Spaces, YouTube Live, Discord and podcasts don’t. Cicada listens to everything your computer plays, or to an in-person meeting room through your microphone: no bot joins the call, and nobody else installs anything.",
   "builtin": "Built-in",
   "us": "Cicada",
   "c1_h": "Where it works",
   "c1_b": "Only in that app’s own meetings",
-  "c1_u": "Any app, any web page, any stream",
+  "c1_u": "Any app, any web page, any stream, and in-person meeting rooms",
   "c2_h": "Who has to agree",
   "c2_b": "The host turns it on, often on a paid plan",
   "c2_u": "You turn it on yourself; nobody else is affected",
@@ -98,13 +97,13 @@
   "how_label": "What it does",
   "v1_small": "01 · Live subtitles",
   "v1_h": "Understand",
-  "v1_p": "What others say turns into subtitles in your language as they speak. It works out which language they’re speaking; speech recognition runs entirely on your Mac.",
+  "v1_p": "What others say turns into subtitles in your language as they speak. It works out which language they’re speaking. On the Mac, speech recognition runs entirely on your computer, and Cicada can also listen to an in-person meeting room.",
   "v2_small": "02 · Interpreting",
   "v2_h": "Speak up",
-  "v2_p": "Hold right ⌥ and talk. When you let go, it’s translated into their language and spoken through a virtual microphone. Works in any app you can speak in.",
+  "v2_p": "Hold right ⌥ (right Ctrl on Windows) and talk. When you let go, it’s translated into their language and spoken through a virtual microphone. Works in any app you can speak in.",
   "v3_small": "03 · Meeting notes",
   "v3_h": "Remember",
-  "v3_p": "Notes written while the meeting runs: key points, decisions, to-dos and “what did I miss”. Afterwards you keep a bilingual record, exportable to Markdown, Word and SRT.",
+  "v3_p": "Notes written while the meeting runs: key points, decisions and to-dos, with speakers separated by voice. Afterwards you keep a bilingual record, or import a recording or video to generate notes, exportable to Markdown, Word and SRT.",
   "rec_more": "See what the meeting leaves behind",
   "sp_more": "See how it speaks for you",
   "sp_h": "You speak English, the room hears Chinese",
@@ -135,20 +134,20 @@
   "rec_q3_src": "我来，这周修好。",
   "rec_q3_dst": "I’ll take it, it’ll be done this week.",
   "rec_hint": "Point at anything on the left to see the line it came from",
-  "fine": "Subtitles work everywhere; interpreting needs a place where you can speak, like a call or a Space. AI notes and natural voices use your own Ling key, which comes with ¥10 of free credit every month.",
+  "fine": "Subtitles work everywhere; interpreting needs a place where you can speak, like a call or a Space. On the Mac, AI notes use a key from an AI service—Ling, OpenRouter, ZenMux, OpenAI or any compatible service; the Windows, Linux and Android apps rely on Ling to recognize speech and need a Ling key. Ling gives ¥10 of free credit every month.",
   "latest_h": "Latest updates",
   "latest_all": "Full changelog →",
   "upcoming": "Coming soon",
   "cta_h": "In your next meeting, Cicada <em>listens</em>, <em>speaks</em> and <em>remembers</em> for you.",
-  "cta_p": "They talk, you read subtitles in your language; you talk, they hear theirs; the meeting is turned into notes as it goes, and you keep a bilingual record. Audio is turned into text only on your Mac.",
-  "start_title": "Get started with Cicada in three steps | Download, Ling key, first run",
-  "start_desc": "Install Cicada, get a Ling API key (Ling gives ¥10 of credit every month), then follow the app’s first-run guide. About five minutes.",
+  "cta_p": "They talk, you read subtitles in your language; you talk, they hear theirs; the meeting is turned into notes as it goes, and you keep a bilingual record. On Mac, Windows, Linux and Android.",
+  "start_title": "Get started with Cicada in three steps | Mac, Windows, Linux, Android: download, Ling key, first run",
+  "start_desc": "Pick your platform, install Cicada, get a Ling API key (Ling gives ¥10 of credit every month), then follow the app’s first-run guide. About five minutes.",
   "start_h1": "Get started in three steps",
-  "start_lead": "Install Cicada, get a Ling key, then follow the guide in the app. About five minutes.",
-  "start_req": "Requires macOS 26 or later on an Apple silicon Mac",
+  "start_lead": "Pick your platform, install Cicada, get a Ling key, then follow the guide in the app. About five minutes.",
+  "start_req": "Requires macOS 14.4 or later on an Apple silicon Mac",
   "start_mac_q": "Will it run on my Mac?",
-  "start_mob_h": "Install it on your Mac",
-  "start_mob_p": "Send the download link to your Mac. You can sign up for a Ling key on your phone right now.",
+  "start_mob_h": "Install it on your computer",
+  "start_mob_p": "The iPhone app is on its way. Send the download link to your computer; you can sign up for a Ling key on your phone right now.",
   "s1_h": "Download and install",
   "s1_p": "Open the DMG and drag Cicada into Applications.",
   "gate_h": "Mac says it can’t verify Cicada?",
@@ -192,8 +191,8 @@
   "later2_p": "Record 15 seconds and the translation is spoken in your voice. Record it in Settings › Interpreting.",
   "more": "Models, shortcuts, uninstalling and other details are in the <a href=\"{{REPO}}/blob/main/README.en.md\">README on GitHub</a>.",
   "foot_slogan": "Cicada hears every meeting, and speaks up for you.",
-  "foot_desc": "Named for the insect that’s never quiet. Live subtitles, interpreting and AI meeting notes for everything your Mac plays. Free and open source.",
-  "foot_meta": "macOS 26 · Apple silicon · Version",
+  "foot_desc": "Named for the insect that’s never quiet. Live subtitles, interpreting and AI meeting notes on Mac, Windows, Linux and Android. Free and open source.",
+  "foot_meta": "Mac · Windows · Linux · Android",
   "foot_label": "Footer",
   "f_product": "Product",
   "f_subtitles": "Live subtitles",
@@ -222,14 +221,14 @@
   "privacy_link": "What each permission is for →",
   "privacy_url": "https://github.com/wquguru/cicada/blob/main/README.en.md#privacy--permissions",
   "p1_small": "On your Mac",
-  "p1_h": "Audio becomes text on your Mac",
-  "p1_p": "Recordings and meeting records stay on your own disk. The only things sent out are the recognized text (for translation and notes) and, when you use interpreting, the few sentences you speak while holding the key.",
+  "p1_h": "On the Mac, audio becomes text on your computer",
+  "p1_p": "Recordings and meeting records stay on your own device. On the Mac, the only things sent out are the recognized text (for translation and notes) and, when you use interpreting, the few sentences you speak while holding the key. The Windows, Linux and Android apps recognize speech with Ming, so what is said is sent to Ling in short pieces.",
   "p2_small": "Permissions",
   "p2_h": "Asked only when needed, optional where possible",
-  "p2_p": "System audio is for subtitles; the microphone records only while you hold the talk key; Input Monitoring only watches the right ⌥ (not needed with a key combination). The notes window stays hidden when you share your screen.",
+  "p2_p": "On the Mac, system audio is for subtitles; the microphone records only while you hold the talk key or when “Listen to › Room” is selected; Input Monitoring only watches the right ⌥ (not needed with a key combination). On Mac, Windows and Android the notes window stays hidden when you share your screen.",
   "p3_small": "Open",
   "p3_h": "No tracking, open source",
-  "p3_p": "It only connects to the translation service, your own Ling key, the official BlackHole download and GitHub. No analytics and no servers of our own. Installers can be checked against their SHA-256.",
+  "p3_p": "It only connects to the translation service, the AI service you configure, the official download of the virtual microphone and GitHub. No analytics and no servers of our own. Installers can be checked against their SHA-256.",
   "road_h": "Roadmap",
   "road_link": "Tell us what you need →",
   "road_sub": "In order, and subject to change",
@@ -241,10 +240,6 @@
     [
       "Record what I say",
       "What you say out loud in the meeting goes into the notes too"
-    ],
-    [
-      "macOS 14.4 and later",
-      "Older systems use an earlier speech recognizer with fewer languages"
     ],
     [
       "Proper signing and notarization",
@@ -261,18 +256,18 @@
   ],
   "road_later_items": [
     [
-      "Windows",
-      "The full feature set, sharing the meeting record format"
+      "Android in the app stores",
+      "No more installing the APK from a browser"
     ],
     [
-      "Android",
-      "Starting with video and stream subtitles and a face-to-face mode"
+      "iPhone",
+      "Listening to the room, face-to-face interpreting and meeting records"
     ]
   ],
   "road_none_items": [
     [
-      "iPhone / iPad",
-      "The system doesn’t let apps capture other apps’ audio"
+      "Intel Macs",
+      "The Mac app is for Apple silicon only"
     ]
   ],
   "faq_small": "FAQ",
@@ -280,45 +275,209 @@
   "faq_sub": "Didn’t find your question? Ask us on GitHub.",
   "faq_ask": "Ask a question →",
   "req_h": "Requirements",
-  "req_os_k": "System",
-  "req_os_v": "macOS 26 or later",
-  "req_chip_k": "Chip",
-  "req_chip_v": "Apple silicon (M series)",
-  "req_intel_k": "Intel Mac",
-  "req_intel_v": "Not yet",
-  "req_how": "Apple menu › About This Mac shows your system version and chip.",
+  "req_how": "On a Mac, Apple menu › About This Mac shows your system version and chip.",
   "faq": [
     [
       "Will it run on my Mac?",
-      "You need macOS 26 or later on an Apple silicon Mac. On-device speech recognition uses SpeechAnalyzer, which is new in macOS 26. Support back to macOS 14.4 is second on the roadmap; recognition will be a little weaker on older systems."
+      "You need macOS 14.4 or later on an Apple silicon Mac. macOS 26 uses the newer on-device speech recognizer, the most accurate; 14.4 to 15 use the system's earlier one, a little weaker, which needs Dictation turned on in System Settings › Keyboard, with each language you want heard added to it."
+    ],
+    [
+      "What about Windows, Linux and phones?",
+      "Windows 10 (2004) or later, the Ubuntu 22.04 / 24.04 desktop and Android 10 or later are all supported, with the same meeting records as the Mac. These apps recognize speech with Ming, so they need a Ling key. On Linux the notes window shows up in screen sharing; on Android, interpreting is face to face through the speaker. The iPhone app is on its way."
     ],
     [
       "Does it cost anything?",
-      "Cicada is free and open source. Live subtitles, translation and meeting records work without a key. AI notes and natural voices use your own Ling key: about ¥0.15–1 per hour of meeting, and Ling gives ¥10 of credit every month."
+      "Cicada is free and open source. On the Mac, live subtitles, translation and meeting records work without a key; AI notes and natural voices use your own Ling key, about ¥0.15–1 per hour of meeting. The Windows, Linux and Android apps need a key. Ling gives ¥10 of credit every month."
     ],
     [
       "Will the other side know?",
-      "No bot joins the call, and nobody else installs anything. When you share your screen, the notes window stays out of the picture by default."
+      "No bot joins the call, and nobody else installs anything. When you share your screen on Mac, Windows or Android, the notes window stays out of the picture by default."
     ],
     [
       "Is meeting audio uploaded?",
-      "Audio turns into text on your Mac, and recordings stay there. Only the recognized text leaves it, plus the few sentences you say while holding the talk key for interpreting."
+      "On the Mac, audio turns into text on your computer; only the recognized text leaves it, plus the few sentences you say while holding the talk key for interpreting. The Windows, Linux and Android apps recognize speech with Ming, so what is said is sent to Ling in short pieces. Recordings stay on your own device."
     ],
     [
       "Which languages does it support?",
-      "It detects the language being spoken, among those your Mac’s on-device speech recognition supports, and translates into your system language by default. Natural interpreting voices cover English, Chinese, Japanese, Korean, German, French and Spanish."
+      "On the Mac, any language its on-device speech recognition supports is detected; on the other platforms Ming recognizes it. Translations go into your system language by default. Natural interpreting voices cover English, Chinese, Japanese, Korean, German, French and Spanish."
     ],
     [
       "Is what I say out loud recorded?",
       "For now, only what you say while holding the talk key. “Record what I say” is first on the roadmap."
     ],
     [
-      "macOS blocked it on first launch?",
-      "Cicada isn’t notarized by Apple yet. Go to System Settings › Privacy & Security and click “Open Anyway”, once. Proper signing is on the roadmap."
+      "Blocked on first launch?",
+      "Cicada isn’t notarized by Apple or code-signed for Windows yet. On a Mac, go to System Settings › Privacy & Security and click “Open Anyway”; on Windows, click “More info › Run anyway”. Only once. Proper signing is on the roadmap."
     ],
     [
       "What else does interpreting need?",
-      "A virtual microphone, BlackHole. The first time you turn on interpreting, Cicada downloads it from the official source, installs it and runs a sound check."
+      "On the Mac, a virtual microphone, BlackHole: the first time you turn on interpreting, Cicada downloads it from the official source and installs it. On Windows, the free VB-Cable, which the guide helps you install. On Linux nothing: Cicada makes its own “Cicada Microphone”."
     ]
-  ]
+  ],
+  "nav_download": "Download",
+  "all_downloads": "All downloads",
+  "also_on": "Also for <a href=\"{{DOWNLOAD_PAGE}}#windows\">Windows</a> · <a href=\"{{DOWNLOAD_PAGE}}#linux\">Linux</a> · <a href=\"{{DOWNLOAD_PAGE}}#android\">Android</a> · <a href=\"{{DOWNLOAD_PAGE}}\">All downloads</a>",
+  "dl_windows": "Download for Windows",
+  "dl_linux": "Download for Linux",
+  "dl_android": "Download for Android",
+  "apk_head": "Runs on this phone",
+  "apk_text": "Translated subtitles for videos and streams, live notes, face-to-face interpreting, and importing recordings or videos. Needs Android 10 or later and a Ling key.",
+  "reqs": [
+    [
+      "Mac",
+      "macOS 14.4+, Apple silicon"
+    ],
+    [
+      "Windows",
+      "Windows 10 (2004)+, x64 / ARM64"
+    ],
+    [
+      "Linux",
+      "Ubuntu 22.04 / 24.04 desktop"
+    ],
+    [
+      "Android",
+      "Android 10+"
+    ]
+  ],
+  "dlp_title": "Download Cicada | Free for Mac, Windows, Linux and Android",
+  "dlp_desc": "Cicada for Mac, Windows, Linux and Android. Free and open source, with a SHA-256 checksum for every file.",
+  "dlp_h1": "Download Cicada",
+  "dlp_lead": "Free and open source, from GitHub Releases. All four apps share one meeting record format.",
+  "dlp_yours": "Your system",
+  "dlp_soon": "Coming soon",
+  "dlp_mac_sys": "macOS 14.4 or later · Apple silicon (M series)",
+  "dlp_mac_btn": "Download .dmg",
+  "dlp_mac_zip": "Or the zip",
+  "dlp_mac_note": "Recognizes speech on your Mac, so audio never leaves it; subtitles work without a key.",
+  "dlp_windows_sys": "Windows 10 (2004) or later",
+  "dlp_win_x64": "Most PCs",
+  "dlp_win_arm": "Snapdragon laptops",
+  "dlp_windows_note": "Double-click Cicada-Setup.exe and it’s installed, no admin rights; later versions update in one click. Needs a Ling key.",
+  "dlp_linux_sys": "Ubuntu 22.04 / 24.04 desktop · x86_64 / arm64",
+  "dlp_linux_btn": "Download .tar.gz",
+  "dlp_linux_note": "Needs a Ling key. The notes window shows up in screen sharing.",
+  "dlp_android_sys": "Android 10 or later",
+  "dlp_android_btn": "Download .apk",
+  "dlp_android_note": "Needs a Ling key. Subtitles for videos, face-to-face interpreting. App store versions are on the way.",
+  "cmp_h": "What each app does",
+  "cmp_rows": [
+    [
+      "Speech recognition",
+      "On the Mac, audio never leaves it",
+      "Ming (cloud)",
+      "Ming (cloud)",
+      "Ming (cloud)"
+    ],
+    [
+      "Without a Ling key",
+      "Subtitles, translation and records",
+      "Doesn’t work",
+      "Doesn’t work",
+      "Doesn’t work"
+    ],
+    [
+      "Live notes",
+      "✓ with a key",
+      "✓",
+      "✓",
+      "✓"
+    ],
+    [
+      "Interpreting into the call",
+      "✓ hold right ⌥",
+      "✓ hold right Ctrl",
+      "✓ Cicada Microphone",
+      "— face to face only"
+    ],
+    [
+      "Notes hidden when sharing",
+      "✓",
+      "✓",
+      "— always visible",
+      "✓"
+    ],
+    [
+      "Speaker identification",
+      "✓",
+      "✓",
+      "✓",
+      "— shows those found on Mac or Windows"
+    ],
+    [
+      "Import a recording or video",
+      "✓",
+      "—",
+      "—",
+      "✓"
+    ]
+  ],
+  "dlp_more": "Each file’s SHA-256 is in checksums.txt on its release page. <a href=\"{{REPO}}/releases\">All versions</a> · The iPhone app is on its way.",
+  "start_tabs_label": "Pick your platform",
+  "s2_badge_req": "Required · about 1 minute",
+  "s2_req_h": "Required on this platform",
+  "s2_req_note": "Recognition, translation and notes all run on it; without a key the app can’t work. The key stays on this device and only goes to Ling.",
+  "w_key_note": "Offer as stated by Ling.",
+  "l_key_note": "Offer as stated by Ling.",
+  "a_key_note": "Offer as stated by Ling. You can sign up on your phone.",
+  "w_req": "Requires Windows 10 (2004) or later; most PCs take x64, Snapdragon laptops ARM64",
+  "w_s1_p": "Double-click the downloaded Cicada-Setup.exe. It installs in seconds, with no admin rights, and you can delete the installer afterwards.",
+  "w_gate_h": "“Windows protected your PC”?",
+  "w_gate_p": "The installer isn’t code-signed yet, so SmartScreen stops it once.",
+  "w_gate_1": "More info",
+  "w_gate_2": "Run anyway",
+  "w_gate_note": "When a new version is out, Cicada tells you and updates in one click.",
+  "w_s3_h": "Open Cicada and finish what’s left",
+  "w_s3_p": "Cicada opens to its main window, which lists the steps left; click Continue setup to go on:",
+  "w_s3_li1": "Connect Ling: paste your key",
+  "w_s3_li2": "Hear the computer: play a test sound and watch the level move",
+  "w_s3_li3": "See it work: a 9-second English meeting, subtitles and notes line by line",
+  "w_s3_li4": "Interpreting (optional): hold right Ctrl and talk, they hear the translation",
+  "w_s3_aside_h": "The level doesn’t move?",
+  "w_s3_aside_p": "Check the computer isn’t muted. Cicada listens to what the computer plays: no microphone, no permission.",
+  "w_s3_note": "Interpreting needs the free VB-Cable virtual microphone; the guide helps you install it when you get there.",
+  "l_req": "Requires the Ubuntu 22.04 / 24.04 desktop",
+  "l_s1_p": "Unpack it in a terminal and run the install script; Cicada appears in the app menu.",
+  "l_gate_h": "No driver to install",
+  "l_gate_p": "Interpreting makes a “Cicada Microphone” and sets it as the default input while it’s on; turning it off or quitting gives your microphone back.",
+  "l_gate_note": "When a new version is out, the top bar menu tells you and updates in one click.",
+  "l_s3_h": "Open Cicada and finish what’s left",
+  "l_s3_p": "Cicada opens to the meeting records window, which lists the steps left:",
+  "l_s3_li1": "Connect Ling: enter your key",
+  "l_s3_li2": "Hear the computer: play a 3-second test sound and watch the level",
+  "l_s3_li3": "See it work: a 9-second sample meeting, subtitles and notes at the top right of the screen",
+  "l_s3_li4": "Interpreting (optional): click the microphone in the notes window and talk",
+  "l_s3_aside_h": "The test sound played but Cicada didn’t hear it?",
+  "l_s3_aside_p": "Check whether sound goes to another device (an HDMI monitor, say) or is muted; the guide can open Sound settings for you.",
+  "l_s3_note": "Linux can’t keep a window out of screen sharing, so the notes window always says it can be seen when you share.",
+  "a_req": "Requires Android 10 or later · App store versions are on the way",
+  "a_s1_p": "Download the APK on your phone and open it to install.",
+  "a_gate_h": "“Can’t install unknown apps”?",
+  "a_gate_p": "Tap Settings in the prompt and allow installs for the app you downloaded it with (your browser or a chat app).",
+  "a_gate_note": "The wording and place differ by brand; follow the system’s prompt.",
+  "a_s3_h": "Open Cicada and follow the guide",
+  "a_s3_p": "The guide takes you through:",
+  "a_s3_li1": "Connect Ling: paste your key",
+  "a_s3_li2": "What Cicada listens to: the phone’s own sound (videos, streams, classes) or In person (in the room, or a call on speaker)",
+  "a_s3_li3": "Allow the microphone, notifications and “Display over other apps”",
+  "a_s3_li4": "Play a 9-second sample meeting",
+  "a_s3_aside_h": "“Display over other apps” is where people get stuck",
+  "a_s3_aside_p": "It depends on your Android version and brand; see your phone below.",
+  "a_s3_note": "Cicada’s guide works out which case you’re in and takes you through it.",
+  "a_guide_h": "Find your phone",
+  "a_guide_p": "Each brand and Android version stops you in a different place. Find yours.",
+  "a_ov_small": "Floating subtitles",
+  "a_ov1_h": "One switch to turn on",
+  "a_ov1_p": "Tap Turn on in the guide, find Cicada in the list and turn on “Display over other apps”. It’s only used for the subtitle card.",
+  "a_ov2_h": "The system blocks the switch first",
+  "a_ov2_p": "Apps installed from a browser or chat app must be unlocked once: tap the switch and get refused, then in App info choose ⋮ › Allow restricted settings, confirm with your screen lock and go back to turn it on.",
+  "a_ov3_brand": "Xiaomi · Redmi · POCO",
+  "a_ov3_h": "Two more switches on Xiaomi",
+  "a_ov3_p": "Tap Open permission settings in the guide; under Other permissions, allow “Display pop-up windows” and “Display pop-up windows while running in the background”. If it says restricted settings, unlock as above first.",
+  "a_cap_small": "Each time you start",
+  "a_cap_h": "The system asks about screen recording",
+  "a_cap_p": "Android only lets apps read the phone’s sound through the screen-recording permission. Tap Start: Cicada takes the sound, never the picture.",
+  "a_meet_small": "In a call",
+  "a_meet_h": "No subtitles in WeChat calls, Tencent Meeting or Zoom?",
+  "a_meet_p": "The system doesn’t let apps record those apps’ sound. Put the call on speaker and switch Cicada to In person, which listens through the microphone. Cicada suggests this after 20 seconds without sound."
 }

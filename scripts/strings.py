@@ -30,8 +30,15 @@ def code_keys():
     subprocess.run(["swift", "build", "--product", "LiveSubs", "-Xswiftc", "-emit-localized-strings",
                     "-Xswiftc", "-emit-localized-strings-path", "-Xswiftc", out],
                    cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
+    # The iOS app's text shares the same tables (ios/AGENTS.md); it needs Xcode's iOS SDK.
+    if subprocess.run(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"], capture_output=True).returncode == 0:
+        subprocess.run([os.path.join(ROOT, "ios/scripts/build.sh")], cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
+                       env={**os.environ, "STRINGS_OUT": os.path.join(out, "ios")})
+    else:
+        print("ios: no iOS SDK (needs Xcode), its strings are not checked")
     keys = {}
-    for f in sorted(glob.glob(os.path.join(out, "*.stringsdata"))):
+    # The shared files are in both builds: iOS writes into its own folder, not over the Mac's.
+    for f in sorted(glob.glob(os.path.join(out, "*.stringsdata")) + glob.glob(os.path.join(out, "ios", "*.stringsdata"))):
         for entries in json.load(open(f))["tables"].values():
             for e in entries:
                 if CJK.search(e["key"]):  # "%@ · %@" and the like need no translation

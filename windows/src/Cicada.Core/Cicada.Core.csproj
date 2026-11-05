@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The UI-free engines. Plain net10.0 so they compile, run and are tested on the Mac too. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Cicada</RootNamespace>
+  </PropertyGroup>
+</Project>

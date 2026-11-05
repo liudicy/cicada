@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Asked for even to capture other apps' sound, and for 面对面. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- 导入录音或视频: transcribing a file goes on with another app in front. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The floating notes window / subtitle bar. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- The daily update check: waits for a network, and keeps its schedule across a restart. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:name=".CicadaApp"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:localeConfig="@xml/locales_config"
+        android:allowAudioPlaybackCapture="false"
+        android:supportsRtl="false"
+        android:theme="@style/Cicada">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".ListeningActivity" android:exported="false" android:parentActivityName=".MainActivity" android:launchMode="singleTop" />
+        <activity android:name=".RecordsActivity" android:exported="false" android:parentActivityName=".MainActivity" />
+        <activity android:name=".RecordActivity" android:exported="false" android:parentActivityName=".MainActivity" />
+        <activity android:name=".SettingsActivity" android:exported="false" android:parentActivityName=".MainActivity" />
+        <activity android:name=".OnboardingActivity" android:exported="false" />
+        <!-- 导入录音或视频: from 首页, or another app's share sheet (分享到知了). -->
+        <activity android:name=".ImportActivity" android:exported="true" android:parentActivityName=".MainActivity"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+        <!-- 面对面: the phone between two people, half of it turned to the other side. -->
+        <activity android:name=".FaceActivity" android:exported="false" android:parentActivityName=".ListeningActivity" />
+        <activity android:name=".OverlayGuideActivity" android:exported="false" />
+        <activity android:name=".ProjectionActivity" android:exported="false"
+            android:theme="@style/Cicada.Translucent" android:excludeFromRecents="true" />
+        <service android:name=".ListenTile" android:exported="true" android:label="@string/app_name"
+            android:icon="@drawable/ic_notification" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+            <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true" />
+        </service>
+        <service android:name=".UpdateJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name=".ListenService" android:exported="false"
+            android:foregroundServiceType="mediaProjection|microphone|dataSync" />
+    </application>
+</manifest>

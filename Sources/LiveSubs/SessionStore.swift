@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import Foundation
 
 struct TranscriptLine: Codable, Identifiable, Equatable {
@@ -11,7 +13,7 @@ struct TranscriptLine: Codable, Identifiable, Equatable {
     var dst: String?
     var srcLang: String
     var dstLang: String
-    /// Experimental: which of the other side's voices said it (SpeakerID.swift); nil when unknown.
+    /// Which of the other side's voices said it (SpeakerID.swift); nil when unknown.
     var voice: Int? = nil
     /// Where this line sits in the recording (seconds into system.m4a), so a post-meeting cloud
     /// proofread cuts exactly its audio. nil in older meetings and "me" lines.
@@ -36,11 +38,21 @@ struct Session: Codable, Identifiable, Equatable {
     var notes: MeetingNotes?
     /// The user renamed it; nil in older sessions, where any title but the default counts as renamed.
     var renamed: Bool?
-    /// Experimental 说话人识别: names the user gave voices, keyed by voice id. An empty name means
+    /// 说话人识别: names the user gave voices, keyed by voice id. An empty name means
     /// "not Ling's guess": the voice shows as 说话人 N.
     var voiceNames: [String: String]? = nil
     /// Names Ling read from the conversation, keyed by voice id; shown until the user says otherwise.
     var voiceGuesses: [String: VoiceGuess]? = nil
+    /// An imported recording or video: its file name, where it was (played from there; never
+    /// copied or deleted), and true until transcribing it finished.
+    var sourceFile: String? = nil
+    var sourcePath: String? = nil
+    var importing: Bool? = nil
+    /// A meeting kept for its recording alone: transcribed like an imported file (its
+    /// `sourcePath` is its own recording), in a language the user picks.
+    var fromRecording: Bool { sourceFile == nil && sourcePath != nil }
+    /// Heard through the microphone in the room (会议室) for some or all of it.
+    var room: Bool? = nil
 
     var duration: TimeInterval { (endedAt ?? Date()).timeIntervalSince(startedAt) }
 
@@ -49,7 +61,11 @@ struct Session: Codable, Identifiable, Equatable {
     var displayTitle: String {
         if renamed ?? !title.hasPrefix("会议 ") { return title }
         // The stored default title is Chinese ("会议 11月1日 14:30"); shown in the UI language.
-        guard let name = notes?.title, !name.isEmpty else { return L("会议 \(dateText(startedAt, "MMMdHHmm"))") }
+        guard let name = notes?.title, !name.isEmpty else {
+            // An imported file is known by its name until the notes give it one.
+            if let file = sourceFile { return (file as NSString).deletingPathExtension }
+            return L("会议 \(dateText(startedAt, "MMMdHHmm"))")
+        }
         let thisYear = Calendar.current.isDate(startedAt, equalTo: Date(), toGranularity: .year)
         return "\(dateText(startedAt, thisYear ? "MMMd" : "yMMMd")) \(name)"
     }
@@ -70,12 +86,14 @@ final class SessionStore: ObservableObject {
     @Published private(set) var liveID: String?
 
     let root: URL
-    private var saveWork: DispatchWorkItem?
+    /// Per meeting: a file being imported saves alongside the live meeting without delaying it.
+    private var saveWork: [String: DispatchWorkItem] = [:]
 
-    init() {
+    /// `root`: tests keep their meetings in a folder of their own.
+    init(root: URL? = nil) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        root = base.appendingPathComponent("\(DevBuild.supportFolder)/Sessions", isDirectory: true)
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        self.root = root ?? base.appendingPathComponent("\(DevBuild.supportFolder)/Sessions", isDirectory: true)
+        try? FileManager.default.createDirectory(at: self.root, withIntermediateDirectories: true)
         load()
     }
 
@@ -126,20 +144,28 @@ final class SessionStore: ObservableObject {
     }
 
     /// `at`: when the meeting really ended, for one that ended by itself after a hang-up or a
-    /// long silence; the recordings are cut there too.
-    func end(at: Date? = nil) {
+    /// long silence; the recordings are cut there too. `heardSpeech`: the recording holds speech,
+    /// so a meeting is kept for it even when no line made it into the record (the language was
+    /// never settled, say): an hour of a meeting must not vanish with its audio.
+    func end(at: Date? = nil, heardSpeech: Bool = false) {
         guard let id = liveID, let i = index(id) else { liveID = nil; return }
         let now = Date()
         sessions[i].endedAt = at.map { min(now, max(sessions[i].startedAt, $0)) } ?? now
         liveID = nil
-        if sessions[i].lines.isEmpty {
-            // Nothing was said: don't keep an empty meeting around.
-            try? FileManager.default.removeItem(at: folder(id))
-            sessions.remove(at: i)
-            return
-        }
         sessions[i].hasAudio = [systemAudioURL(id), micAudioURL(id)].contains {
             FileManager.default.fileExists(atPath: $0.path) || FileManager.default.fileExists(atPath: AudioFileWriter.partial($0).path)
+        }
+        if sessions[i].lines.isEmpty {
+            guard heardSpeech, sessions[i].hasAudio else {
+                // Nothing was said: don't keep an empty meeting around.
+                try? FileManager.default.removeItem(at: folder(id))
+                sessions.remove(at: i)
+                return
+            }
+            // Only the recording: it plays, and is transcribed again, like an imported file.
+            let system = systemAudioURL(id)
+            let heard = [system, AudioFileWriter.partial(system)].contains { FileManager.default.fileExists(atPath: $0.path) }
+            sessions[i].sourcePath = (heard ? system : micAudioURL(id)).path
         }
         saveNow(id)
         finishAudio(id, until: at == nil ? nil : sessions[i].duration)
@@ -186,6 +212,13 @@ final class SessionStore: ObservableObject {
     }
 
     var liveStart: Date? { liveID.flatMap { index($0) }.map { sessions[$0].startedAt } }
+
+    /// The live meeting is (now) heard in the room: its record says 会议室.
+    func markLiveInRoom() {
+        guard let id = liveID, let i = index(id), sessions[i].room != true else { return }
+        sessions[i].room = true
+        scheduleSave(id)
+    }
 
     func append(_ line: TranscriptLine) {
         guard let id = liveID, let i = index(id) else { return }
@@ -239,6 +272,41 @@ final class SessionStore: ObservableObject {
         scheduleSave(id)
     }
 
+    /// The user says a line (or a paragraph of them) was someone else's: those lines take that voice.
+    func setLineVoices(_ id: String, lines ids: Set<String>, _ voice: Int) {
+        guard let i = index(id) else { return }
+        for j in sessions[i].lines.indices where ids.contains(sessions[i].lines[j].id) && sessions[i].lines[j].speaker == "them" {
+            sessions[i].lines[j].voice = voice
+        }
+        saveNow(id)
+    }
+
+    /// Who said what in a meeting, taken before a speaker edit so 撤销 can put it back.
+    struct VoiceSnapshot {
+        /// Every line's voice then (nil included), by line id.
+        let voices: [String: Int?]
+        let names: [String: String]?
+        let guesses: [String: VoiceGuess]?
+    }
+
+    func voiceSnapshot(_ id: String) -> VoiceSnapshot? {
+        guard let s = session(id) else { return nil }
+        var voices: [String: Int?] = [:]
+        for l in s.lines { voices[l.id] = .some(l.voice) }
+        return VoiceSnapshot(voices: voices, names: s.voiceNames, guesses: s.voiceGuesses)
+    }
+
+    func restore(_ id: String, _ snap: VoiceSnapshot) {
+        guard let i = index(id) else { return }
+        // Lines heard since keep the voice they were given.
+        for j in sessions[i].lines.indices {
+            if let v = snap.voices[sessions[i].lines[j].id] { sessions[i].lines[j].voice = v }
+        }
+        sessions[i].voiceNames = snap.names
+        sessions[i].voiceGuesses = snap.guesses
+        saveNow(id)
+    }
+
     /// The user names a voice. nil drops their name (Ling's guess shows again); "" keeps 说话人 N.
     func setVoiceName(_ id: String, voice: Int, _ name: String?) {
         guard let i = index(id) else { return }
@@ -282,6 +350,52 @@ final class SessionStore: ObservableObject {
         id == liveID ? scheduleSave(id) : saveNow(id)
     }
 
+    // MARK: Imported files
+
+    /// A record for a recording or video, dated when it was recorded; filled by `FileImporter`.
+    func beginImport(file: URL, recordedAt: Date, duration: Double) -> Session {
+        let fid = DateFormatter()
+        fid.dateFormat = "yyyyMMdd-HHmmss"
+        let id = "import-\(fid.string(from: Date()))-\(UUID().uuidString.prefix(4).lowercased())"
+        var s = Session(id: id, title: Session.defaultTitle(recordedAt), startedAt: recordedAt,
+                        endedAt: recordedAt.addingTimeInterval(max(1, duration)), lines: [], hasAudio: false)
+        s.sourceFile = file.lastPathComponent
+        s.sourcePath = file.path
+        s.importing = true
+        sessions.append(s)
+        sessions.sort { $0.startedAt > $1.startedAt }
+        saveNow(id)
+        return s
+    }
+
+    /// Transcribing again from the start: the old lines and notes go.
+    func restartImport(_ id: String) {
+        guard let i = index(id) else { return }
+        sessions[i].lines = []
+        sessions[i].notes = nil
+        sessions[i].importing = true
+        saveNow(id)
+    }
+
+    func append(_ line: TranscriptLine, to id: String) {
+        guard let i = index(id) else { return }
+        sessions[i].lines.append(line)
+        scheduleSave(id)
+    }
+
+    func setTranslation(in id: String, lineID: String, _ text: String) {
+        guard let i = index(id), let j = sessions[i].lines.firstIndex(where: { $0.id == lineID }) else { return }
+        sessions[i].lines[j].dst = text
+        scheduleSave(id)
+    }
+
+    func finishImport(_ id: String) {
+        guard let i = index(id) else { return }
+        sessions[i].importing = nil
+        saveWork.removeValue(forKey: id)?.cancel()
+        saveNow(id)
+    }
+
     // MARK: Editing
 
     /// An empty title, or the one shown already, goes back to the automatic one.
@@ -301,6 +415,7 @@ final class SessionStore: ObservableObject {
 
     func delete(_ id: String) {
         guard id != liveID, let i = index(id) else { return }
+        saveWork.removeValue(forKey: id)?.cancel()
         try? FileManager.default.removeItem(at: folder(id))
         sessions.remove(at: i)
     }
@@ -319,12 +434,15 @@ final class SessionStore: ObservableObject {
 
     private func index(_ id: String) -> Int? { sessions.firstIndex(where: { $0.id == id }) }
 
+    /// At most one save per meeting every 1.5 s. A save already waiting writes the latest state,
+    /// so it is never pushed back: an imported file adds lines and translations many times a
+    /// second and would otherwise not reach the disk until it went quiet.
     private func scheduleSave(_ id: String) {
-        saveWork?.cancel()
+        guard saveWork[id] == nil else { return }
         let work = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated { self?.saveNow(id) }
+            MainActor.assumeIsolated { self?.saveWork[id] = nil; self?.saveNow(id) }
         }
-        saveWork = work
+        saveWork[id] = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
     }
 
@@ -348,7 +466,7 @@ enum TranscriptExport {
                          : String(format: "%02d:%02d", s / 60, s % 60)
     }
 
-    /// Experimental speaker numbers on (设置 › 通用 › 实验功能); kept in step by AppModel.
+    /// Speaker numbers on (设置 › 通用 › 说话人识别); kept in step by AppModel.
     nonisolated(unsafe) static var voices = false
 
     static func speakerName(_ line: TranscriptLine, _ numbers: [String: Int] = [:], _ names: [Int: String] = [:]) -> String {
@@ -394,7 +512,9 @@ enum TranscriptExport {
         if !notes.isEmpty { out += notes + "## \(L("文字记录"))\n\n" }
         let numbers = speakerNumbers(s), names = SpeakerLabels.names(s)
         for l in s.lines {
-            out += "**[\(clock(l.t))] \(speakerName(l, numbers, names))**  \n\(l.src)\n"
+            // An imported file has no "other side" to name.
+            let who = s.sourceFile == nil ? " \(speakerName(l, numbers, names))" : ""
+            out += "**[\(clock(l.t))]\(who)**  \n\(l.src)\n"
             if let d = l.dst, d != l.src { out += "> \(d)\n" }
             out += "\n"
         }
@@ -417,6 +537,8 @@ enum TranscriptExport {
         return out
     }
 
+    #if os(macOS)
+    // `.officeOpenXML` is macOS-only; iOS needs its own writer (docs/ios-plan.md).
     static func docx(_ s: Session) throws -> Data {
         let doc = NSMutableAttributedString()
         func add(_ text: String, size: CGFloat, weight: NSFont.Weight = .regular, color: NSColor = .black, after: CGFloat = 4) {
@@ -455,11 +577,12 @@ enum TranscriptExport {
         }
         let numbers = speakerNumbers(s), names = SpeakerLabels.names(s)
         for l in s.lines {
-            add("[\(clock(l.t))] \(speakerName(l, numbers, names))", size: 9, weight: .semibold, color: .darkGray, after: 2)
+            add("[\(clock(l.t))]" + (s.sourceFile == nil ? " \(speakerName(l, numbers, names))" : ""), size: 9, weight: .semibold, color: .darkGray, after: 2)
             add(l.src, size: 11, after: 2)
             if let d = l.dst, d != l.src { add(d, size: 11, color: NSColor(calibratedWhite: 0.3, alpha: 1), after: 10) }
         }
         return try doc.data(from: NSRange(location: 0, length: doc.length),
                             documentAttributes: [.documentType: NSAttributedString.DocumentType.officeOpenXML])
     }
+    #endif
 }

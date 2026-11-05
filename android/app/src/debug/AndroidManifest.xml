@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dev builds only: the debug receiver scripts/cicadactl.sh talks to. Declared here (not
+     registered at run time) so a command also wakes an app that isn't running; only the shell
+     holds DUMP, so other apps can't drive it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver android:name=".DebugReceiver" android:exported="true" android:permission="android.permission.DUMP">
+            <intent-filter><action android:name="com.wquguru.cicada.dev.DEBUG" /></intent-filter>
+        </receiver>
+    </application>
+</manifest>
