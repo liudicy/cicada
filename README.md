@@ -39,6 +39,18 @@
 
 > 此前 fork 补充的现场会议录音、导入会议录音、自定义模型服务商三项功能，已在上游 v1.1.0 由官方实现，本 fork 已改用上游实现。
 
+## 同步上游更新
+
+```bash
+git fetch upstream
+git merge upstream/main                 # 冲突文件优先取上游：git checkout --theirs <file>
+scripts/test.sh                         # AGENTS.md 检查 + 单元测试
+python3 scripts/strings.py              # 补齐三语翻译（应为 0 missing / 0 TODO）
+scripts/package-dev.sh -r               # 出包并发 Release，已装的 Cicada Dev 会收到更新提示
+```
+
+原则：上游已实现的功能一律改用上游实现；fork 独有功能集中在 `CloudASR.swift`、`SpaceSettings.swift`、`scripts/package-dev.sh` 和 `AppModel` / `Views` / `AISettings` / `UpdateChecker` 中带 fork 注释的区段，合并后确认它们仍接得上，再端到端验证一遍云端校对和纪要编辑。
+
 无论是用 Zoom、飞书、腾讯会议开会，还是听 X Spaces 和 YouTube 直播，知了都能实时给出双语字幕、边听边写结构化纪要。遇到需要发言的时候，按住说话键（Mac 上是右 `⌥`，Windows 上是右 `Ctrl`）开口，对方就能在会里直接听到翻译好的语音。知了直接读取系统声音，不用往会里塞机器人，对方完全无感；在 Mac 上还全部在本机识别，声音不出电脑。
 
 <p align="center">

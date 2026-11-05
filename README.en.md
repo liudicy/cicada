@@ -39,6 +39,18 @@
 
 > Three features this fork added earlier — in-person meeting recording, importing recordings, and custom AI providers — were officially implemented upstream in v1.1.0, and the fork now uses the upstream implementations.
 
+## Tracking upstream
+
+```bash
+git fetch upstream
+git merge upstream/main                 # on conflicts prefer upstream: git checkout --theirs <file>
+scripts/test.sh                         # AGENTS.md check + unit tests
+python3 scripts/strings.py              # fill the three languages (expect 0 missing / 0 TODO)
+scripts/package-dev.sh -r               # package + publish; installed Cicada Dev gets the prompt
+```
+
+Rule of thumb: once upstream implements a feature, switch to the upstream implementation. The fork's own features live in `CloudASR.swift`, `SpaceSettings.swift`, `scripts/package-dev.sh` and fork-commented sections of `AppModel` / `Views` / `AISettings` / `UpdateChecker` — after a merge, check those still connect, then re-verify cloud proofreading and notes editing end to end.
+
 Cicada works with whatever is playing on your computer, from Zoom, Teams, and Feishu calls to X Spaces, Discord stages, and YouTube livestreams. By listening directly to system audio, it gives you live bilingual subtitles and structured meeting notes without sending bots into the call or asking anyone else to install a thing. And when you need to jump in, just hold the talk key (right `⌥` on the Mac, right `Ctrl` on Windows) to speak and broadcast your translated voice straight into the meeting. On the Mac, speech is recognized on your computer, so audio never leaves it.
 
 <p align="center">
