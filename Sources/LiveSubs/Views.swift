@@ -825,7 +825,7 @@ struct MainWindowView: View {
                 }
                 if s.lines.isEmpty {
                     ScrollView {
-                        header(s).frame(maxWidth: 680).padding(.horizontal, 44).padding(.vertical, 36)
+                        header(s).frame(maxWidth: 680).padding(.horizontal, 40).padding(.vertical, 36)
                             .frame(maxWidth: .infinity)
                     }
                         .overlay {
@@ -1273,9 +1273,9 @@ struct SessionNotesView: View {
                     .background(RoundedRectangle(cornerRadius: 18).fill(Palette.raised))
                 }
             }
-            // A narrow measure and a tall top margin: the page reads as one quiet column.
-            .frame(maxWidth: 600, alignment: .leading)
-            .padding(.horizontal, 44).padding(.top, 52).padding(.bottom, 64)
+            // The transcript tab's exact measure, so switching tabs doesn't move the column.
+            .frame(maxWidth: 680, alignment: .leading)
+            .padding(.horizontal, 40).padding(.top, 36).padding(.bottom, 64)
             .frame(maxWidth: .infinity)
         }
     }
