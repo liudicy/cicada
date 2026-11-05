@@ -24,6 +24,19 @@ import Testing
         #expect(CloudASRClient.asrLanguage("auto") == "auto")
     }
 
+    @Test @MainActor func inventedEnumerationIsDropped() {
+        // The cloud sometimes hears a list marker that was never said.
+        #expect(CloudASRClient.stripInventedEnumeration("10. Let's lock that in.", original: "Let's lock that in.")
+            == "Let's lock that in.")
+        #expect(CloudASRClient.stripInventedEnumeration("1、我们先说预算", original: "我们先说预算")
+            == "我们先说预算")
+        // A marker the original really has (or real numbers) stays.
+        #expect(CloudASRClient.stripInventedEnumeration("3. 第三项", original: "3. 第三项") == "3. 第三项")
+        #expect(CloudASRClient.stripInventedEnumeration("2026 年计划", original: "2026 年计划") == "2026 年计划")
+        // Nothing useful after stripping: keep the cloud text rather than blank the line.
+        #expect(CloudASRClient.stripInventedEnumeration("10. ", original: "hello") == "10. ")
+    }
+
     @Test func providerBaseURLGetsATrailingSlash() {
         #expect(AIProvider(id: "x", name: "X", baseURL: "https://a.example/v1", model: "m").base
             == URL(string: "https://a.example/v1/"))

@@ -27,6 +27,9 @@ struct SpaceSettingsView: View {
                                     divider: i < meetings.count - 1) {
                             if s.id == store.liveID {
                                 Text(L("正在记录")).font(.system(size: 12)).foregroundStyle(Palette.tertiary)
+                            } else if model.proofreading?.id == s.id {
+                                // Its recording is being read slice by slice right now.
+                                Text(L("云端校对中")).font(.system(size: 12)).foregroundStyle(Palette.tertiary)
                             } else if s.hasAudio {
                                 Button { model.deleteAudio(s) } label: {
                                     Text(L("删除录音")).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)

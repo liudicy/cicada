@@ -253,13 +253,6 @@
 
 /* ListenPill */
 "开始听" = "Start listening";
-"知了" = "Cicada";
-"会议已自动结束" = "Meeting ended by itself";
-"线上会议" = "Online meeting";
-"收录 Mac 播放的声音" = "Captures the sound your Mac plays";
-"现场会议" = "In-person";
-"用麦克风收录房间里的说话声" = "Uses the microphone to capture the room";
-"导入会议录音" = "Import a Meeting Recording";
 "结束" = "End";
 
 /* MicCapture */
@@ -518,6 +511,7 @@
 "还差一步：允许“输入监控”" = "One more step: allow “Input Monitoring”";
 "“按住右 ⌥ 说话”需要此权限。请在系统设置中勾选 %@，返回此处即可生效" = "“Hold right ⌥ to talk” needs this. Turn on %@ in System Settings, then come back";
 "去允许" = "Allow";
+"知了" = "Cicada";
 "再试一次" = "Try Again";
 "虚拟麦克风已就绪" = "Virtual microphone ready";
 "%@ · 试音通过，对方听得到" = "%@ · sound test passed, they can hear you";
@@ -609,6 +603,7 @@
 "文字记录和纪要只占很少空间，大头是录音" = "Transcripts and notes are tiny; the recordings are the bulk of it.";
 "共 %@，其中录音 %@" = "%@ total, %@ of it recordings";
 "%@，其中录音 %@" = "%@, %@ of it recordings";
+"云端校对中" = "Proofreading";
 "无录音" = "No recording";
 
 /* SpeakEngine */
@@ -767,6 +762,7 @@
 "自动识别（%@）" = "Auto-detect (%@)";
 "选中后自动下载语音模型" = "Downloads its speech model when chosen";
 "正在导入 %@（%lld%%）" = "Importing %@ (%lld%%)";
+"会议已自动结束" = "Meeting ended by itself";
 "声源" = "Source";
 "系统音频" = "System Audio";
 "现场" = "In the room";
@@ -805,6 +801,12 @@
 "虚拟麦克风还没装好" = "Virtual mic isn't set up yet";
 "对方听到 %@ · %@" = "They hear %@ · %@";
 "对方听到 %@" = "They hear %@";
+"线上会议" = "Online meeting";
+"收录 Mac 播放的声音" = "Captures the sound your Mac plays";
+"现场会议" = "In-person";
+"用麦克风收录房间里的说话声" = "Uses the microphone to capture the room";
+"导入会议录音" = "Import a Meeting Recording";
+"把录好的音频文件变成一场会议记录" = "Turn a recorded audio file into a meeting record";
 "搜索" = "Search";
 "没有找到“%@”" = "Nothing found for “%@”";
 "今天" = "Today";
@@ -832,7 +834,6 @@
 "还没有会议" = "No meetings yet";
 "打开会议或视频，开始听后，每一场都会存在这里。" = "Open a meeting or a video and start listening: each one is kept here.";
 "先听一段示例" = "Try a sample first";
-"把录好的音频文件变成一场会议记录" = "Turn a recorded audio file into a meeting record";
 "把每句话的录音发给云端识别，用更准的文字替换记录并重译" = "Sends each sentence's audio to the cloud and replaces the record with the more accurate text, retranslated";
 "删除录音文件，文字记录和纪要保留" = "Deletes the audio files; the transcript and notes are kept";
 "用当前文字记录重新生成纪要" = "Regenerate the notes from the current transcript";

@@ -1130,8 +1130,9 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             let text: String
             do {
-                text = try await cloudASR.transcribe(samples: samples, language: seg.sourceCode)
-                contentLog("asr: \(lineID) heard “\(text)”")
+                let heard = try await cloudASR.transcribe(samples: samples, language: seg.sourceCode)
+                text = CloudASRClient.stripInventedEnumeration(heard, original: original)
+                contentLog("asr: \(lineID) heard “\(heard)”")
             } catch {
                 debugLog("asr: \(lineID) failed: \(error)")
                 return
@@ -1142,7 +1143,9 @@ final class AppModel: ObservableObject {
                   let line = session.lines.first(where: { $0.id == lineID }),
                   line.src == original else { return }
             store.setSource(lineID: lineID, text)
-            if let dst = await listen.translate(text, source: seg.sourceCode, target: listen.resolvedTarget,
+            // 内容=只看原文 keeps the record translation-free; the correction still lands.
+            if subtitles != "original",
+               let dst = await listen.translate(text, source: seg.sourceCode, target: listen.resolvedTarget,
                                                 kind: .sentence, trace: TranslateTrace()) {
                 store.setTranslation(lineID: lineID, dst)
             }
@@ -1219,17 +1222,21 @@ final class AppModel: ObservableObject {
                       !samples.isEmpty else { continue }
                 let text: String
                 do {
-                    text = try await cloudASR.transcribe(samples: samples, language: line.srcLang)
+                    let heard = try await cloudASR.transcribe(samples: samples, language: line.srcLang)
+                    text = CloudASRClient.stripInventedEnumeration(heard, original: line.src)
                 } catch {
                     debugLog("asr: \(line.id) failed: \(error)")
                     continue
                 }
                 guard text != line.src else { continue }
                 // A guessed window (older meetings) may hold different words entirely: only a
-                // plausible correction of the same sentence is allowed through.
-                if !exact, SpeakScore.match(sent: line.src, heard: text) < 0.4 {
+                // plausible correction of the same sentence is allowed through. Exact windows
+                // (this version's meetings) get a looser bar — a very different text on the
+                // right audio is usually the fix — but plain garbage is still rejected.
+                let score = SpeakScore.match(sent: line.src, heard: text)
+                if score < (exact ? 0.25 : 0.4) {
                     skipped += 1
-                    contentLog("asr: \(line.id) rejected “\(text)” (window only approximate)")
+                    contentLog("asr: \(line.id) rejected “\(text)” (\(exact ? "implausible" : "window only approximate"))")
                     continue
                 }
                 // The line must still say what we sent off (the user may have edited meanwhile).
@@ -1237,7 +1244,9 @@ final class AppModel: ObservableObject {
                       current.src == line.src else { continue }
                 contentLog("asr: \(line.id) “\(line.src)” → “\(text)”")
                 store.editSource(id, lineID: line.id, text)
-                if let dst = await listen.translate(text, source: line.srcLang, target: line.dstLang,
+                // 内容=只看原文 keeps the record translation-free; the correction still lands.
+                if subtitles != "original",
+                   let dst = await listen.translate(text, source: line.srcLang, target: line.dstLang,
                                                     kind: .sentence, trace: TranslateTrace()) {
                     store.editTranslation(id, lineID: line.id, dst)
                 }

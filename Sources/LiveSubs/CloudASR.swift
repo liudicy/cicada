@@ -105,6 +105,17 @@ final class CloudASRClient: ObservableObject {
         return "auto"
     }
 
+    /// ASR models sometimes invent a list marker ("10.", "1、") that was never said. When the
+    /// on-device text doesn't start with one, drop the cloud's before it enters the record.
+    static func stripInventedEnumeration(_ text: String, original: String) -> String {
+        // The marker must be followed by a letter, so decimals like "3.5分" are untouched.
+        let pattern = #"^\s*\d{1,2}\s*[.、)）]\s*(?=\p{L})"#
+        guard original.range(of: pattern, options: .regularExpression) == nil,
+              let r = text.range(of: pattern, options: .regularExpression) else { return text }
+        let stripped = text[r.upperBound...].trimmingCharacters(in: .whitespaces)
+        return stripped.isEmpty ? text : stripped
+    }
+
     /// A slice of a meeting's recording (seconds from the start) as 16 kHz mono floats, for
     /// proofreading an already-recorded meeting. The file is decoded fresh each call; a slice is
     /// at most half a minute, so this is cheap.
