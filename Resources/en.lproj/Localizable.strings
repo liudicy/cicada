@@ -819,8 +819,9 @@
 "这场会议没有记录到内容" = "Nothing was recorded in this meeting";
 "还没有会议" = "No meetings yet";
 "打开会议或视频，开始听后，每一场都会存在这里。" = "Open a meeting or a video and start listening: each one is kept here.";
-"开始听线上会议" = "Start Listening to an Online Meeting";
 "先听一段示例" = "Try a sample first";
+"把录好的音频文件变成一场会议记录" = "Turn a recorded audio file into a meeting record";
+"开始听线上会议" = "Start Listening to an Online Meeting";
 "把每句话的录音发给云端识别，用更准的文字替换记录并重译" = "Sends each sentence's audio to the cloud and replaces the record with the more accurate text, retranslated";
 "用当前文字记录重新生成纪要" = "Regenerate the notes from the current transcript";
 "修改纪要的文字，完成后保存" = "Edit the notes text; Done saves it";

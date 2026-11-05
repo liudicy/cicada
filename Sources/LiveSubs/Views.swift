@@ -882,6 +882,15 @@ struct MainWindowView: View {
                 }
                 .buttonStyle(.plain)
                 .help(L("用麦克风收录房间里的说话声"))
+                Button { model.importRecording() } label: {
+                    Text("导入会议录音").font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Palette.ink).padding(.horizontal, 22).frame(height: 44)
+                        .background(Capsule().fill(Color.white))
+                        .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(L("把录好的音频文件变成一场会议记录"))
             }
             .padding(.top, 32)
             if let imp = model.importing {
@@ -892,11 +901,8 @@ struct MainWindowView: View {
                 }
                 .padding(.top, 18)
             }
-            HStack(spacing: 20) {
-                Button("导入会议录音") { model.importRecording() }
-                Button("先听一段示例") { model.ensureListening(); model.sample.play() }
-            }
-            .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.secondary).padding(.top, 16)
+            Button("先听一段示例") { model.ensureListening(); model.sample.play() }
+                .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Palette.secondary).padding(.top, 16)
         }
         .frame(maxWidth: 420)
         .padding(.bottom, 60)
