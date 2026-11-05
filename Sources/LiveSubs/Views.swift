@@ -669,20 +669,15 @@ struct MainWindowView: View {
             .padding(.horizontal, 12).frame(height: 30)
             .padding(.bottom, 2)
 
-            // The three ways a meeting starts, under the search like "new chat" buttons.
-            Button { model.startListening("system") } label: {
-                HStack(spacing: 8) {
-                    Circle().fill(Palette.accent).frame(width: 7, height: 7)
-                    Text("线上会议").font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundStyle(.white).padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.ink))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(L("收录 Mac 播放的声音"))
-            sidebarAction(L("现场会议"), icon: "mic", help: L("用麦克风收录房间里的说话声")) { model.startListening("mic") }
-            sidebarAction(L("导入会议录音"), icon: "square.and.arrow.down", help: L("把录好的音频文件变成一场会议记录")) { model.importRecording() }
+            // 开始听: the three ways a meeting starts. While one is running (or an import is
+            // in flight) they grey out, so nobody starts a second meeting over the first.
+            let busy = model.running || model.importing != nil
+            Text("开始听").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
+                .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, -2)
+            sidebarAction(L("线上会议"), icon: "desktopcomputer", help: L("收录 Mac 播放的声音"), enabled: !busy) { model.startListening("system") }
+            sidebarAction(L("现场会议"), icon: "mic", help: L("用麦克风收录房间里的说话声"), enabled: !busy) { model.startListening("mic") }
+            sidebarAction(L("导入会议录音"), icon: "square.and.arrow.down", help: L("把录好的音频文件变成一场会议记录"), enabled: !busy) { model.importRecording() }
+                .padding(.bottom, 4)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
@@ -727,8 +722,8 @@ struct MainWindowView: View {
         }
     }
 
-    /// A quiet full-width sidebar row: icon + label, used for 现场会议 / 导入会议录音 / 设置.
-    private func sidebarAction(_ title: String, icon: String, help: String, action: @escaping () -> Void) -> some View {
+    /// A quiet full-width sidebar row: icon + label, used for the 开始听 entries and 设置.
+    private func sidebarAction(_ title: String, icon: String, help: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: icon).font(.system(size: 12)).foregroundStyle(Palette.secondary).frame(width: 16)
@@ -739,6 +734,8 @@ struct MainWindowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
         .help(help)
     }
 

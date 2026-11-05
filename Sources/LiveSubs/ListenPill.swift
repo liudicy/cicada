@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// The main window's toolbar: just the listening pill, centred. Settings lives at the bottom
-/// of the sidebar instead; a real toolbar so macOS centres the window buttons on the same line.
+/// The main window's toolbar: only the listening pill while a meeting runs, centred. Starting
+/// a meeting lives in the sidebar's 开始听 section; a real toolbar so macOS centres the window
+/// buttons on the same line.
 @MainActor final class MainToolbar: NSObject, NSToolbarDelegate {
     static let pill = NSToolbarItem.Identifier("cicada.pill")
     let model: AppModel
@@ -37,8 +38,8 @@ import SwiftUI
     }
 }
 
-/// The listening switch, led by the logo: still in a white pill while idle, breathing in an ink pill while
-/// listening, ringed by a countdown when the meeting is about to end. The brand is the switch.
+/// The live state of the meeting in the toolbar: breathing logo, level and time, ringed by a
+/// countdown when the meeting is about to end. Hidden while idle — starting lives in the sidebar.
 struct ListenPill: View {
     @ObservedObject var model: AppModel
     @ObservedObject var store: SessionStore
@@ -50,8 +51,6 @@ struct ListenPill: View {
                 ending(p)
             } else if model.running {
                 listening
-            } else {
-                idle
             }
         }
         .animation(.spring(duration: 0.35), value: model.running)
@@ -63,27 +62,6 @@ struct ListenPill: View {
         // A toolbar item keeps the width it was first laid out at: a fixed slot, wide enough for
         // the longest state (the English countdown), with the pill centred in it.
         .frame(width: 420)
-    }
-
-    private var idle: some View {
-        // The quick default: start with the current source. The three explicit entries
-        // (线上 / 现场 / 导入) live at the top of the sidebar.
-        Button { model.setRunning(true) } label: {
-            HStack(spacing: 9) {
-                BrandMark(size: 22)
-                Text(L("知了")).font(.system(size: 13, weight: .heavy)).foregroundStyle(Palette.ink)
-                Rectangle().fill(Palette.line).frame(width: 1, height: 14)
-                Text(model.autoEnded ? L("会议已自动结束") : L("开始听"))
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
-                Text("⌘R").font(.system(size: 11)).foregroundStyle(Palette.secondary)
-            }
-            .padding(.leading, 6).padding(.trailing, 12).frame(height: 32)
-            .background(Capsule().fill(Color.white))
-            .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L("开始听"))
     }
 
     private var listening: some View {
