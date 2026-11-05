@@ -1,11 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// The main window's toolbar: the listening pill centred, settings on the right. A real toolbar,
-/// so macOS centres the window buttons on the same line instead of leaving them above it.
+/// The main window's toolbar: just the listening pill, centred. Settings lives at the bottom
+/// of the sidebar instead; a real toolbar so macOS centres the window buttons on the same line.
 @MainActor final class MainToolbar: NSObject, NSToolbarDelegate {
     static let pill = NSToolbarItem.Identifier("cicada.pill")
-    static let settings = NSToolbarItem.Identifier("cicada.settings")
     let model: AppModel
 
     init(model: AppModel) { self.model = model }
@@ -20,7 +19,7 @@ import SwiftUI
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, Self.pill, .flexibleSpace, Self.settings]
+        [.flexibleSpace, Self.pill, .flexibleSpace]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -30,23 +29,9 @@ import SwiftUI
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         let item = NSToolbarItem(itemIdentifier: id)
-        let root: AnyView
-        if id == Self.pill {
-            root = AnyView(ListenPill(model: model, store: model.store))
-            item.label = L("开始听")
-        } else {
-            root = AnyView(
-                Button { [model] in model.openSettings() } label: {
-                    Image(systemName: "slider.horizontal.3").font(.system(size: 14))
-                        .frame(width: 30, height: 30).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain).foregroundStyle(Palette.secondary).help("设置")
-            )
-            item.label = L("设置")
-        }
-        let host = NSHostingView(rootView: root)
-        host.sizingOptions = .intrinsicContentSize
-        item.view = host
+        item.view = NSHostingView(rootView: AnyView(ListenPill(model: model, store: model.store)))
+        (item.view as? NSHostingView<AnyView>)?.sizingOptions = .intrinsicContentSize
+        item.label = L("开始听")
         item.isBordered = false
         return item
     }
@@ -81,34 +66,24 @@ struct ListenPill: View {
     }
 
     private var idle: some View {
-        HStack(spacing: 8) {
-            // In colour while idle too: the white pill against the ink one already tells off from on.
-            BrandMark(size: 22)
-            Text(L("知了")).font(.system(size: 13, weight: .heavy)).foregroundStyle(Palette.ink)
-            if model.autoEnded {
-                Text(L("会议已自动结束")).font(.system(size: 11)).foregroundStyle(Palette.secondary)
+        // The quick default: start with the current source. The three explicit entries
+        // (线上 / 现场 / 导入) live at the top of the sidebar.
+        Button { model.setRunning(true) } label: {
+            HStack(spacing: 9) {
+                BrandMark(size: 22)
+                Text(L("知了")).font(.system(size: 13, weight: .heavy)).foregroundStyle(Palette.ink)
+                Rectangle().fill(Palette.line).frame(width: 1, height: 14)
+                Text(model.autoEnded ? L("会议已自动结束") : L("开始听"))
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                Text("⌘R").font(.system(size: 11)).foregroundStyle(Palette.secondary)
             }
-            Rectangle().fill(Palette.line).frame(width: 1, height: 14)
-            // Three doors in, side by side: the meeting the Mac plays, the room the mic hears,
-            // or a recording already on disk.
-            idleButton(L("线上会议"), help: L("收录 Mac 播放的声音")) { model.startListening("system") }
-            idleButton(L("现场会议"), help: L("用麦克风收录房间里的说话声")) { model.startListening("mic") }
-            idleButton(L("导入会议录音"), help: L("导入会议录音")) { model.importRecording() }
-            Text("⌘R").font(.system(size: 11)).foregroundStyle(Palette.secondary)
-        }
-        .padding(.leading, 6).padding(.trailing, 12).frame(height: 32)
-        .background(Capsule().fill(Color.white))
-        .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
-    }
-
-    private func idleButton(_ title: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
-                .padding(.horizontal, 8).frame(height: 22).contentShape(Rectangle())
+            .padding(.leading, 6).padding(.trailing, 12).frame(height: 32)
+            .background(Capsule().fill(Color.white))
+            .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help(help)
-        .accessibilityLabel(title)
+        .accessibilityLabel(L("开始听"))
     }
 
     private var listening: some View {

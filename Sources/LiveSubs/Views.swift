@@ -667,7 +667,22 @@ struct MainWindowView: View {
             }
             .font(.system(size: 13))
             .padding(.horizontal, 12).frame(height: 30)
-            .padding(.bottom, 6)
+            .padding(.bottom, 2)
+
+            // The three ways a meeting starts, under the search like "new chat" buttons.
+            Button { model.startListening("system") } label: {
+                HStack(spacing: 8) {
+                    Circle().fill(Palette.accent).frame(width: 7, height: 7)
+                    Text("线上会议").font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(.white).padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.ink))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(L("收录 Mac 播放的声音"))
+            sidebarAction(L("现场会议"), icon: "mic", help: L("用麦克风收录房间里的说话声")) { model.startListening("mic") }
+            sidebarAction(L("导入会议录音"), icon: "square.and.arrow.down", help: L("把录好的音频文件变成一场会议记录")) { model.importRecording() }
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
@@ -701,12 +716,30 @@ struct MainWindowView: View {
                 }
             }
             .scrollIndicators(.never)
+
+            Divider().padding(.horizontal, 2)
+            sidebarAction(L("设置"), icon: "gearshape", help: L("设置")) { model.openSettings() }
         }
         .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 14)
         .onChange(of: selection) { _, id in
             // A meeting picked from elsewhere (search, the notes window) shouldn't hide in a fold.
             if let id, let first = groups.first, !first.sessions.contains(where: { $0.id == id }) { showOlder = true }
         }
+    }
+
+    /// A quiet full-width sidebar row: icon + label, used for 现场会议 / 导入会议录音 / 设置.
+    private func sidebarAction(_ title: String, icon: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).font(.system(size: 12)).foregroundStyle(Palette.secondary).frame(width: 16)
+                Text(title).font(.system(size: 13)).foregroundStyle(Palette.ink)
+                Spacer()
+            }
+            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     /// 今天 / 昨天 / 本周 / then one group per month, newest first.
