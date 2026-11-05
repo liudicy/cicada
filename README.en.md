@@ -24,6 +24,18 @@
 
 <p align="center"><a href="README.md">简体中文</a> · <a href="README.en.md">English</a></p>
 
+> **This is a personal fork of [wquguru/cicada](https://github.com/wquguru/cicada)** with the additions listed below, tracking upstream continuously; when upstream ships the same capability, its implementation wins. The fork has no packaged releases yet — build from source (see Development).
+
+## What this fork adds
+
+- **In-person meetings**: listening starts from two entries — Online meeting (what the Mac plays) and In-person (the microphone, for voices in the room); the Source row in the menu bar panel switches mid-meeting.
+- **Import a recording**: turn an audio file (m4a, wav, mp3, …) into a full meeting record — on-device transcription, line-by-line translation and notes.
+- **Custom AI providers**: besides the built-in Ling, notes and translation can use any OpenAI-compatible endpoint; add several, switch anytime, keys are stored read-only per provider on this Mac. Leaving Ling falls interpreting back to the on-device chain automatically.
+- **Cloud speech proofreading**: preset for Xiaomi MiMo (~¥0.5/hour, or another OpenAI-compatible audio endpoint). Sentences are re-recognized in the cloud while recording, and a finished meeting can be re-checked afterwards from its transcript page; when the transcript changes, the notes are rewritten from the new text automatically.
+- **Editable notes and rewrite**: summaries, topics, conclusions and to-dos can be edited in place, and Rewrite regenerates the whole notes from the current transcript — asking first before overwriting hand-edited notes.
+- **Delete recordings & storage page**: drop just a meeting's audio to reclaim space (transcript and notes stay); Settings › Storage shows each meeting's footprint.
+- **Main window layout**: the three start entries live in the sidebar under a 开始听 (Start listening) section and grey out while a meeting runs, settings moved to the bottom of the sidebar, and the toolbar only shows live state, duration and stop while a meeting is on.
+
 Cicada works with whatever is playing on your Mac, from Zoom, Teams, and Feishu calls to X Spaces, Discord stages, and YouTube livestreams. By listening directly to system audio, it gives you live bilingual subtitles and structured meeting notes without sending bots into the call or asking anyone else to install a thing. And when you need to jump in, just hold the right `⌥` key to speak and broadcast your translated voice straight into the meeting.
 
 <p align="center">
