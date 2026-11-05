@@ -18,14 +18,20 @@ final class UpdateChecker {
         let size: Int
     }
 
-    static let repository = URL(string: "https://github.com/wquguru/cicada")!
+    static var repository: URL { DevBuild.isDev ? forkRepository : upstreamRepository }
+    static let upstreamRepository = URL(string: "https://github.com/wquguru/cicada")!
+    /// The fork publishes the dev build ("Cicada Dev") as prereleases; a fork-packaged dev
+    /// build (DevBuild.fork) watches those instead of upstream's.
+    static let forkRepository = URL(string: "https://github.com/liudicy/cicada")!
 
     /// `CICADA_UPDATE_FEED` (or the `updateFeed:` debug command) points at another release JSON,
     /// a list or a single release; a file:// URL works, for testing.
     /// The list, not `releases/latest`: every platform shares one version, and a release that only
     /// ships Windows, Android or Linux has no Mac zip, so the newest Mac release may be further down.
     var feed = ProcessInfo.processInfo.environment["CICADA_UPDATE_FEED"].flatMap(URL.init(string:))
-        ?? URL(string: "https://api.github.com/repos/wquguru/cicada/releases?per_page=20")!
+        ?? (DevBuild.isDev
+            ? URL(string: "https://api.github.com/repos/liudicy/cicada/releases?per_page=20")!
+            : URL(string: "https://api.github.com/repos/wquguru/cicada/releases?per_page=20")!)
     private let onUpdate: (Update?) -> Void
     private var timer: Timer?
     private var wakeObserver: Any?
@@ -83,7 +89,12 @@ final class UpdateChecker {
               (response as? HTTPURLResponse)?.statusCode ?? 200 == 200,
               let releases = Self.decode(data) else { return false }
         let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-        let update = Self.newestMac(in: releases)
+        // A fork-packaged dev build reads the fork's feed: prereleases named Cicada-Dev-…,
+        // checksummed in checksums-dev.txt.
+        let dev = DevBuild.isDev
+        let update = dev
+            ? Self.newestMac(in: releases, zipPrefix: "Cicada-Dev-", checksumsName: "checksums-dev.txt", allowPrerelease: true)
+            : Self.newestMac(in: releases)
         lastChecked = Date()
         debugLog("update: checked, latest Mac \(update?.version ?? "none"), running \(current)")
         onUpdate(update.flatMap { Self.isNewer($0.version, than: current) ? $0 : nil })
@@ -99,12 +110,19 @@ final class UpdateChecker {
     /// The newest published release that ships the Mac app. A release without the Mac zip only
     /// carries other platforms (the Mac app had no change), so it is skipped, not offered.
     nonisolated static func newestMac(in releases: [Release]) -> Update? {
+        newestMac(in: releases, zipPrefix: "Cicada-", checksumsName: "checksums.txt", allowPrerelease: false)
+    }
+
+    /// The general form, so the fork's dev feed (Cicada-Dev-… prereleases, checksums-dev.txt)
+    /// and tests can use the same matching.
+    nonisolated static func newestMac(in releases: [Release], zipPrefix: String, checksumsName: String,
+                                      allowPrerelease: Bool) -> Update? {
         let shipped = releases.compactMap { release -> Update? in
-            guard release.draft != true, release.prerelease != true,
+            guard release.draft != true, allowPrerelease || release.prerelease != true,
                   let url = URL(string: release.html_url),
-                  let zip = release.assets.first(where: { $0.name.hasPrefix("Cicada-") && $0.name.hasSuffix("-macOS-AppleSilicon.zip") })
+                  let zip = release.assets.first(where: { $0.name.hasPrefix(zipPrefix) && $0.name.hasSuffix("-macOS-AppleSilicon.zip") })
             else { return nil }
-            let checksums = release.assets.first { $0.name == "checksums.txt" }
+            let checksums = release.assets.first { $0.name == checksumsName }
             return Update(version: release.tag_name.trimmingCharacters(in: CharacterSet(charactersIn: "v")), url: url,
                           zip: URL(string: zip.browser_download_url),
                           checksums: checksums.flatMap { URL(string: $0.browser_download_url) },

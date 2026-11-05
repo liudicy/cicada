@@ -51,6 +51,26 @@ import Testing
         let one = Self.release("v1.3.0", ["Cicada-1.3.0-macOS-AppleSilicon.zip"])
         #expect(UpdateChecker.decode(Data(one.utf8)).flatMap(UpdateChecker.newestMac)?.version == "1.3.0")
     }
+
+    /// The fork's dev feed: prereleases named Cicada-Dev-… with checksums-dev.txt, and the
+    /// four-component fork versions comparing above the upstream base.
+    @Test func theForkFeedReadsDevPrereleases() {
+        let fork = { (releases: [String]) -> String? in
+            UpdateChecker.decode(Data("[\(releases.joined(separator: ","))]".utf8))
+                .flatMap { UpdateChecker.newestMac(in: $0, zipPrefix: "Cicada-Dev-",
+                                                   checksumsName: "checksums-dev.txt", allowPrerelease: true) }?.version
+        }
+        let old = Self.release("v1.1.1.1", ["Cicada-Dev-1.1.1.1-macOS-AppleSilicon.zip", "checksums-dev.txt"], prerelease: true)
+        let new = Self.release("v1.1.1.2", ["Cicada-Dev-1.1.1.2-macOS-AppleSilicon.zip", "checksums-dev.txt"], prerelease: true)
+        // The first fork packaging, before the tag scheme went dotted, is never offered.
+        let legacy = Self.release("v1.1.1-fork.1", ["Cicada-Dev-1.1.1-macOS-AppleSilicon.zip", "checksums-dev.txt"], prerelease: true)
+        #expect(fork([legacy, old, new]) == "1.1.1.2")
+        #expect(fork([legacy]) == "1.1.1-fork.1")  // found, but isNewer keeps it from offering
+        #expect(UpdateChecker.isNewer("1.1.1.2", than: "1.1.1.1"))
+        #expect(UpdateChecker.isNewer("1.1.1.1", than: "1.1.1"))
+        #expect(!UpdateChecker.isNewer("1.1.1-fork.1", than: "1.1.1.1"))
+        #expect(!UpdateChecker.isNewer("1.1.1-fork.1", than: "1.1.1"))
+    }
 }
 
 @Suite struct UpdateScheduleTests {

@@ -13,6 +13,11 @@ enum DevBuild {
 
     static var isDev: Bool { label != nil }
 
+    /// The fork release this build was packaged as ("1.1.1.1"), stamped into Info.plist by
+    /// scripts/package-dev.sh. Its presence also opts the dev build into update checks, which
+    /// then run against the fork's releases (see UpdateChecker).
+    static let fork: String? = Bundle.main.object(forInfoDictionaryKey: "LiveSubsFork") as? String
+
     /// Folder name under ~/Library/Application Support.
     static var supportFolder: String { isDev ? "LiveSubs Dev" : "LiveSubs" }
 

@@ -31,10 +31,12 @@ final class Updates: ObservableObject {
     static let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
 
     /// Regular checks (see `UpdateChecker`). A dev build has its own bundle id, so a release can't
-    /// replace it: it checks only when pointed at a test feed.
+    /// replace it: it checks only when packaged by the fork (its feed is the fork's releases)
+    /// or when pointed at a test feed.
     func start() {
         lastChecked = checker.lastChecked
-        guard !DevBuild.isDev || ProcessInfo.processInfo.environment["CICADA_UPDATE_FEED"] != nil else { return }
+        guard !DevBuild.isDev || DevBuild.fork != nil
+                || ProcessInfo.processInfo.environment["CICADA_UPDATE_FEED"] != nil else { return }
         started = true
         checker.start()
     }

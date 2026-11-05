@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # Packages the dev build (com.wquguru.cicada.dev, "Cicada Dev") in build/:
-#   Cicada-Dev-<version>-macOS-AppleSilicon.dmg     drag-to-Applications installer
-#   Cicada-Dev-<version>-macOS-AppleSilicon.zip     the bare app
-#   checksums-dev.txt                               SHA-256 of both
+#   Cicada-Dev-<fver>-macOS-AppleSilicon.dmg     drag-to-Applications installer
+#   Cicada-Dev-<fver>-macOS-AppleSilicon.zip     the bare app
+#   checksums-dev.txt                            SHA-256 of both
 #
 #   scripts/package-dev.sh              build + package
 #   scripts/package-dev.sh -r           also publish a GitHub pre-release on the fork
-#   scripts/package-dev.sh -r v1.1.1-fork.2    …with this tag instead of the auto-bumped one
+#   scripts/package-dev.sh -r v1.1.1.2  …with this tag instead of the auto-bumped one
+#
+# <fver> is the upstream version plus a fork serial (1.1.1.1, 1.1.1.2, …): the running app
+# is stamped with it (CFBundleShortVersionString + LiveSubsFork) so update checks against the
+# fork's releases compare cleanly, and Updater's exact version match still works. The stamp is
+# re-signed with the same ad-hoc designated requirement, so permissions carry over.
 #
 # Publishing needs gh (logged in) and network access to github.com; if that needs a proxy,
 # export HTTPS_PROXY first, e.g.  HTTPS_PROXY=http://127.0.0.1:7890 scripts/package-dev.sh -r
@@ -18,7 +23,7 @@ TAG=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -r|--release) RELEASE=1; shift ;;
-        -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
         *) TAG="$1"; shift ;;
     esac
 done
@@ -29,10 +34,33 @@ done
 [[ -d /Applications/Xcode.app ]] && export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 scripts/build.sh
 APP=build/Cicada.app
-ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP/Contents/Info.plist")
+PLIST="$APP/Contents/Info.plist"
+ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$PLIST")
 [[ "$ID" == com.wquguru.cicada.dev ]] || { echo "Not a dev build: $ID" >&2; exit 1; }
 VERSION=$(tr -d '[:space:]' < VERSION)
-NAME="Cicada-Dev-$VERSION-macOS-AppleSilicon"
+
+# The fork version: a manual tag wins; otherwise v<version>.<n+1>, counting the fork's existing
+# releases. Offline without -r, stamp .0 (never offered as an update, clearly a local package).
+if [[ -n "$TAG" ]]; then
+    FVER="${TAG#v}"
+elif LAST=$(gh release list --repo liudicy/cicada --limit 100 --json tagName --jq '.[].tagName' 2>/dev/null); then
+    LAST=$(echo "$LAST" | { grep -E "^v${VERSION//./\\.}\.[0-9]+$" || true; } | sort -t. -k4 -n | tail -1)
+    FVER=$([[ -n "$LAST" ]] && echo "$VERSION.$(( ${LAST##*.} + 1 ))" || echo "$VERSION.1")
+else
+    [[ $RELEASE -eq 1 ]] && { echo "Cannot reach GitHub to pick the next tag." >&2; exit 1; }
+    FVER="$VERSION.0"
+    echo "GitHub unreachable: stamping local-only version $FVER"
+fi
+TAG="v$FVER"
+NAME="Cicada-Dev-$FVER-macOS-AppleSilicon"
+
+# Stamp the fork version into the app the packages are made from, then re-seal: the ad-hoc
+# signature covers Info.plist, and Updater verifies the downloaded app with --deep --strict.
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $FVER" "$PLIST"
+/usr/libexec/PlistBuddy -c "Delete :LiveSubsFork" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :LiveSubsFork string $FVER" "$PLIST"
+codesign --force --sign - --requirements "=designated => identifier \"$ID\"" "$APP" >/dev/null
+
 rm -f build/Cicada-Dev-*.dmg build/Cicada-Dev-*.zip build/checksums-dev.txt
 
 ditto -c -k --keepParent "$APP" "build/$NAME.zip"
@@ -62,13 +90,6 @@ echo "Packaged build/$NAME.dmg, build/$NAME.zip, build/checksums-dev.txt"
 [[ $RELEASE -eq 0 ]] && exit 0
 command -v gh >/dev/null || { echo "gh not found; upload the files in build/ by hand." >&2; exit 1; }
 
-# Auto tag: v<version>-fork.<n+1>, counting the fork's existing releases.
-if [[ -z "$TAG" ]]; then
-    LAST=$(gh release list --repo liudicy/cicada --limit 50 --json tagName --jq '.[].tagName' \
-        | { grep -E "^v$VERSION-fork\.[0-9]+$" || true; } | sort -t. -k3 -n | tail -1)
-    N=$((${LAST##*.} + 1))
-    TAG="v$VERSION-fork.$N"
-fi
 # The tag points at the commit being packaged, so push first.
 git push origin main
 NOTES=$(cat <<EOF
@@ -88,6 +109,6 @@ xattr -dr com.apple.quarantine "/Applications/Cicada Dev.app"
 EOF
 )
 gh release create "$TAG" --repo liudicy/cicada --prerelease \
-    --title "v$VERSION + fork 定制（Cicada Dev）" --notes "$NOTES" \
+    --title "v$VERSION + fork 定制（Cicada Dev $FVER）" --notes "$NOTES" \
     "build/$NAME.dmg" "build/$NAME.zip" build/checksums-dev.txt
 echo "Published https://github.com/liudicy/cicada/releases/tag/$TAG"

@@ -35,6 +35,7 @@
 - **Editable, regenerable notes**: the summary, topics, conclusions and to-dos on the notes page can be edited directly; 重新整理 regenerates the whole notes from the current transcript, asking first if you edited them by hand.
 - **Delete recordings & storage page**: a meeting's 文字记录 page can delete just the recording to free space (transcript and notes stay), and Settings › 存储空间 shows what each meeting takes on disk.
 - **Main window layout**: 开始听 splits into three sidebar entries — online meeting, in-person meeting, import a recording — greyed out while a meeting runs; settings moves to the bottom of the sidebar, and the toolbar only shows live state, elapsed time and 结束 while listening.
+- **Self-updating dev builds**: packaged builds from Releases carry a fork version and offer one-click in-place updates when the fork publishes a new one (permissions and records carry over); builds made straight from source with `build.sh` are never nagged.
 
 > Three features this fork added earlier — in-person meeting recording, importing recordings, and custom AI providers — were officially implemented upstream in v1.1.0, and the fork now uses the upstream implementations.
 
