@@ -39,7 +39,10 @@ enum Updater {
 
             let unpacked = work.appendingPathComponent("unpacked")
             try await run("/usr/bin/ditto", "-x", "-k", zip.path, unpacked.path)
-            let newApp = unpacked.appendingPathComponent("Cicada.app")
+            // The zip root is "Cicada.app" upstream but "Cicada MOD.app" on the fork's packages;
+            // a missing app falls through to the version check below, which reports the failure.
+            let newApp = (try? FileManager.default.contentsOfDirectory(at: unpacked, includingPropertiesForKeys: nil))?
+                .first(where: { $0.pathExtension == "app" }) ?? unpacked.appendingPathComponent("Cicada.app")
             let info = Bundle(url: newApp)?.infoDictionary
             guard info?["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier,
                   info?["CFBundleShortVersionString"] as? String == update.version else {

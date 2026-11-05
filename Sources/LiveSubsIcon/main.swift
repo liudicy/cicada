@@ -1,5 +1,6 @@
 // Renders the app icon (logo B: a cicada's eyes and wings peeking over a white subtitle card, on orange)
-// into an .iconset. `LiveSubsIcon [--dev] <out.iconset>`; --dev adds a "DEV" band.
+// into an .iconset. `LiveSubsIcon [--dev | --band <text>] <out.iconset>`; --dev adds a
+// "DEV" band, --band a band with the given text (the packaged fork uses --band MOD).
 import AppKit
 
 let orange = NSColor(srgbRed: 0.91, green: 0.33, blue: 0.17, alpha: 1)   // #E8552B
@@ -82,7 +83,7 @@ enum CicadaLogo {
     }
 }
 
-func render(_ px: Int, dev: Bool) -> Data {
+func render(_ px: Int, band: String?) -> Data {
     let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8,
                                samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                bytesPerRow: 0, bitsPerPixel: 0)!
@@ -109,15 +110,16 @@ func render(_ px: Int, dev: Bool) -> Data {
     CicadaLogo.drawIcon(c, unit: body.width / 100)
     c.restoreGState()
 
-    if dev {
-        // Dev builds: a dark "DEV" band across the bottom, so the Dock, Finder and
-        // Spotlight tell them apart from the installed app.
+    if let band {
+        // Dev builds carry a dark band across the bottom, so the Dock, Finder and
+        // Spotlight tell them apart from the installed app; the fork's packaged
+        // build uses the same band with "MOD".
         NSGraphicsContext.saveGraphicsState()
         squircle.addClip()
         ink.setFill()
         NSRect(x: body.minX, y: body.minY, width: body.width, height: 170 * s).fill()
         let font = NSFont.systemFont(ofSize: 110 * s, weight: .heavy)
-        let text = NSAttributedString(string: "DEV", attributes: [
+        let text = NSAttributedString(string: band, attributes: [
             .font: font, .foregroundColor: NSColor.white, .kern: 14 * s,
         ])
         let size = text.size()
@@ -129,10 +131,15 @@ func render(_ px: Int, dev: Bool) -> Data {
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
-let dev = args.contains("--dev")
-let out = URL(fileURLWithPath: args.first { $0 != "--dev" } ?? "AppIcon.iconset")
+var band: String? = args.contains("--dev") ? "DEV" : nil
+var positional = args.filter { $0 != "--dev" }
+if let i = args.firstIndex(of: "--band"), args.indices.contains(i + 1) {
+    band = args[i + 1]
+    positional = positional.filter { $0 != "--band" && $0 != args[i + 1] }
+}
+let out = URL(fileURLWithPath: positional.first ?? "AppIcon.iconset")
 try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 for size in [16, 32, 128, 256, 512] {
-    try render(size, dev: dev).write(to: out.appendingPathComponent("icon_\(size)x\(size).png"))
-    try render(size * 2, dev: dev).write(to: out.appendingPathComponent("icon_\(size)x\(size)@2x.png"))
+    try render(size, band: band).write(to: out.appendingPathComponent("icon_\(size)x\(size).png"))
+    try render(size * 2, band: band).write(to: out.appendingPathComponent("icon_\(size)x\(size)@2x.png"))
 }

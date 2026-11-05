@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Packages the dev build (com.wquguru.cicada.dev, "Cicada Dev") in build/:
+# Packages the fork build (dev bundle id com.wquguru.cicada.dev, rebranded "Cicada MOD") in build/:
 #   Cicada-Dev-<fver>-macOS-AppleSilicon.dmg     drag-to-Applications installer
 #   Cicada-Dev-<fver>-macOS-AppleSilicon.zip     the bare app
 #   checksums-dev.txt                            SHA-256 of both
@@ -61,28 +61,42 @@ NAME="Cicada-Dev-$FVER-macOS-AppleSilicon"
 /usr/libexec/PlistBuddy -c "Add :LiveSubsFork string $FVER" "$PLIST"
 codesign --force --sign - --requirements "=designated => identifier \"$ID\"" "$APP" >/dev/null
 
+# The published package is rebranded "Cicada MOD" (display name + MOD icon band) on a copy, so
+# the dev build in build/Cicada.app stays "Cicada Dev" for local driving. Bundle id, data,
+# permissions and the update feed (the Cicada-Dev-* asset names) are deliberately unchanged.
+MODAPP="build/Cicada MOD.app"
+ICONSET=build/AppIcon-mod.iconset
+rm -rf "$MODAPP" "$ICONSET"
+cp -R "$APP" "$MODAPP"
+BIN=$(swift build -c release --show-bin-path)
+"$BIN/LiveSubsIcon" --band MOD "$ICONSET"
+iconutil -c icns "$ICONSET" -o "$MODAPP/Contents/Resources/AppIcon.icns"
+/usr/libexec/PlistBuddy -c "Set :CFBundleName Cicada MOD" -c "Set :CFBundleDisplayName Cicada MOD" "$MODAPP/Contents/Info.plist"
+sed -i '' -E 's/ Dev";/ MOD";/' "$MODAPP"/Contents/Resources/*.lproj/InfoPlist.strings
+codesign --force --sign - --requirements "=designated => identifier \"$ID\"" "$MODAPP" >/dev/null
+
 rm -f build/Cicada-Dev-*.dmg build/Cicada-Dev-*.zip build/checksums-dev.txt
 
-ditto -c -k --keepParent "$APP" "build/$NAME.zip"
+ditto -c -k --keepParent "$MODAPP" "build/$NAME.zip"
 
 # Same installer window as the release DMG: background drawn by the app itself, layout from
-# the repo's .DS_Store, staged as "Cicada Dev.app" so it never overwrites the release app.
+# the repo's .DS_Store, staged as "Cicada MOD.app" so it never overwrites the release app.
 rm -rf build/dmg-dev && mkdir -p build/dmg-dev/stage/.background build/dmg-dev/mount
 "$APP/Contents/MacOS/Cicada" --render-dmg-background build/dmg-dev/background.png 1
 "$APP/Contents/MacOS/Cicada" --render-dmg-background build/dmg-dev/background@2x.png 2
 tiffutil -cathidpicheck build/dmg-dev/background.png build/dmg-dev/background@2x.png -out build/dmg-dev/background.tiff 2>/dev/null
-cp -R "$APP" "build/dmg-dev/stage/Cicada Dev.app"
+cp -R "$MODAPP" "build/dmg-dev/stage/Cicada MOD.app"
 ln -s /Applications build/dmg-dev/stage/Applications
 cp build/dmg-dev/background.tiff build/dmg-dev/stage/.background/background.tiff
 [[ -f Resources/dmg/DS_Store ]] && cp Resources/dmg/DS_Store build/dmg-dev/stage/.DS_Store
-cp "$APP/Contents/Resources/AppIcon.icns" build/dmg-dev/stage/.VolumeIcon.icns
-hdiutil create -quiet -srcfolder build/dmg-dev/stage -volname "Cicada Dev" -fs HFS+ -format UDRW -ov build/dmg-dev/rw.dmg
+cp "$MODAPP/Contents/Resources/AppIcon.icns" build/dmg-dev/stage/.VolumeIcon.icns
+hdiutil create -quiet -srcfolder build/dmg-dev/stage -volname "Cicada MOD" -fs HFS+ -format UDRW -ov build/dmg-dev/rw.dmg
 hdiutil attach -quiet -readwrite -noverify -noautoopen -nobrowse -mountpoint build/dmg-dev/mount build/dmg-dev/rw.dmg
 SetFile -a C build/dmg-dev/mount 2>/dev/null || true
 hdiutil detach -quiet build/dmg-dev/mount
 hdiutil convert -quiet build/dmg-dev/rw.dmg -format UDZO -imagekey zlib-level=9 -ov -o "build/$NAME.dmg"
-# Drop the staged copy so Spotlight and Launch Services don't list a third Cicada.app.
-rm -rf build/dmg-dev
+# Drop the staged and MOD copies so Spotlight and Launch Services don't list extra apps.
+rm -rf build/dmg-dev "$MODAPP" "$ICONSET"
 
 (cd build && shasum -a 256 "$NAME.dmg" "$NAME.zip" > checksums-dev.txt)
 echo "Packaged build/$NAME.dmg, build/$NAME.zip, build/checksums-dev.txt"
@@ -99,16 +113,16 @@ NOTES=$(cat <<EOF
 
 ## 安装
 
-拖拽 \`Cicada Dev.app\` 到「应用程序」即可，与上游正式版并存、数据互不影响。个人 ad-hoc 签名，首次打开如被 Gatekeeper 拦截，在终端执行：
+拖拽 \`Cicada MOD.app\` 到「应用程序」即可，与上游正式版并存、数据互不影响。个人 ad-hoc 签名，首次打开如被 Gatekeeper 拦截，在终端执行：
 
 \`\`\`sh
-xattr -dr com.apple.quarantine "/Applications/Cicada Dev.app"
+xattr -dr com.apple.quarantine "/Applications/Cicada MOD.app"
 \`\`\`
 
 仅限 Apple 芯片 Mac，macOS 14.4+。校验值见 checksums-dev.txt。
 EOF
 )
 gh release create "$TAG" --repo liudicy/cicada --prerelease \
-    --title "v$VERSION + fork 定制（Cicada Dev $FVER）" --notes "$NOTES" \
+    --title "v$VERSION + fork 定制（Cicada MOD $FVER）" --notes "$NOTES" \
     "build/$NAME.dmg" "build/$NAME.zip" build/checksums-dev.txt
 echo "Published https://github.com/liudicy/cicada/releases/tag/$TAG"

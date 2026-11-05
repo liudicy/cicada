@@ -27,7 +27,7 @@
 
 > **This is a personal fork of [wquguru/cicada](https://github.com/wquguru/cicada)**, adding the features listed below (Mac app only so far) and continuously tracking upstream; when upstream ships the same capability, the upstream implementation wins. You can also build from source (see [Development](#development)).
 
-**Download the fork build**: grab the packaged DMG from [Releases](https://github.com/liudicy/cicada/releases) — it contains `Cicada Dev.app`, which lives side by side with the upstream release and keeps its own data. It is ad-hoc signed; if Gatekeeper blocks the first launch, run `xattr -dr com.apple.quarantine "/Applications/Cicada Dev.app"` in Terminal and open it again.
+**Download the fork build**: grab the packaged DMG from [Releases](https://github.com/liudicy/cicada/releases) — it contains `Cicada MOD.app` (its icon carries a MOD band, telling it apart from the upstream release and from the local `scripts/build.sh` Dev build), which lives side by side with the upstream release and keeps its own data. It is ad-hoc signed; if Gatekeeper blocks the first launch, run `xattr -dr com.apple.quarantine "/Applications/Cicada MOD.app"` in Terminal and open it again.
 
 ## What this fork adds
 
@@ -46,7 +46,7 @@ git fetch upstream
 git merge upstream/main                 # on conflicts prefer upstream: git checkout --theirs <file>
 scripts/test.sh                         # AGENTS.md check + unit tests
 python3 scripts/strings.py              # fill the three languages (expect 0 missing / 0 TODO)
-scripts/package-dev.sh -r               # package + publish; installed Cicada Dev gets the prompt
+scripts/package-dev.sh -r               # package + publish; installed Cicada MOD gets the prompt
 ```
 
 Rule of thumb: once upstream implements a feature, switch to the upstream implementation. The fork's own features live in `CloudASR.swift`, `SpaceSettings.swift`, `scripts/package-dev.sh` and fork-commented sections of `AppModel` / `Views` / `AISettings` / `UpdateChecker` — after a merge, check those still connect, then re-verify cloud proofreading and notes editing end to end.

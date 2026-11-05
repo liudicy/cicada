@@ -27,7 +27,7 @@
 
 > **这是 [wquguru/cicada](https://github.com/wquguru/cicada) 的个人 fork**，在原版基础上增加了下方列出的功能（目前只改动 Mac 版），并持续跟踪上游更新；上游后续实现了相同能力时，以上游的实现为准。也可以从源码构建（见[开发](#开发)）。
 
-**下载 fork 打包版**：在 [Releases](https://github.com/liudicy/cicada/releases) 页下载打好的 DMG，里面是 `Cicada Dev.app`，与上游正式版并存、数据互不影响。个人 ad-hoc 签名，首次打开如果被 Gatekeeper 拦截，在「终端」执行 `xattr -dr com.apple.quarantine "/Applications/Cicada Dev.app"` 后再打开即可。
+**下载 fork 打包版**：在 [Releases](https://github.com/liudicy/cicada/releases) 页下载打好的 DMG，里面是 `Cicada MOD.app`（图标带 MOD 横幅，与上游正式版和本地 `scripts/build.sh` 出的 Dev 开发版一眼区分），与上游正式版并存、数据互不影响。个人 ad-hoc 签名，首次打开如果被 Gatekeeper 拦截，在「终端」执行 `xattr -dr com.apple.quarantine "/Applications/Cicada MOD.app"` 后再打开即可。
 
 ## 本 fork 的个性化改进
 
@@ -46,7 +46,7 @@ git fetch upstream
 git merge upstream/main                 # 冲突文件优先取上游：git checkout --theirs <file>
 scripts/test.sh                         # AGENTS.md 检查 + 单元测试
 python3 scripts/strings.py              # 补齐三语翻译（应为 0 missing / 0 TODO）
-scripts/package-dev.sh -r               # 出包并发 Release，已装的 Cicada Dev 会收到更新提示
+scripts/package-dev.sh -r               # 出包并发 Release，已装的 Cicada MOD 会收到更新提示
 ```
 
 原则：上游已实现的功能一律改用上游实现；fork 独有功能集中在 `CloudASR.swift`、`SpaceSettings.swift`、`scripts/package-dev.sh` 和 `AppModel` / `Views` / `AISettings` / `UpdateChecker` 中带 fork 注释的区段，合并后确认它们仍接得上，再端到端验证一遍云端校对和纪要编辑。

@@ -7,6 +7,11 @@
   "image": null,
   "items": [
    {
+    "kind": "improved",
+    "title": "打包版更名为 Cicada MOD。",
+    "text": "fork 发布的安装包改名 Cicada MOD，图标带 MOD 横幅，与上游正式版和本地 Dev 开发版一眼区分；bundle id、数据、权限和自动更新通道都不变。"
+   },
+   {
     "kind": "new",
     "title": "开发版会提示 fork 的新打包。",
     "text": "Releases 页下载的打包版带 fork 版本号，出新版时菜单栏面板会提示，一键就地更新，权限和会议记录都保留；从源码直接构建的开发版不受影响，不会收到提示。"
