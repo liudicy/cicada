@@ -3,7 +3,7 @@ import Carbon.HIToolbox
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case overlay, language, speak, records, ai, diagnostics
+    case overlay, language, speak, records, space, ai, diagnostics
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -11,6 +11,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .language: L("语言")
         case .speak: L("同声传译")
         case .records: L("通用")
+        case .space: L("存储空间")
         case .ai: L("AI 服务")
         case .diagnostics: L("诊断")
         }
@@ -21,6 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .language: "globe"
         case .speak: "mic"
         case .records: "gearshape"
+        case .space: "internaldrive"
         case .ai: "key"
         case .diagnostics: "waveform.path.ecg"
         }
@@ -437,6 +439,7 @@ struct SettingsView: View {
             case .overlay: overlay
             case .language: LanguageSettings(model: model, settings: settings)
             case .records: records
+            case .space: SpaceSettingsView(model: model, store: model.store)
             case .ai: AISettingsView(model: model, ling: model.ling, settings: settings)
             case .diagnostics: DiagnosticsView(diagnostics: model.diagnostics, model: settings.aiModel)
             }

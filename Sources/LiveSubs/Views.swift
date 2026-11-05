@@ -963,6 +963,15 @@ struct MainWindowView: View {
                     .buttonStyle(.plain)
                     .help(L("把每句话的录音发给云端识别，用更准的文字替换记录并重译"))
                 }
+                if s.hasAudio, s.id != store.liveID, model.proofreading?.id != s.id {
+                    Button { model.deleteAudio(s) } label: {
+                        Text(L("删除录音")).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 10).frame(height: 24)
+                            .background(Capsule().fill(Palette.error)).contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("删除录音文件，文字记录和纪要保留"))
+                }
                 Segments(options: [("both", L("双语")), ("src", L("原文")), ("dst", L("译文"))], value: view) { view = $0 }
             } else {
                 if model.notes.generatingID == s.id {
@@ -1026,21 +1035,12 @@ struct MainWindowView: View {
                 Button("导出字幕 SRT…") { model.export(s, kind: "srt") }
                 Divider()
                 Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([store.folder(s.id)]) }
-                if s.hasAudio, s.id != store.liveID {
-                    Divider()
-                    Button(L("删除录音（\(audioSizeText(s.id))）")) { model.deleteAudio(s) }
-                }
             } label: {
                 Text("导出…").font(.system(size: 13)).foregroundStyle(Palette.secondary)
             }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
             .disabled(s.lines.isEmpty)
         }
-    }
-
-    /// "12.3 MB" for the 删除录音 menu item.
-    private func audioSizeText(_ id: String) -> String {
-        ByteCountFormatter.string(fromByteCount: store.audioSize(id), countStyle: .file)
     }
 
     private func tabButton(_ title: String, id: String, count: Int? = nil) -> some View {        let on = tab == id

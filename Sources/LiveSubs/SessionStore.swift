@@ -165,6 +165,13 @@ final class SessionStore: ObservableObject {
         [systemAudioURL(id), micAudioURL(id)].flatMap { [$0, AudioFileWriter.partial($0)] }
     }
 
+    /// Everything the meeting keeps on disk: its recordings plus session.json.
+    func totalSize(_ id: String) -> Int64 {
+        let json = folder(id).appendingPathComponent("session.json")
+        let jsonSize = ((try? FileManager.default.attributesOfItem(atPath: json.path)[FileAttributeKey.size]) as? NSNumber)?.int64Value ?? 0
+        return audioSize(id) + jsonSize
+    }
+
     /// Turns the meeting's recordings into .m4a files (call after the recorders are closed).
     func finishAudio(_ id: String, until: Double? = nil) {
         let urls = [systemAudioURL(id), micAudioURL(id)]
