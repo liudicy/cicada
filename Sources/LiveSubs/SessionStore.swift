@@ -142,6 +142,29 @@ final class SessionStore: ObservableObject {
         [systemAudioURL(id), micAudioURL(id)].contains { FileManager.default.fileExists(atPath: AudioFileWriter.partial($0).path) }
     }
 
+    /// Bytes the meeting's recordings take on disk (finished files plus any partials).
+    func audioSize(_ id: String) -> Int64 {
+        audioFiles(id).reduce(0) { total, u in
+            total + (((try? FileManager.default.attributesOfItem(atPath: u.path)[FileAttributeKey.size]) as? NSNumber)?.int64Value ?? 0)
+        }
+    }
+
+    /// Deletes the recordings, keeps the transcript and notes: the space-saving move once a
+    /// meeting is fully transcribed and summarized. Returns the freed bytes.
+    @discardableResult
+    func deleteAudio(_ id: String) -> Int64 {
+        guard let i = index(id) else { return 0 }
+        let freed = audioSize(id)
+        for u in audioFiles(id) { try? FileManager.default.removeItem(at: u) }
+        sessions[i].hasAudio = false
+        saveNow(id)
+        return freed
+    }
+
+    private func audioFiles(_ id: String) -> [URL] {
+        [systemAudioURL(id), micAudioURL(id)].flatMap { [$0, AudioFileWriter.partial($0)] }
+    }
+
     /// Turns the meeting's recordings into .m4a files (call after the recorders are closed).
     func finishAudio(_ id: String, until: Double? = nil) {
         let urls = [systemAudioURL(id), micAudioURL(id)]

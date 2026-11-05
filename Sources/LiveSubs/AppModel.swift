@@ -1150,6 +1150,26 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// 导出… menu's 删除录音: frees the meeting's audio after asking, keeping the transcript and
+    /// notes. Without system.m4a the proofread button hides itself.
+    func deleteAudio(_ s: Session) {
+        guard s.id != store.liveID, s.hasAudio else { return }
+        NSApp.activate()
+        let size = ByteCountFormatter.string(fromByteCount: store.audioSize(s.id), countStyle: .file)
+        let alert = NSAlert()
+        alert.messageText = L("删除这场会议的录音？")
+        alert.informativeText = L("可释放 \(size)。文字记录和纪要都会保留；删除后不能再云端校对，录音也找不回来。")
+        let del = alert.addButton(withTitle: L("删除录音"))
+        let cancel = alert.addButton(withTitle: L("取消"))
+        del.hasDestructiveAction = true
+        del.keyEquivalent = ""
+        cancel.keyEquivalent = "\r"
+        if alert.runModal() == .alertFirstButtonReturn {
+            store.deleteAudio(s.id)
+            debugLog("audio: session \(s.id) deleted \(size) of recordings")
+        }
+    }
+
     // MARK: - Post-meeting proofreading
 
     /// Progress of a retroactive cloud proofread (nil when idle): meeting id, lines done, total.

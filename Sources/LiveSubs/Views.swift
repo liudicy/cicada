@@ -1026,6 +1026,10 @@ struct MainWindowView: View {
                 Button("导出字幕 SRT…") { model.export(s, kind: "srt") }
                 Divider()
                 Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([store.folder(s.id)]) }
+                if s.hasAudio, s.id != store.liveID {
+                    Divider()
+                    Button(L("删除录音（\(audioSizeText(s.id))）")) { model.deleteAudio(s) }
+                }
             } label: {
                 Text("导出…").font(.system(size: 13)).foregroundStyle(Palette.secondary)
             }
@@ -1034,8 +1038,12 @@ struct MainWindowView: View {
         }
     }
 
-    private func tabButton(_ title: String, id: String, count: Int? = nil) -> some View {
-        let on = tab == id
+    /// "12.3 MB" for the 删除录音 menu item.
+    private func audioSizeText(_ id: String) -> String {
+        ByteCountFormatter.string(fromByteCount: store.audioSize(id), countStyle: .file)
+    }
+
+    private func tabButton(_ title: String, id: String, count: Int? = nil) -> some View {        let on = tab == id
         // Leaving the notes page drops an unsaved edit, like its 取消.
         return Button { tab = id; notesDraft = nil } label: {
             HStack(spacing: 5) {
