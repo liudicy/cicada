@@ -33,10 +33,10 @@ struct AISettingsView: View {
                     }
                 }
                 Text("一小时会议约 ¥0.15–1（目前优惠价）。发出去的只有文字（用你自己的声音时还有那段录音），语音识别留在本机。")
-                    .font(.system(size: 12)).foregroundStyle(Palette.tertiary)
+                    .font(.system(size: 12)).foregroundStyle(Palette.tertiary).padding(.horizontal, 4)
             } else {
                 Text("发出去的只有文字（用你自己的声音时还有那段录音）；服务商的计费与隐私政策见其官网。")
-                    .font(.system(size: 12)).foregroundStyle(Palette.tertiary)
+                    .font(.system(size: 12)).foregroundStyle(Palette.tertiary).padding(.horizontal, 4)
             }
             // 2) Speech proofreading is an independent add-on with its own key.
             sectionHeader(L("语音识别校对"), detail: nil)
@@ -83,7 +83,7 @@ struct AISettingsView: View {
 
     private var providerCard: some View {
         SettingsCard {
-            SettingsRow(title: L("服务商"), detail: L("纪要、翻译用选中的接口（OpenAI 兼容）"),
+            SettingsRow(title: L("服务商"), detail: L("Ling 或任何 OpenAI 兼容接口"),
                         divider: adding || customIndex != nil) {
                 HStack(spacing: 8) {
                     PillMenu(value: settings.aiActiveProvider, options: providerOptions) { model.setActiveProvider($0) }
@@ -186,7 +186,8 @@ struct AISettingsView: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.961, green: 0.965, blue: 0.973)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.line, lineWidth: 1))
     }
 
     private func save() {
@@ -240,7 +241,7 @@ struct AISettingsView: View {
     private var cloudASRCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Text(L("云端语音识别校对")).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+                Text(L("云端校对")).font(.system(size: 13)).foregroundStyle(Palette.ink)
                 Spacer()
                 Toggle("", isOn: $settings.cloudASREnabled).labelsHidden().toggleStyle(.switch)
             }
@@ -287,7 +288,8 @@ struct AISettingsView: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.961, green: 0.965, blue: 0.973)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.line, lineWidth: 1))
         .onAppear { asrKey = model.cloudASR.key }
     }
 
