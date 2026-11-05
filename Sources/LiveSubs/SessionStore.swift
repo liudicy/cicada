@@ -84,7 +84,7 @@ final class SessionStore: ObservableObject {
     func micAudioURL(_ id: String) -> URL { folder(id).appendingPathComponent("mic.m4a") }
 
     private func load() {
-        let dirs = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+        let dirs = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey])) ?? []
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         var out: [Session] = []
@@ -98,6 +98,13 @@ final class SessionStore: ObservableObject {
                     finishAudio(s.id)
                 }
                 out.append(s)
+            } else {
+                // A meeting that ended with nothing said leaves a shell (just metrics.jsonl);
+                // drop it, unless it is fresh — a meeting starting right now writes
+                // session.json only after its first line.
+                let values = try? dir.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
+                let fresh = values?.contentModificationDate.map { Date().timeIntervalSince($0) < 3600 } ?? true
+                if values?.isDirectory == true, !fresh { try? FileManager.default.removeItem(at: dir) }
             }
         }
         sessions = out.sorted { $0.startedAt > $1.startedAt }
