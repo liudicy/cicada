@@ -25,7 +25,9 @@
 
 <p align="center"><a href="README.md">简体中文</a> · <a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a></p>
 
-> **这是 [wquguru/cicada](https://github.com/wquguru/cicada) 的个人 fork**，在原版基础上增加了下方列出的功能（目前只改动 Mac 版），并持续跟踪上游更新；上游后续实现了相同能力时，以上游的实现为准。fork 暂时没有打包发布，需要从源码构建（见[开发](#开发)）。
+> **这是 [wquguru/cicada](https://github.com/wquguru/cicada) 的个人 fork**，在原版基础上增加了下方列出的功能（目前只改动 Mac 版），并持续跟踪上游更新；上游后续实现了相同能力时，以上游的实现为准。也可以从源码构建（见[开发](#开发)）。
+
+**下载 fork 打包版**：在 [Releases](https://github.com/liudicy/cicada/releases) 页下载打好的 DMG，里面是 `Cicada Dev.app`，与上游正式版并存、数据互不影响。个人 ad-hoc 签名，首次打开如果被 Gatekeeper 拦截，在「终端」执行 `xattr -dr com.apple.quarantine "/Applications/Cicada Dev.app"` 后再打开即可。
 
 ## 本 fork 的个性化改进
 

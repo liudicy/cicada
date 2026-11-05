@@ -25,7 +25,9 @@
 
 <p align="center"><a href="README.md">简体中文</a> · <a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a></p>
 
-> **This is a personal fork of [wquguru/cicada](https://github.com/wquguru/cicada)**, adding the features listed below (Mac app only so far) and continuously tracking upstream; when upstream ships the same capability, the upstream implementation wins. The fork has no packaged release yet — build from source (see [Development](#development)).
+> **This is a personal fork of [wquguru/cicada](https://github.com/wquguru/cicada)**, adding the features listed below (Mac app only so far) and continuously tracking upstream; when upstream ships the same capability, the upstream implementation wins. You can also build from source (see [Development](#development)).
+
+**Download the fork build**: grab the packaged DMG from [Releases](https://github.com/liudicy/cicada/releases) — it contains `Cicada Dev.app`, which lives side by side with the upstream release and keeps its own data. It is ad-hoc signed; if Gatekeeper blocks the first launch, run `xattr -dr com.apple.quarantine "/Applications/Cicada Dev.app"` in Terminal and open it again.
 
 ## What this fork adds
 
