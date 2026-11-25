@@ -6,9 +6,7 @@ name: release
 # secrets (android/scripts/keystore.sh --github). Each platform's tests run before its build, and
 # the release is left as a draft: nobody's update check sees it until scripts/publish-release.sh.
 on:
-  push:
-    tags: ["v*.*.*"]
-  # Rebuild an existing release, e.g. after its tag was moved: Actions › release › Run workflow.
+  # Manual trigger only on this Mac-only fork (releases are published by scripts/package-dev.sh -r).
   workflow_dispatch:
     inputs:
       tag:

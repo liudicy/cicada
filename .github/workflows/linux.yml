@@ -6,11 +6,6 @@ name: linux
 # app under Xvfb with a PulseAudio null sink (windows open, the speakers' monitor is heard, 说话人识别
 # loads). The real desktop (GNOME, XWayland, focus, a real sound card) is tested in the VM and by hand.
 on:
-  push:
-    branches: [main]
-    paths: ["linux/**", "Resources/**/Localizable.strings", "VERSION", ".github/workflows/linux.yml"]
-  pull_request:
-    paths: ["linux/**", "Resources/**/Localizable.strings", "VERSION", ".github/workflows/linux.yml"]
   workflow_dispatch:
 
 jobs:

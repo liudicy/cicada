@@ -5,11 +5,6 @@ name: android
 # sign on, it also signs with the release key from the secrets and checks it, uploading nothing.
 # Listening itself is tested in the emulator or on a phone.
 on:
-  push:
-    branches: [main]
-    paths: ["android/**", "Resources/**/Localizable.strings", "linux/native/voiceprint.c", "linux/models/voiceprint.bin", ".github/workflows/android.yml"]
-  pull_request:
-    paths: ["android/**", "Resources/**/Localizable.strings", "linux/native/voiceprint.c", "linux/models/voiceprint.bin", ".github/workflows/android.yml"]
   workflow_dispatch:
     inputs:
       sign:

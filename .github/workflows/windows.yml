@@ -3,11 +3,6 @@ name: windows
 # The Windows app (windows/): unit tests on a real Windows runner, then the x64 and ARM64 builds
 # as artifacts. Runners have no sound card, so listening itself is tested in a VM or on a PC.
 on:
-  push:
-    branches: [main]
-    paths: ["windows/**", "Resources/**/Localizable.strings", ".github/workflows/windows.yml"]
-  pull_request:
-    paths: ["windows/**", "Resources/**/Localizable.strings", ".github/workflows/windows.yml"]
   workflow_dispatch:
 
 jobs:
