@@ -25,8 +25,23 @@ final class CloudASRClient: ObservableObject {
     var key: String? { AIKey.read("asr") }
     var hasKey: Bool { key != nil }
 
-    /// One sentence at a time, in order; a slow request must not pile up behind live speech.
+    /// One request at a time, in order; concurrent callers (e.g. `CloudStream` during file
+    /// re-transcription) wait their turn instead of failing with `.busy`.
     private var running = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    private func acquire() async {
+        if !running { running = true; return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    private func release() {
+        if !waiters.isEmpty {
+            waiters.removeFirst().resume()
+        } else {
+            running = false
+        }
+    }
 
     func setKey(_ raw: String) {
         let k = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -46,9 +61,8 @@ final class CloudASRClient: ObservableObject {
     /// (used when `FileImporter` re-transcribes a saved meeting through the cloud ASR engine).
     func transcribe(wav: Data, language: String) async throws -> String {
         guard let key else { throw Failure.noKey }
-        guard !running else { throw Failure.busy }
-        running = true
-        defer { running = false }
+        await acquire()
+        defer { release() }
         let body: [String: Any] = [
             "model": model(),
             "messages": [[

@@ -23,6 +23,11 @@ final class AppSettings: ObservableObject {
     @Published var subtitles: String {
         didSet { save() }
     }
+    /// Global translation switch: off skips translation in live listening, imports, re-transcribe
+    /// and cloud proofreading to save tokens.
+    @Published var translateEnabled: Bool {
+        didSet { save() }
+    }
     /// The language notes are written in: "mine" (the translate-to language, or the system's when
     /// that follows the system) or "source" (the meeting's own language).
     @Published var notesLanguage: String {
@@ -333,6 +338,7 @@ final class AppSettings: ObservableObject {
         }
         target = defaults.string(forKey: "target") ?? "system"
         subtitles = defaults.string(forKey: "subtitles") ?? "both"
+        translateEnabled = defaults.object(forKey: "translateEnabled") as? Bool ?? true
         notesLanguage = defaults.string(forKey: "notesLanguage") ?? "mine"
         speakEnabled = defaults.bool(forKey: "speakEnabled")
         // Anyone who had it on before this question existed already knows.
@@ -405,6 +411,7 @@ final class AppSettings: ObservableObject {
         }
         defaults.set(target, forKey: "target")
         defaults.set(subtitles, forKey: "subtitles")
+        defaults.set(translateEnabled, forKey: "translateEnabled")
         defaults.set(notesLanguage, forKey: "notesLanguage")
         defaults.set(speakEnabled, forKey: "speakEnabled")
         defaults.set(speakConfirmed, forKey: "speakConfirmed")

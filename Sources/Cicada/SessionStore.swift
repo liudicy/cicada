@@ -304,11 +304,12 @@ final class SessionStore: ObservableObject {
         id == liveID ? scheduleSave(id) : saveNow(id)
     }
 
-    /// Its translation follows (`editSource`).
-    func editTranslation(_ id: String, lineID: String, _ text: String) {
+    /// Its translation follows (`editSource` or on-demand `translateSession`).
+    func editTranslation(_ id: String, lineID: String, _ text: String, dstLang: String? = nil) {
         guard let i = index(id),
               let j = sessions[i].lines.firstIndex(where: { $0.id == lineID }) else { return }
         sessions[i].lines[j].dst = text
+        if let dstLang { sessions[i].lines[j].dstLang = dstLang }
         id == liveID ? scheduleSave(id) : saveNow(id)
     }
     func setVoice(lineID: String, _ voice: Int) {

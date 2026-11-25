@@ -230,12 +230,21 @@ struct MenuPanelView: View {
                 ChoiceRow(label: L("听到"), value: heardValue.0, badge: heardValue.1, compact: true, sections: sourceSections) {
                     model.sourceSelection = $0
                 }
-                ChoiceRow(label: L("翻译成"),
-                          value: targetName(model.listen.resolvedTarget),
-                          // "Follow system" leaves no room for the language name in the panel.
-                          badge: settings.target == "system" ? (uiIsChinese ? L("跟随系统") : L("系统")) : nil,
-                          compact: true, options: targetOptions) {
-                    model.targetSelection = $0
+                HStack(spacing: 8) {
+                    Text("自动翻译").font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                    Spacer()
+                    Toggle("", isOn: $settings.translateEnabled).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                }
+                .padding(.horizontal, 10).frame(height: 30)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.ground))
+                if settings.translateEnabled {
+                    ChoiceRow(label: L("翻译成"),
+                              value: targetName(model.listen.resolvedTarget),
+                              // "Follow system" leaves no room for the language name in the panel.
+                              badge: settings.target == "system" ? (uiIsChinese ? L("跟随系统") : L("系统")) : nil,
+                              compact: true, options: targetOptions) {
+                        model.targetSelection = $0
+                    }
                 }
             }
 
@@ -1184,7 +1193,7 @@ struct MainWindowView: View {
                         .overlay(alignment: .top) { Rectangle().fill(Self.hairline).frame(height: 1) }
                 }
             }
-            .onChange(of: s.id) { _, _ in pinned = false }
+            .onChange(of: s.id) { _, _ in pinned = false; model.stopReading() }
             .onChange(of: tab) { _, _ in pinned = false }
         } else {
             welcome
@@ -1304,6 +1313,45 @@ struct MainWindowView: View {
                         .buttonStyle(.plain)
                         .fixedSize()
                         .help(L("删除录音文件，文字记录和纪要保留"))
+                    }
+                    if let t = model.translatingSession, t.id == s.id {
+                        HStack(spacing: 5) {
+                            Spinner()
+                            Text(L("翻译中 \(t.done)/\(t.total)")).font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                                .lineLimit(1)
+                        }
+                        .fixedSize()
+                    } else if !s.lines.isEmpty, s.id != store.liveID {
+                        Menu {
+                            ForEach(targetLanguages, id: \.code) { lang in
+                                Button(lang.name) { model.translateSession(s.id, to: lang.code) }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "translate").font(.system(size: 11, weight: .medium))
+                                Text(L("翻译")).font(.system(size: 13)).lineLimit(1)
+                            }
+                            .foregroundStyle(Palette.secondary)
+                            .fixedSize()
+                            .contentShape(Rectangle())
+                        }
+                        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                        .help(L("选择目标语言，为这场文字记录生成或更新译文"))
+                    }
+                    if !s.lines.isEmpty, s.id != store.liveID {
+                        let isReading = model.reading?.sessionID == s.id
+                        Button { model.toggleReadTranscript(s, view: view) } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: isReading ? "stop.fill" : "speaker.wave.2")
+                                    .font(.system(size: 11, weight: .medium))
+                                Text(isReading ? L("停止朗读") : L("朗读")).font(.system(size: 13)).lineLimit(1)
+                            }
+                            .foregroundStyle(isReading ? Palette.accentInk : Palette.secondary)
+                            .fixedSize()
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(L("用同声传译选定的声音（含克隆声音）朗读当前显示的原文或译文"))
                     }
                 }
                 Segments(options: [("both", L("双语")), ("src", L("原文")), ("dst", L("译文"))], value: view) { view = $0 }
@@ -1499,7 +1547,8 @@ struct MainWindowView: View {
                     let starts = SpeakerLabels.runStarts(s.lines, speakers)
                     ForEach(s.lines) { l in
                         quoteRow(l, speaker: speakers[l.id], picked: quoteJump.map { t in l.id == pickedLine(s, t)?.id } ?? false,
-                                 label: settings.speakerEveryLine || starts.contains(l.id), voices: !speakers.isEmpty).id(l.id)
+                                 label: settings.speakerEveryLine || starts.contains(l.id), voices: !speakers.isEmpty,
+                                 translating: (s.id == store.liveID || working(s)) && settings.translateEnabled && settings.subtitles != "original").id(l.id)
                     }
                 }
                 .environment(\.speakerNames, SpeakerLabels.names(s))
@@ -1524,19 +1573,25 @@ struct MainWindowView: View {
     }
 
     /// Whitespace between lines, no rules; the picked line gets a soft fill.
-    private func quoteRow(_ l: TranscriptLine, speaker: Int?, picked: Bool, label: Bool = true, voices: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func quoteRow(_ l: TranscriptLine, speaker: Int?, picked: Bool, label: Bool = true, voices: Bool = false, translating: Bool = false) -> some View {
+        let hasDst = !(l.dst?.isEmpty ?? true)
+        return VStack(alignment: .leading, spacing: 2) {
             // Only once voices are told apart (or for your own lines): one speaker needs no label;
             // and only where the speaker changes.
             if !label {
             } else if let speaker { SpeakerTag(number: speaker).padding(.bottom, 2) }
             else if voices, l.speaker != "me" { UnknownSpeakerTag().padding(.bottom, 2) }
             else if l.speaker == "me" { MeTag().padding(.bottom, 2) }
-            Text(l.shown).font(.system(size: 12)).foregroundStyle(Palette.secondary).lineSpacing(1)
+            Text(l.shown)
+                .font(.system(size: hasDst || translating ? 12 : 14))
+                .foregroundStyle(hasDst || translating ? Palette.secondary : Palette.ink)
+                .lineSpacing(hasDst || translating ? 1 : 2)
                 .textSelection(.enabled)
-            Text(l.dst ?? L("翻译中…")).font(.system(size: 14)).lineSpacing(2)
-                .foregroundStyle(l.dst == nil ? Palette.secondary : Palette.ink)
-                .textSelection(.enabled)
+            if hasDst || translating {
+                Text(l.dst ?? L("翻译中…")).font(.system(size: 14)).lineSpacing(2)
+                    .foregroundStyle(l.dst == nil ? Palette.secondary : Palette.ink)
+                    .textSelection(.enabled)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8).padding(.horizontal, 8)
@@ -1576,8 +1631,12 @@ struct MainWindowView: View {
                     }
                     ForEach(s.lines) { l in
                         lineRow(l, speaker: speakers[l.id], label: speakers.isEmpty || settings.speakerEveryLine || starts.contains(l.id), voices: !speakers.isEmpty, place: both, in: s,
-                                current: l.id == playingLine, terms: terms, found: l.id == found)
+                                current: l.id == playingLine || (model.reading?.sessionID == s.id && model.reading?.lineID == l.id), terms: terms, found: l.id == found)
                             .contextMenu {
+                                if s.id != store.liveID {
+                                    Button(L("从这句开始朗读")) { model.toggleReadTranscript(s, view: view, from: l.id) }
+                                    Divider()
+                                }
                                 Button(L("改这句…")) { editingStart = l.shown; editingLine = l.id }
                                 if !speakers.isEmpty, l.speaker == "them" { assignMenu(s, l, voices) }
                             }
@@ -1722,20 +1781,35 @@ struct MainWindowView: View {
                     }
                     if place, label, !me { PlaceTag(line: l) }
                 }
+                let translating = (shownSession.map { $0.id == store.liveID || working($0) } ?? false)
+                    && settings.translateEnabled && settings.subtitles != "original"
+                let hasDst = !(l.dst?.isEmpty ?? true)
                 if editingLine == l.id, let s = shownSession {
                     LineEditor(line: l, session: s.id, fixes: model.fixes, start: editingStart) { editingLine = nil }
                 } else if view != "dst" {
+                    let primary = view == "src" || (!hasDst && !translating)
                     Text(TranscriptSearch.highlighted(TranscriptParagraphs.joinFixed([l]), terms, current: found))
-                        .font(.system(size: view == "src" ? 15 : 13))
-                        .foregroundStyle(view == "src" ? Palette.ink : Palette.tertiary)
-                        .lineSpacing(2)
+                        .font(.system(size: primary ? 15 : 13))
+                        .foregroundStyle(primary ? Palette.ink : Palette.tertiary)
+                        .lineSpacing(primary ? 3 : 2)
                         .textSelection(.enabled)
                 }
                 if view != "src" {
-                    Text(l.dst.map { TranscriptSearch.highlighted(AttributedString($0), terms, current: found) } ?? AttributedString(L("翻译中…")))
-                        .font(.system(size: 15)).lineSpacing(3)
-                        .foregroundStyle(l.dst == nil ? Palette.tertiary : Palette.ink)
-                        .textSelection(.enabled)
+                    if let dst = l.dst, !dst.isEmpty {
+                        Text(TranscriptSearch.highlighted(AttributedString(dst), terms, current: found))
+                            .font(.system(size: 15)).lineSpacing(3)
+                            .foregroundStyle(Palette.ink)
+                            .textSelection(.enabled)
+                    } else if translating {
+                        Text(L("翻译中…"))
+                            .font(.system(size: 15)).lineSpacing(3)
+                            .foregroundStyle(Palette.tertiary)
+                    } else if view == "dst" {
+                        Text(TranscriptSearch.highlighted(TranscriptParagraphs.joinFixed([l]), terms, current: found))
+                            .font(.system(size: 15)).lineSpacing(3)
+                            .foregroundStyle(Palette.secondary)
+                            .textSelection(.enabled)
+                    }
                 }
                 // Pointing at a line: what its fixed words were heard as, 改回, and 改这句….
                 if hoveredLine == l.id, editingLine != l.id, let s = shownSession {

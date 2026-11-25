@@ -381,8 +381,14 @@ final class AppModel: ObservableObject {
         notes.language = { [weak self] id in
             TranslationService.englishName(self?.notesLanguageCode(id) ?? "zh-CN")
         }
-        listen.translationOff = { [weak self] in self?.subtitles == "original" }
-        roomListen.translationOff = { [weak self] in self?.subtitles == "original" }
+        listen.translationOff = { [weak self] in
+            guard let self else { return false }
+            return !self.settings.translateEnabled || self.subtitles == "original"
+        }
+        roomListen.translationOff = { [weak self] in
+            guard let self else { return false }
+            return !self.settings.translateEnabled || self.subtitles == "original"
+        }
         applyAIService()
 
         installer.speakThrough = { [weak self] text, lang, device in
@@ -1331,6 +1337,44 @@ final class AppModel: ObservableObject {
 
     /// Plays a voice on the speakers (not into the room) with a line in that language.
     @Published var previewing: String?
+    /// Reading a saved meeting's transcript aloud (session id and currently spoken line id).
+    @Published var reading: (sessionID: String, lineID: String)?
+    private var readTask: Task<Void, Never>?
+
+    func stopReading() {
+        readTask?.cancel()
+        readTask = nil
+        speak.stopPlayback()
+        reading = nil
+    }
+
+    /// Reads a finished meeting's transcript aloud through the default speakers using the voice
+    /// selected for each line's language (including the user's cloned voice when chosen).
+    /// `view`: "src" reads the original text; "dst" or "both" reads the translation (falling back to original).
+    func toggleReadTranscript(_ s: Session, view: String, from lineID: String? = nil) {
+        if reading?.sessionID == s.id, lineID == nil {
+            stopReading()
+            return
+        }
+        stopReading()
+        let startIndex = lineID.flatMap { id in s.lines.firstIndex(where: { $0.id == id }) } ?? 0
+        let lines = Array(s.lines[startIndex...])
+        guard !lines.isEmpty else { return }
+        readTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.reading = nil }
+            for line in lines {
+                if Task.isCancelled { break }
+                let useSource = view == "src" || (line.dst?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+                let text = (useSource ? line.shown : (line.dst ?? line.shown)).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                let lang = useSource ? line.srcLang : line.dstLang
+                self.reading = (s.id, line.id)
+                let route = self.voiceRoute(id: self.voiceID(for: lang), language: lang)
+                await self.speak.speak(text, language: lang, device: AudioDevices.defaultOutput, route: route)
+            }
+        }
+    }
 
     func previewVoice(_ id: String, language: String, text: String? = nil) {
         previewing = id
@@ -1955,7 +1999,7 @@ final class AppModel: ObservableObject {
                   line.src == original else { return }
             store.setSource(lineID: lineID, text)
             // 内容=只看原文 keeps the record translation-free; the correction still lands.
-            if subtitles != "original",
+            if settings.translateEnabled, subtitles != "original",
                let dst = await listen.translate(text, source: seg.sourceCode, target: listen.resolvedTarget,
                                                 kind: .sentence, trace: TranslateTrace()) {
                 store.setTranslation(lineID: lineID, dst)
@@ -1968,6 +2012,33 @@ final class AppModel: ObservableObject {
 
     /// Progress of a retroactive cloud proofread (nil when idle): meeting id, lines done, total.
     @Published var proofreading: (id: String, done: Int, total: Int)?
+    /// Progress of an on-demand full-session translation (nil when idle): meeting id, lines done, total.
+    @Published var translatingSession: (id: String, done: Int, total: Int)?
+
+    /// Translates (or re-translates) every line of a finished meeting into `target` on demand,
+    /// e.g. when 自动翻译 was off during the meeting or the user wants another target language.
+    func translateSession(_ id: String, to target: String) {
+        guard let s = store.session(id), s.id != store.liveID, !s.lines.isEmpty, translatingSession == nil else { return }
+        let lines = s.lines
+        translatingSession = (id, 0, lines.count)
+        debugLog("translate: session \(id) → \(target) (\(lines.count) lines)")
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.translatingSession = nil }
+            for (i, line) in lines.enumerated() {
+                defer { self.translatingSession = (id, i + 1, lines.count) }
+                let text = line.shown.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                if line.srcLang == target {
+                    store.editTranslation(id, lineID: line.id, text, dstLang: target)
+                } else if let dst = await listen.translate(text, source: line.srcLang, target: target,
+                                                           kind: .file, trace: TranslateTrace()) {
+                    store.editTranslation(id, lineID: line.id, dst, dstLang: target)
+                }
+            }
+            debugLog("translate: session \(id) → \(target) done")
+        }
+    }
 
     /// A recorded meeting can be proofread afterwards: either the active AI service provides a
     /// dedicated ASR model or standalone cloud proofreading is enabled with a key, and system.m4a exists.
@@ -2037,7 +2108,7 @@ final class AppModel: ObservableObject {
                 contentLog("asr: \(line.id) “\(line.src)” → “\(text)”")
                 store.editSource(id, lineID: line.id, text)
                 // 内容=只看原文 keeps the record translation-free; the correction still lands.
-                if subtitles != "original",
+                if settings.translateEnabled, subtitles != "original",
                    let dst = await listen.translate(text, source: line.srcLang, target: line.dstLang,
                                                     kind: .sentence, trace: TranslateTrace()) {
                     store.editTranslation(id, lineID: line.id, dst)

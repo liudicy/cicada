@@ -202,6 +202,9 @@ struct CloudSegmenter {
     static let pause = 0.6, maxLength = 8.0, minSpeech = 0.25, preRoll = 0.15, tail = 0.15, cutWindow = 2.0
     /// Loud frames' 90th / 10th percentile below this: steady sound (a fan, hum, hiss), not speech.
     static let steady: Float = 2.0
+    /// Live capture filters steady fan hum; saved/broadcast recordings often have compressed
+    /// loudness where real speech looks steady, so file imports turn this off.
+    var filterSteady = true
 
     private var pending: [Int16] = []
     private var current: [Int16] = []
@@ -280,7 +283,8 @@ struct CloudSegmenter {
         let rest = Array(current[end...])
         let restLevels = Array(levels[min(levels.count, end / f)...])
         let start = currentStart
-        let speech = Double(loud * f) >= Self.minSpeech * 16000 && !Self.isSteady(levels[..<min(levels.count, end / f)])
+        let speech = Double(loud * f) >= Self.minSpeech * 16000
+            && (!filterSteady || !Self.isSteady(levels[..<min(levels.count, end / f)]))
         current = []
         levels = []
         quiet = 0
@@ -308,6 +312,7 @@ final class CloudStream: RecognitionStream, @unchecked Sendable {
     let results: AsyncThrowingStream<Recognition.Piece, Error>
     private let continuation: AsyncThrowingStream<Recognition.Piece, Error>.Continuation
     private let hear: Hear
+    private let forFile: Bool
     private let queue = DispatchQueue(label: "com.wquguru.cicada.cloud")
     private var segmenter = CloudSegmenter()
     private var issued = 0
@@ -317,13 +322,17 @@ final class CloudStream: RecognitionStream, @unchecked Sendable {
     private var ended = false
 
     /// `format`: the analyzer's, when it is 16 kHz mono 16-bit, so the audio held for it can be replayed.
-    init(format: AVAudioFormat? = nil, hear: @escaping Hear) {
+    /// `forFile`: disables the live fan-hum filter and loosens music rejection so compressed recordings
+    /// (broadcasts, podcasts, Zoom) are never dropped mid-file.
+    init(format: AVAudioFormat? = nil, forFile: Bool = false, hear: @escaping Hear) {
         if let format, format.sampleRate == 16000, format.channelCount == 1, format.commonFormat == .pcmFormatInt16 {
             self.format = format
         } else {
             self.format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true)!
         }
+        self.forFile = forFile
         self.hear = hear
+        self.segmenter.filterSteady = !forFile
         (results, continuation) = AsyncThrowingStream.makeStream()
     }
 
@@ -370,9 +379,12 @@ final class CloudStream: RecognitionStream, @unchecked Sendable {
     /// On `queue`. A stretch nobody spoke in (hold music, a ringtone, an alert) isn't sent: Ming
     /// would write something for it anyway, and a minute on hold is some thirty calls.
     private func send(_ piece: CloudSegmenter.Piece) {
-        if let v = SoundKind.judge(piece.samples), v.speech < SoundKind.speechLine {
-            debugLog(String(format: "hear: not speech, not sent (speech %.2f, music %.2f, %.1f s)", v.speech, v.music, piece.seconds))
-            return
+        if let v = SoundKind.judge(piece.samples) {
+            let drop = forFile ? (v.speech < 0.03 && v.music > 0.35) : (v.speech < SoundKind.speechLine)
+            if drop {
+                debugLog(String(format: "hear: not speech, not sent (speech %.2f, music %.2f, %.1f s)", v.speech, v.music, piece.seconds))
+                return
+            }
         }
         issued += 1
         let index = issued

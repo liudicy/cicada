@@ -11,19 +11,24 @@ struct LanguageSettings: View {
         VStack(alignment: .leading, spacing: 14) {
             route
             group(L("听对方")) {
+                SettingsRow(title: L("自动翻译"), detail: L("关闭后会议和转写都不翻译，只保留原文，节省 token")) {
+                    Toggle("", isOn: $settings.translateEnabled).labelsHidden().toggleStyle(.switch)
+                }
                 SettingsRow(title: L("对方说的语言"), detail: heardDetail) {
                     PillMenu(value: heardValue, options: [("auto", L("自动识别"))] + sourceLanguages.map { ($0.locale, $0.name) }) {
                         model.sourceSelection = $0
                     }
                 }
-                SettingsRow(title: L("字幕"), detail: L("只看原文时不翻译，也不用 Ling 额度")) {
-                    Segments(options: subtitleOptions, value: settings.subtitles) { model.setSubtitles($0) }
-                }
-                SettingsRow(title: L("翻译成"), detail: targetDetail, divider: false) {
-                    PillMenu(value: settings.target == "system" ? L("跟随系统（\(targetName(model.listen.resolvedTarget))）")
-                                                                : targetName(settings.target),
-                             options: [("system", L("跟随系统"))] + targetLanguages.map { ($0.code, $0.name) }) {
-                        model.targetSelection = $0
+                if settings.translateEnabled {
+                    SettingsRow(title: L("字幕"), detail: L("只看原文时不翻译，也不用 Ling 额度")) {
+                        Segments(options: subtitleOptions, value: settings.subtitles) { model.setSubtitles($0) }
+                    }
+                    SettingsRow(title: L("翻译成"), detail: targetDetail, divider: false) {
+                        PillMenu(value: settings.target == "system" ? L("跟随系统（\(targetName(model.listen.resolvedTarget))）")
+                                                                    : targetName(settings.target),
+                                 options: [("system", L("跟随系统"))] + targetLanguages.map { ($0.code, $0.name) }) {
+                            model.targetSelection = $0
+                        }
                     }
                 }
             }

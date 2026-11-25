@@ -869,6 +869,11 @@ final class SpeakEngine {
     /// Who speaks a stream, for logs and the test ("ming", or the service: "zenmux").
     var streamName: () -> String = { "ming" }
 
+    /// Stops any ongoing playback (e.g. when the user cancels reading a saved transcript).
+    func stopPlayback() {
+        player.stop()
+    }
+
     /// Returns after the audio has played. A stream that fails before any audio falls back to the
     /// Mac's voice, so the room always hears the sentence.
     func speak(_ text: String, language: String, device override: OutputDevice? = nil, route forced: VoiceRoute? = nil) async {

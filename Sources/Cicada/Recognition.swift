@@ -259,8 +259,8 @@ enum Recognition {
         return DeferredStream(locale, drafts: drafts, format: format)
     }
 
-    static func cloudStream(_ locale: String?) -> CloudStream {
-        CloudStream { wav, seconds in await cloudHear?(wav, seconds, locale) }
+    static func cloudStream(_ locale: String?, forFile: Bool = false) -> CloudStream {
+        CloudStream(forFile: forFile) { wav, seconds in await cloudHear?(wav, seconds, locale) }
     }
 
     /// Transcribes recorded audio (a clip, one press of the talk key): the finished lines joined,

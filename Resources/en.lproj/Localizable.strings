@@ -485,6 +485,8 @@
 /* LanguageSettings */
 "听对方" = "Listening";
 "同声传译" = "Interpreting";
+"自动翻译" = "Auto translate";
+"关闭后会议和转写都不翻译，只保留原文，节省 token" = "When off, live meetings and transcriptions keep original text only to save tokens";
 "对方说的语言" = "Language they speak";
 "字幕" = "Subtitles";
 "只看原文时不翻译，也不用 Ling 额度" = "Original: no translation, no Ling quota";
@@ -1366,11 +1368,16 @@
 "先听一段示例" = "Try a sample first";
 "转完后生成" = "After transcribing";
 "删除录音文件，文字记录和纪要保留" = "Delete the recording file; the transcript and notes stay";
+"选择目标语言，为这场文字记录生成或更新译文" = "Pick a target language to translate or re-translate this transcript";
+"用同声传译选定的声音（含克隆声音）朗读当前显示的原文或译文" = "Read the shown original or translation aloud using the selected interpreting voice (including your cloned voice)";
 "用当前文字记录重新生成纪要" = "Regenerate the notes from the current transcript";
 "收起原话" = "Hide original";
 "在纪要旁显示原话" = "Show the original beside the notes";
 "用保存的录音重新识别或云端校对；整场重转会先备份旧记录" = "Re-transcribe or proofread from the saved recording; full re-transcribe backs up the current transcript first";
 "云端校对中 %lld/%lld" = "Cloud proofreading %lld/%lld";
+"翻译中 %lld/%lld" = "Translating %lld/%lld";
+"停止朗读" = "Stop";
+"朗读" = "Read aloud";
 "正在整理纪要…" = "Writing notes…";
 "分享…" = "Share…";
 "复制全文" = "Copy Everything";
@@ -1385,6 +1392,7 @@
 "这场会议没存录音 ·" = "No recording of this meeting ·";
 "全部 %lld 句" = "All %lld lines";
 "翻译中…" = "Translating…";
+"从这句开始朗读" = "Read aloud from here";
 "改这句…" = "Edit line…";
 "回到正在播放" = "Back to playing";
 "从这里播放" = "Play from here";

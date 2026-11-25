@@ -11,7 +11,14 @@ protocol ImportSettings: AnyObject {
     /// "auto" or a `sourceLanguages` locale.
     var importLanguage: String { get }
     var speakerVoices: Bool { get }
+    var translateEnabled: Bool { get }
+    var subtitles: String { get }
     func resolvedTarget(source: String?) -> String
+}
+
+extension ImportSettings {
+    var translateEnabled: Bool { true }
+    var subtitles: String { "both" }
 }
 
 /// Recordings and videos the user brings in: each becomes a meeting record, transcribed on device
@@ -222,16 +229,18 @@ final class FileImporter: ObservableObject {
             let add = { (sentences: [(text: String, t: Double)], end: Double, heard: String?, translation: String?) in
                 let src = heard.flatMap { code in sourceLanguages.first { $0.code == code }?.code } ?? lang.code
                 let to = heard == nil ? target : self.settings.resolvedTarget(source: src)
+                let translateOn = self.settings.translateEnabled && self.settings.subtitles != "original"
                 // The service's translation covers the whole stretch: kept when the stretch is one line.
-                let given = sentences.count == 1 && to == heardTarget ? translation : nil
+                let given = translateOn && sentences.count == 1 && to == heardTarget ? translation : nil
                 for (k, sentence) in sentences.enumerated() {
                     let text = HeardText.clean(sentence.text)
                     guard text.contains(where: \.isLetter) else { continue }
                     n += 1
                     let line = TranscriptLine(id: "f\(n)", t: max(0, sentence.t), speaker: "them",
-                                              src: text, dst: src == to ? text : given, srcLang: src, dstLang: to)
+                                              src: text, dst: !translateOn ? nil : (src == to ? text : given),
+                                              srcLang: src, dstLang: to)
                     self.store.append(line, to: job.id)
-                    if line.dst == nil { translations.append(self.translate(line, session: job.id)) }
+                    if translateOn, line.dst == nil { translations.append(self.translate(line, session: job.id)) }
                     voices?.tag(line.id, from: line.t, to: k + 1 < sentences.count ? sentences[k + 1].t : end)
                 }
             }
@@ -279,7 +288,7 @@ final class FileImporter: ObservableObject {
     private func transcribeLegacy(_ pcm: URL, locale: String?, session id: String, useCloud: Bool,
                                   line: @escaping (Recognition.Piece) -> Void) async throws {
         // Heard by the service: `locale` is only its hint, nil when the file's language isn't known.
-        let stream = useCloud ? Recognition.cloudStream(locale)
+        let stream = useCloud ? Recognition.cloudStream(locale, forFile: true)
             : try await Recognition.start(locale ?? sourceLanguages[0].locale, drafts: false, background: true)
         analyzer = stream
         let file = try AVAudioFile(forReading: pcm)
