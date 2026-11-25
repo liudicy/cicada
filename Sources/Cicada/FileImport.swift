@@ -20,11 +20,21 @@ protocol ImportSettings: AnyObject {
 /// UI-free: AppModel shows the state and writes the notes when a file is done.
 @MainActor
 final class FileImporter: ObservableObject {
+    enum Engine: Equatable {
+        /// Follows the active AI service (cloud when `ling.transcribes` or `cloudOnly`, else on-device).
+        case auto
+        /// Force on-device Apple recognition (falls back to cloud on Intel).
+        case local
+        /// Force cloud ASR recognition (active service ASR, Ming, or standalone MiMo).
+        case cloud
+    }
+
     struct Job: Equatable {
         let id: String
         let url: URL
         /// The language the user said it is in; nil detects it.
         var lang: Lang? = nil
+        var engine: Engine = .auto
     }
 
     enum Phase: Equatable {
@@ -97,7 +107,7 @@ final class FileImporter: ObservableObject {
     /// Transcribe a record again from the start (one that stopped halfway, or by request), in
     /// `lang` when the user picked it. A live meeting has no `sourcePath`; its saved system.m4a
     /// (or mic/room file) is used instead, so a record with a bad transcript can be redone.
-    func retry(_ id: String, lang: Lang? = nil) {
+    func retry(_ id: String, lang: Lang? = nil, engine: Engine = .auto) {
         guard let s = store.session(id), current?.id != id, !queue.contains(where: { $0.id == id }) else { return }
         let candidates = [s.sourcePath.map { URL(fileURLWithPath: $0) },
                           store.systemAudioURL(id), store.micAudioURL(id), store.roomAudioURL(id)].compactMap { $0 }
@@ -107,7 +117,7 @@ final class FileImporter: ObservableObject {
         }
         if !s.lines.isEmpty || s.notes != nil { store.backupTranscript(id) }
         store.restartImport(id)
-        queue.append(Job(id: id, url: url, lang: lang))
+        queue.append(Job(id: id, url: url, lang: lang, engine: engine))
         next()
     }
 
@@ -177,15 +187,20 @@ final class FileImporter: ObservableObject {
         guard !Task.isCancelled, store.session(job.id) != nil else { return }
 
         var lang = job.lang ?? sourceLanguages[0]
-        // The service names each line's language itself (`cloudOnly`): no models to compare.
+        // Honor an explicit engine choice from 重新转写; otherwise follow the active AI service.
+        let useCloud: Bool = switch job.engine {
+        case .local: Recognition.cloudOnly
+        case .cloud: true
+        case .auto: Recognition.cloudOnly || translator.ling.transcribes
+        }
         let named = job.lang ?? sourceLanguages.first { $0.locale == settings.importLanguage }
-        if Recognition.cloudOnly { lang = named ?? lastLanguage } else if job.lang == nil { lang = await language(of: pcm) }
+        if useCloud { lang = named ?? lastLanguage } else if job.lang == nil { lang = await language(of: pcm) }
         guard !Task.isCancelled else { return }
         let target = settings.resolvedTarget(source: lang.code)
-        debugLog("import: \(job.id) \(lang.locale) → \(target)")
-        // Nothing hears it on an Intel Mac without a Ling key: left unfinished, it offers 重新转写 once there is one.
-        if Recognition.cloudOnly, !translator.ling.hearsAudio {
-            debugLog("import: \(job.id) needs a Ling key")
+        debugLog("import: \(job.id) \(lang.locale) → \(target) cloud=\(useCloud)")
+        // Nothing hears it on an Intel Mac without a cloud recognizer: left unfinished, it offers 重新转写 once there is one.
+        if Recognition.cloudOnly, !translator.ling.hearsAudio, !translator.ling.transcribes {
+            debugLog("import: \(job.id) needs a cloud speech service key")
             return
         }
         hearFailures = 0
@@ -193,7 +208,7 @@ final class FileImporter: ObservableObject {
         let heardTarget = settings.resolvedTarget(source: named?.code)
 
         do {
-            if await Recognition.status(lang.locale) != .installed {
+            if !useCloud, await Recognition.status(lang.locale) != .installed {
                 try await Recognition.install(lang.locale) { _ in self.phase = .downloading(lang.name) }
             }
             guard !Task.isCancelled else { return }
@@ -221,7 +236,7 @@ final class FileImporter: ObservableObject {
                 }
             }
             // `Recognition.host`: the iOS simulator's stand-in recognizer takes a stream, not a file.
-            if !Recognition.legacy, !Recognition.cloudOnly, Recognition.host == nil, #available(macOS 26, *) {
+            if !Recognition.legacy, !useCloud, Recognition.host == nil, #available(macOS 26, *) {
                 let transcriber = SpeechTranscriber(locale: Locale(identifier: lang.locale), transcriptionOptions: [],
                                                     reportingOptions: [], attributeOptions: [.audioTimeRange])
                 let file = try AVAudioFile(forReading: pcm)
@@ -237,13 +252,13 @@ final class FileImporter: ObservableObject {
                 }
                 _ = analyzer
             } else {
-                let hint = Recognition.cloudOnly ? named?.locale : lang.locale
-                try await transcribeLegacy(pcm, locale: hint, session: job.id) { piece in
+                let hint = useCloud ? named?.locale : lang.locale
+                try await transcribeLegacy(pcm, locale: hint, session: job.id, useCloud: useCloud) { piece in
                     add(Self.sentences(Self.words(piece), start: piece.start), piece.end, piece.language, piece.translation)
                 }
             }
             guard !Task.isCancelled, store.session(job.id) != nil else { return }
-            if Recognition.cloudOnly, hearFailures > 0 {
+            if useCloud, hearFailures > 0 {
                 debugLog("import: \(job.id) \(hearFailures) stretches not heard, left unfinished")
                 return
             }
@@ -261,10 +276,10 @@ final class FileImporter: ObservableObject {
 
     /// macOS 14.4–15: the file fed through the older recognizer, which ends a line at each pause.
     /// It is fed only a couple of lines ahead of what has come back, so a long file doesn't queue up in memory.
-    private func transcribeLegacy(_ pcm: URL, locale: String?, session id: String,
+    private func transcribeLegacy(_ pcm: URL, locale: String?, session id: String, useCloud: Bool,
                                   line: @escaping (Recognition.Piece) -> Void) async throws {
         // Heard by the service: `locale` is only its hint, nil when the file's language isn't known.
-        let stream = Recognition.cloudOnly ? Recognition.cloudStream(locale)
+        let stream = useCloud ? Recognition.cloudStream(locale)
             : try await Recognition.start(locale ?? sourceLanguages[0].locale, drafts: false, background: true)
         analyzer = stream
         let file = try AVAudioFile(forReading: pcm)

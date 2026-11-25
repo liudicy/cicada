@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Security
 
@@ -358,6 +359,14 @@ final class LingClient: ObservableObject {
                 c.shape(&body, maxTokens: 1)
                 _ = try await post("chat/completions", body: body, key: key, timeout: 20)
                 r.pass(upTo: .text, seconds: Date().timeIntervalSince(started))
+            case .stepfun:
+                var body: [String: Any] = ["model": c.textModel, "messages": [["role": "user", "content": "hi"]]]
+                c.shape(&body, maxTokens: 1)
+                _ = try await post("chat/completions", body: body, key: key, timeout: 20)
+                r.pass(upTo: .text, seconds: Date().timeIntervalSince(started))
+                if r.failure == nil, c.transcribes {
+                    r.hear = await checkHearing(c, key: key)
+                }
             case .custom:
                 // A real sentence, the way a meeting translates: one token says nothing about a
                 // model that thinks for six seconds before every answer.
@@ -796,6 +805,11 @@ final class LingClient: ObservableObject {
                         body["voice"] = voice
                     }
                     if let language { body["language_id"] = language }
+                } else if c.provider.id == .stepfun || c.voiceBase?.host?.contains("stepfun") == true {
+                    // StepFun `/audio/speech` streams raw 24 kHz PCM when asked for `pcm`.
+                    body["sample_rate"] = 24000
+                    body["voice"] = voice ?? c.voices.first?.id ?? "lively-girl"
+                    if let language, let code = Self.stepFunLanguage(language) { body["language"] = code }
                 } else {
                     // OpenRouter documents no `stream` (it streams the bytes anyway); ZenMux needs it.
                     if c.provider.id != .openrouter { body["stream"] = true }
@@ -853,6 +867,22 @@ final class LingClient: ObservableObject {
         }
     }
 
+    /// Normalizes a BCP-47 locale ("zh-CN", "en-US") or Ming language name ("Chinese", "English")
+    /// to StepFun's 2-letter `language` parameter.
+    nonisolated static func stepFunLanguage(_ raw: String) -> String? {
+        let lower = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let prefix = String(lower.prefix { $0 != "-" && $0 != "_" })
+        switch prefix {
+        case "zh", "chinese": return "zh"
+        case "en", "english": return "en"
+        case "ja", "japanese": return "ja"
+        case "ko", "korean": return "ko"
+        case "fr", "french": return "fr"
+        case "es", "spanish": return "es"
+        default: return nil
+        }
+    }
+
     /// The samples of a WAV (its `data` chunk); the bytes as they are when there is no header.
     nonisolated static func pcm(fromWAV wav: Data) -> Data {
         guard wav.count > 12, wav.prefix(4) == Data("RIFF".utf8) else { return wav }
@@ -868,29 +898,55 @@ final class LingClient: ObservableObject {
 
     // MARK: Recognition
 
-    /// What the custom service's speech model heard in `wav` (a 16 kHz mono WAV): standard
-    /// `/audio/transcriptions` (Qwen3-ASR, Whisper servers, Fun-ASR). `language` (a BCP-47 code) is
-    /// the hint, for servers that take one. Throws like a chat call, so listening can tell a
-    /// service that is down from a quiet meeting.
-    func transcribe(_ wav: Data, language: String?, timeout: TimeInterval = 12) async throws -> (text: String, language: String?) {
+    /// What the AI service's speech model heard in `wav` (a 16 kHz mono WAV): StepFun `/audio/asr/sse`
+    /// or standard `/audio/transcriptions` (Qwen3-ASR, Whisper servers, Fun-ASR). `override` lets
+    /// cloud proofreading reuse the active service's ASR even when live listening stays on-device.
+    func transcribe(_ wav: Data, language: String?, timeout: TimeInterval = 12,
+                    override: (base: URL, model: String)? = nil) async throws -> (text: String, language: String?) {
         guard let key else { throw Failure.noKey }
         let c = config()
-        guard let base = c.hearBase, let model = c.hearModel else { throw Failure.noKey }
+        guard let base = override?.base ?? c.hearBase, let model = override?.model ?? c.hearModel else { throw Failure.noKey }
         let asked = Date()
         await acquire(.translate)
         let queued = Date().timeIntervalSince(asked)
         let started = Date()
         let call = CallLabel(provider: c.provider.id.rawValue, model: model, role: "heard-them")
-        var req = URLRequest(url: base.appendingPathComponent("audio/transcriptions"))
-        req.httpMethod = "POST"
-        req.timeoutInterval = timeout
-        let boundary = "cicada-" + UUID().uuidString
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        var fields = [("model", model), ("temperature", "0")]
-        if let language { fields.append(("language", String(language.prefix { $0 != "-" }))) }
-        req.httpBody = Self.multipart(fields: fields, file: wav, boundary: boundary)
+        let isStepFun = c.provider.id == .stepfun || base.host?.contains("stepfun") == true
+        var req: URLRequest
+        if isStepFun {
+            // StepFun Step Plan ASR uses JSON + base64 WAV over SSE (`/audio/asr/sse`).
+            req = URLRequest(url: base.appendingPathComponent("audio/asr/sse"))
+            req.httpMethod = "POST"
+            req.timeoutInterval = timeout
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+            var transcription: [String: Any] = ["model": model, "enable_itn": true]
+            if let language {
+                let code = String(language.prefix { $0 != "-" }).lowercased()
+                if ["zh", "en", "ja", "ko", "fr", "es"].contains(code) { transcription["language"] = code }
+            }
+            let body: [String: Any] = [
+                "audio": ["data": wav.base64EncodedString(), "input": ["format": ["type": "wav"]]],
+                "transcription": transcription,
+            ]
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        } else {
+            req = URLRequest(url: base.appendingPathComponent("audio/transcriptions"))
+            req.httpMethod = "POST"
+            req.timeoutInterval = timeout
+            let boundary = "cicada-" + UUID().uuidString
+            req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            var fields = [("model", model), ("temperature", "0")]
+            if let language { fields.append(("language", String(language.prefix { $0 != "-" }))) }
+            req.httpBody = Self.multipart(fields: fields, file: wav, boundary: boundary)
+        }
         do {
             let data = try await send(req, key: key, contentType: nil)
+            if isStepFun {
+                guard let text = Self.parseStepFunASR(data) else { throw Failure.parse }
+                report(call, .translate, at: started, queued: queued, outcome: "ok", chars: text.count)
+                return (text.trimmingCharacters(in: .whitespacesAndNewlines), nil)
+            }
             guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let text = root["text"] as? String else { throw Failure.parse }
             report(call, .translate, at: started, queued: queued, outcome: "ok", chars: text.count)
@@ -904,6 +960,36 @@ final class LingClient: ObservableObject {
             report(call, .translate, at: started, queued: queued, outcome: "parse")
             throw Failure.parse
         }
+    }
+
+    /// Parses StepFun `/audio/asr/sse` events: prefers `transcript.text.done`'s final text, falling
+    /// back to concatenated `transcript.text.delta` pieces (or a plain JSON `{ "text": ... }`).
+    nonisolated static func parseStepFunASR(_ data: Data) -> String? {
+        if let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let text = root["text"] as? String {
+            return text
+        }
+        guard let raw = String(data: data, encoding: .utf8) else { return nil }
+        var done: String?
+        var deltas = ""
+        var sawEvent = false
+        for line in raw.split(whereSeparator: \.isNewline) {
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            guard payload != "[DONE]",
+                  let obj = try? JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
+            else { continue }
+            sawEvent = true
+            let type = obj["type"] as? String ?? ""
+            if type == "transcript.text.done", let text = obj["text"] as? String {
+                done = text
+            } else if type == "transcript.text.delta", let piece = (obj["delta"] as? String) ?? (obj["text"] as? String) {
+                deltas += piece
+            } else if done == nil, let text = obj["text"] as? String, deltas.isEmpty {
+                done = text
+            }
+        }
+        return done ?? (sawEvent ? deltas : nil)
     }
 
     /// One second of silence through the speech model: does the address answer, and does the

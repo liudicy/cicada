@@ -10,7 +10,7 @@ import Foundation
 /// TTS arena). `inclusionai/ling-*` is Ling itself on the aggregators, so the prompts carry over.
 struct AIProvider: Identifiable, Equatable {
     enum Kind: String, CaseIterable, Identifiable {
-        case ling, openrouter, zenmux, openai, custom
+        case ling, stepfun, openrouter, zenmux, openai, custom
         var id: String { rawValue }
     }
 
@@ -31,19 +31,44 @@ struct AIProvider: Identifiable, Equatable {
     let voiceModels: [Model]
     /// Voices of `voiceModels` (all Gemini TTS: the same names in every language).
     let voices: [CloudVoice]
+    /// Dedicated speech-recognition models (e.g. StepFun StepAudio ASR); empty when recognition
+    /// stays on this Mac (or uses Ling's 1-step Ming audio model).
+    let hearModels: [Model]
     let clones: Bool
     let hearsAudio: Bool
     /// Ling's account allows ~2 requests per second across every model; the aggregators allow far more.
     let spacing: TimeInterval
 
     var hasVoices: Bool { !voiceModels.isEmpty }
+    var hasHearing: Bool { !hearModels.isEmpty }
 
     static let ling = AIProvider(
         id: .ling, name: "Ling", base: URL(string: "https://api.ant-ling.com/v1/"),
         site: URL(string: "https://chat.ant-ling.com/platform/api"),
         textModels: [Model(id: "Ling-3.1-flash", note: L("更准")), Model(id: "Ling-3.0-flash", note: L("更快、更省"))],
-        voiceModels: [Model(id: "Ming-3.0-tts-0.5B", note: "")], voices: [],
+        voiceModels: [Model(id: "Ming-3.0-tts-0.5B", note: "")], voices: [], hearModels: [],
         clones: true, hearsAudio: true, spacing: 0.6)
+
+    static let stepfunVoices: [CloudVoice] = [
+        CloudVoice(id: "lively-girl", gender: L("女")),
+        CloudVoice(id: "elegantgentle-female", gender: L("女")),
+        CloudVoice(id: "soft-spoken-gentleman", gender: L("男")),
+        CloudVoice(id: "magnetic-voiced-male", gender: L("男")),
+    ]
+
+    /// Fork addition: StepFun Step Plan preset (`https://api.stepfun.com/step_plan/v1/`).
+    /// Covers translation, live notes and TTS; speech recognition stays on this Mac (or optional
+    /// cloud proofreading) since Step Plan's `/files` & `/audio/voices` require pay-as-you-go balance.
+    static let stepfun = AIProvider(
+        id: .stepfun, name: "StepFun Plan", base: URL(string: "https://api.stepfun.com/step_plan/v1/"),
+        site: URL(string: "https://platform.stepfun.com/interface-key"),
+        textModels: [Model(id: "step-3.5-flash", note: L("快、够用")),
+                     Model(id: "step-3.7-flash", note: L("更准"))],
+        voiceModels: [Model(id: "stepaudio-3-tts", note: L("效果最好")),
+                      Model(id: "stepaudio-2.5-tts", note: L("稳定、省"))],
+        voices: stepfunVoices,
+        hearModels: [],
+        clones: false, hearsAudio: false, spacing: 0.1)
 
     static let gemini: [CloudVoice] = [
         CloudVoice(id: "Kore", gender: L("女")), CloudVoice(id: "Aoede", gender: L("女")),
@@ -57,7 +82,7 @@ struct AIProvider: Identifiable, Equatable {
                      Model(id: "qwen/qwen3.8-flash", note: L("中文好"))],
         voiceModels: [Model(id: "google/gemini-3.8-flash-tts", note: L("效果和价格最均衡")),
                       Model(id: "google/gemini-3.8-flash-lite-tts", note: L("更省"))],
-        voices: gemini, clones: false, hearsAudio: false, spacing: 0.1)
+        voices: gemini, hearModels: [], clones: false, hearsAudio: false, spacing: 0.1)
 
     static let zenmux = AIProvider(
         id: .zenmux, name: "ZenMux", base: URL(string: "https://zenmux.ai/api/v1/"),
@@ -66,22 +91,22 @@ struct AIProvider: Identifiable, Equatable {
                      Model(id: "qwen/qwen3.8-flash", note: L("中文好"))],
         voiceModels: [Model(id: "google/gemini-3.8-flash-tts", note: L("效果和价格最均衡")),
                       Model(id: "google/gemini-3.8-flash-lite-tts", note: L("更省"))],
-        voices: gemini, clones: false, hearsAudio: false, spacing: 0.1)
+        voices: gemini, hearModels: [], clones: false, hearsAudio: false, spacing: 0.1)
 
     /// No voices: `/audio/speech` models shut down 2027-01-06 and their successor is Realtime-only.
     static let openai = AIProvider(
         id: .openai, name: "OpenAI", base: URL(string: "https://api.openai.com/v1/"),
         site: URL(string: "https://platform.openai.com/api-keys"),
         textModels: [Model(id: "gpt-5.4-nano", note: L("够用、更省"))],
-        voiceModels: [], voices: [], clones: false, hearsAudio: false, spacing: 0.1)
+        voiceModels: [], voices: [], hearModels: [], clones: false, hearsAudio: false, spacing: 0.1)
 
     /// Any OpenAI-compatible address (a company gateway, Ollama, LM Studio…). Voices only when the
     /// user names a speech model; plain standard requests, none of Ling's workarounds.
     static let custom = AIProvider(
         id: .custom, name: L("自定义服务"), base: nil, site: nil,
-        textModels: [], voiceModels: [], voices: [], clones: false, hearsAudio: false, spacing: 0.1)
+        textModels: [], voiceModels: [], voices: [], hearModels: [], clones: false, hearsAudio: false, spacing: 0.1)
 
-    static let all: [AIProvider] = [.ling, .openrouter, .zenmux, .openai, .custom]
+    static let all: [AIProvider] = [.ling, .stepfun, .openrouter, .zenmux, .openai, .custom]
 
     static func named(_ raw: String) -> AIProvider { all.first { $0.id.rawValue == raw } ?? .ling }
 
@@ -159,8 +184,8 @@ struct AIConfig: Equatable {
     var notesBadAddress = false
 
     var hasVoices: Bool { voiceModel != nil && voiceBase != nil }
-    /// The meeting is recognized by the custom service instead of on this Mac.
-    var transcribes: Bool { provider.id == .custom && hearModel != nil && hearBase != nil }
+    /// The meeting is recognized by the AI service instead of on this Mac (custom or StepFun Plan).
+    var transcribes: Bool { (provider.id == .custom || provider.hasHearing) && hearModel != nil && hearBase != nil }
 
     /// Notes go somewhere translation doesn't: they get their own check, result and start gate.
     var notesApart: Bool { provider.id == .custom && (notesModel != nil || notesBase != nil || notesOwnService) }
@@ -199,6 +224,9 @@ struct AIConfig: Equatable {
         case .openai:
             body["max_completion_tokens"] = maxTokens
             body["reasoning_effort"] = "none"
+        case .stepfun:
+            body["max_tokens"] = maxTokens
+            body["temperature"] = 0.2
         case .custom:
             body["max_tokens"] = maxTokens
             body["temperature"] = 0.2

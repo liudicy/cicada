@@ -51,6 +51,9 @@
 "更快、更省" = "Faster, cheaper";
 "女" = "Female";
 "男" = "Male";
+"快、够用" = "Fast, good enough";
+"效果最好" = "Best quality";
+"稳定、省" = "Steady, cheaper";
 "和 Ling 同款" = "Same as Ling";
 "中文好" = "Great at Chinese";
 "效果和价格最均衡" = "Best balance of quality and price";
@@ -93,6 +96,8 @@
 "换用 Ling 才有" = "Switch to Ling to use";
 "语音识别" = "Speech recognition";
 "识别和翻译一步完成" = "Transcribed and translated in one step";
+"会议的声音会发给 %@ 识别；连不上时用本机" = "Meeting audio goes to %@; falls back to this Mac if unreachable";
+"更快，不花钱，声音不出这台 Mac" = "Faster, free, and audio never leaves this Mac";
 "云端校对" = "Cloud proofread";
 "整句再请云端识别一遍，记录更准" = "Each sentence is re-recognized in the cloud for a more accurate record";
 "更快，不花钱" = "Faster, and free";
@@ -103,8 +108,12 @@
 "纪要和整句翻译" = "Notes and sentence translation";
 "声音模型" = "Voice model";
 "同传念给对方" = "Speaks to the room when interpreting";
+"语音识别模型" = "Recognition model";
+"把会议声音转成文字" = "Turns meeting audio into text";
 "一小时会议约 ¥0.15–1（目前优惠价）。说话的声音分段发给 Ling 识别和翻译；会议录音和文字记录只存在这台 Mac 上。" = "Roughly ¥0.15–1 for an hour-long meeting at current promotional pricing. Speech is sent to Ling in short segments for transcription and translation; recordings and transcripts stay on this Mac.";
 "一小时会议约 ¥0.15–1（目前优惠价）。发出去的只有文字（用你自己的声音时还有那段录音），语音识别留在本机。" = "About ¥0.15–1 per hour of meeting (current discount pricing). Only text is sent (plus your voice sample if you use your own voice); speech recognition stays on this Mac.";
+"按 Step Plan 套餐额度计费。会议的声音和文字会发给 StepFun；录音和文字记录只存在这台 Mac 上。" = "Uses your Step Plan quota. Meeting audio and text go to StepFun; recordings and transcripts stay on this Mac.";
+"按 Step Plan 套餐额度计费。发出去的只有文字，语音识别留在本机。" = "Uses your Step Plan quota. Only text leaves this Mac; speech recognition stays on device.";
 "跑在你自己的机器上，不按量计费。" = "Runs on your own machine, with no usage charges. ";
 "费用以这个服务为准。" = "Charges are set by this service. ";
 "会议的语音和文字只发给 %@，不经过 Google 等外部服务。" = "Meeting audio and text go only to %@, never through Google or other outside services.";
@@ -162,7 +171,6 @@
 "例如 vivian" = "e.g. vivian";
 "自建服务" = "Your service";
 "会议的声音会发到 %@；连不上时用本机" = "Meeting audio goes to %@; this Mac takes over if it can't be reached";
-"更快，不花钱，声音不出这台 Mac" = "Faster, free, and audio never leaves this Mac";
 "需支持 /audio/transcriptions，例如 Qwen3-ASR、Whisper。下一场会议起生效。" = "Needs /audio/transcriptions, e.g. Qwen3-ASR or Whisper. Takes effect from the next meeting.";
 "填上模型才会用它识别。" = "Add a model to recognize with it.";
 "例如 qwen3-asr" = "e.g. qwen3-asr";
@@ -187,7 +195,8 @@
 "没有 key 时用本机声音" = "Uses the Mac's voice without a key";
 "没填声音模型，用本机声音" = "No voice model set; using on-device voice";
 "%@ 暂不能出声音，用本机声音" = "%@ doesn't support voice yet; using on-device voice";
-"每句说完后，把这句的声音发给云端模型再识别一遍，用更准的文字替换记录里的原文并重译；实时字幕仍是本机识别。" = "After each sentence, its audio is sent to a cloud model to be recognized again; the more accurate text replaces the original in the record and is retranslated. Live captions still use on-device recognition.";
+"每句说完后用云端模型再识别一遍并重译，实时字幕仍走本机" = "Re-recognizes and retranslates each finished sentence in the cloud; live subtitles stay on device";
+"实时字幕走本机，每句说完用 %@（%@）校对记录；共用上方 key" = "Live subtitles stay on device; each finished sentence is proofread with %@ (%@) using the key above";
 "去小米 MiMo 开放平台领 key ↗" = "Get a key from the Xiaomi MiMo platform ↗";
 "接口地址" = "Endpoint";
 "保存" = "Save";
@@ -1345,6 +1354,9 @@
 "显示原文件" = "Show Original File";
 "在 Finder 中显示" = "Show in Finder";
 "恢复自动标题" = "Restore Automatic Title";
+"云端校对（保留时间轴与说话人）" = "Cloud proofread (keep timestamps & speakers)";
+"用本机引擎重转" = "Re-transcribe on this Mac";
+"用云端 ASR 引擎重转" = "Re-transcribe with cloud ASR";
 "正在听，说话的内容会出现在这里" = "Listening; what's said will appear here";
 "转出的文字会陆续出现在这里" = "The transcript will appear here as it's made";
 "还没有文字记录" = "No transcript yet";
@@ -1353,12 +1365,11 @@
 "打开会议或视频，开始听后，每一场都会存在这里。" = "Open a meeting or a video and start listening: each one is kept here.";
 "先听一段示例" = "Try a sample first";
 "转完后生成" = "After transcribing";
-"把每句话的录音发给云端识别，用更准的文字替换记录并重译" = "Send each sentence's audio to the cloud, replace the record with more accurate text and retranslate";
 "删除录音文件，文字记录和纪要保留" = "Delete the recording file; the transcript and notes stay";
 "用当前文字记录重新生成纪要" = "Regenerate the notes from the current transcript";
 "收起原话" = "Hide original";
 "在纪要旁显示原话" = "Show the original beside the notes";
-"用保存的录音重新识别，替换现在的文字记录和纪要；旧记录会先备份" = "Recognize the saved recording again and replace the transcript and notes; the old record is backed up first";
+"用保存的录音重新识别或云端校对；整场重转会先备份旧记录" = "Re-transcribe or proofread from the saved recording; full re-transcribe backs up the current transcript first";
 "云端校对中 %lld/%lld" = "Cloud proofreading %lld/%lld";
 "正在整理纪要…" = "Writing notes…";
 "分享…" = "Share…";

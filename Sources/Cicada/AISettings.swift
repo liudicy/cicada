@@ -23,8 +23,20 @@ struct AISettingsView: View {
 
     private var provider: AIProvider { settings.provider }
     private var name: String { provider.name }
-    /// Cloud speech proofreading runs when it is on and has its own key.
-    private var asrOn: Bool { settings.cloudASREnabled && asrKey != nil }
+    /// Cloud speech proofreading runs when on-device recognition is active and a proofreading engine is ready.
+    private var asrOn: Bool {
+        settings.cloudASREnabled && !settings.aiConfig.transcribes
+            && ((ling.usable && settings.serviceHearConfig != nil) || asrKey != nil)
+    }
+
+    /// Short summary of the active models shown beside 自己选模型 so bindings are visible at a glance.
+    private var boundModelsSummary: String {
+        let c = settings.aiConfig
+        var parts = [c.textModel]
+        if let v = c.voiceModel, !v.isEmpty { parts.append(v) }
+        if let h = c.hearModel, !h.isEmpty { parts.append(h) }
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
 
     @State private var open: Set<String> = []
 
@@ -40,16 +52,23 @@ struct AISettingsView: View {
                 .padding(.top, 4)
             SettingsCard { usage }
             Button { withAnimation(.easeOut(duration: 0.15)) { model.aiModelsOpen.toggle() } } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Text("自己选模型")
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
                         .rotationEffect(.degrees(model.aiModelsOpen ? 90 : 0))
+                    Spacer(minLength: 8)
+                    if !model.aiModelsOpen, !boundModelsSummary.isEmpty {
+                        Text(boundModelsSummary)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Palette.tertiary)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
                 }
                 .font(.system(size: 13)).foregroundStyle(Palette.secondary).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             if model.aiModelsOpen { SettingsCard { models } }
-            if !Recognition.cloudOnly {
+            if !Recognition.cloudOnly, !settings.aiConfig.transcribes {
                 Text("语音识别校对").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
                     .padding(.top, 4)
                 cloudASRCard
@@ -87,7 +106,7 @@ struct AISettingsView: View {
                         .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Palette.secondary)
                 }
             }
-            if !Recognition.cloudOnly {
+            if !Recognition.cloudOnly, !settings.aiConfig.transcribes {
                 Text("语音识别校对").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
                     .padding(.top, 4)
                 cloudASRCard
@@ -765,11 +784,20 @@ struct AISettingsView: View {
             usageRow(L("你自己的声音"), tag: L("只有 Ling"), style: .ling, note: L("换用 Ling 才有"))
         }
         if Recognition.cloudOnly {
-            if provider.hearsAudio {
+            if provider.hearsAudio || provider.hasHearing {
                 usageRow(L("语音识别"), tag: on ? uses : ling.hasKey ? L("暂不可用") : L("需要 key"), style: on ? .ok : .off,
-                         note: on ? L("识别和翻译一步完成") : later, divider: false)
+                         note: on ? (provider.hearsAudio ? L("识别和翻译一步完成") : (settings.aiConfig.hearModel ?? "")) : later, divider: false)
             } else {
                 usageRow(L("语音识别"), tag: L("只有 Ling"), style: .ling, note: L("换用 Ling 才有"), divider: false)
+            }
+        } else if provider.id == .stepfun, provider.hasHearing {
+            SettingsRow(title: L("语音识别"),
+                        detail: settings.stepfunRecognize ? L("会议的声音会发给 \(name) 识别；连不上时用本机") : L("更快，不花钱，声音不出这台 Mac"),
+                        divider: false) {
+                Segments(options: [("mac", L("本机")), ("cloud", name)], value: settings.stepfunRecognize ? "cloud" : "mac") {
+                    settings.stepfunRecognize = $0 == "cloud"
+                    model.applyAIService()
+                }
             }
         } else {
             usageRow(L("语音识别"), tag: asrOn ? L("云端校对") : L("本机"), style: asrOn ? .ok : .off,
@@ -812,16 +840,25 @@ struct AISettingsView: View {
                 }
             }
         default:
-            SettingsRow(title: L("文字模型"), detail: L("纪要和整句翻译"), divider: provider.hasVoices) {
+            SettingsRow(title: L("文字模型"), detail: L("纪要和整句翻译"), divider: provider.hasVoices || provider.hasHearing) {
                 ModelMenu(value: settings.textModel, recommended: provider.textModels, catalog: ling.catalog) {
                     settings.aiModels[provider.id.rawValue] = $0
                     model.applyAIService()
                 }
             }
             if provider.hasVoices {
-                SettingsRow(title: L("声音模型"), detail: L("同传念给对方"), divider: false) {
+                SettingsRow(title: L("声音模型"), detail: L("同传念给对方"), divider: provider.hasHearing) {
                     ModelMenu(value: settings.aiConfig.voiceModel ?? "", recommended: provider.voiceModels, catalog: []) {
                         settings.aiVoiceModels[provider.id.rawValue] = $0
+                        model.applyAIService()
+                    }
+                }
+            }
+            if provider.hasHearing {
+                SettingsRow(title: L("语音识别模型"), detail: L("把会议声音转成文字"), divider: false) {
+                    ModelMenu(value: settings.aiHearModels[provider.id.rawValue] ?? provider.hearModels.first?.id ?? "",
+                              recommended: provider.hearModels, catalog: []) {
+                        settings.aiHearModels[provider.id.rawValue] = $0
                         model.applyAIService()
                     }
                 }
@@ -831,59 +868,66 @@ struct AISettingsView: View {
 
     // MARK: Cloud speech proofreading
 
-    /// Fork addition: after each sentence finishes, its audio is re-recognized by a cloud model
-    /// (preset: Xiaomi MiMo) and the more accurate text replaces the on-device transcript.
+    /// Fork addition: after each sentence finishes on-device, its audio is re-recognized by a cloud
+    /// model and the more accurate text replaces the transcript. Reuses the active AI service's ASR
+    /// when it has one (e.g. StepFun Plan); otherwise configures a standalone endpoint (preset: MiMo).
     private var cloudASRCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Text(L("云端校对")).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
-                Spacer()
-                Toggle("", isOn: $settings.cloudASREnabled).labelsHidden().toggleStyle(.switch)
-            }
-            Text("每句说完后，把这句的声音发给云端模型再识别一遍，用更准的文字替换记录里的原文并重译；实时字幕仍是本机识别。")
-                .font(.system(size: 12)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            if settings.cloudASREnabled {
-                if let key = asrKey, !asrEditing {
-                    HStack(spacing: 8) {
-                        Text(AIKey.masked(key)).font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink)
-                            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.line, lineWidth: 1))
-                        SoftButton(L("更换")) { asrDraft = ""; asrEditing = true }
-                        Button("移除") { model.cloudASR.removeKey(); asrKey = nil }
-                            .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Palette.secondary)
-                    }
-                } else {
-                    HStack(spacing: 8) {
-                        SecureField("API key", text: $asrDraft)
-                            .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced))
-                            .padding(.horizontal, 12).frame(height: 36)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.ink.opacity(0.6), lineWidth: 1))
-                        SoftButton(L("保存"), dark: true) {
-                            model.cloudASR.setKey(asrDraft)
-                            asrDraft = ""
-                            asrEditing = false
-                            asrKey = model.cloudASR.key
-                        }
-                        if asrEditing { SoftButton(L("取消")) { asrEditing = false } }
-                    }
-                    Button("去小米 MiMo 开放平台领 key ↗") {
-                        if let url = URL(string: "https://platform.xiaomimimo.com") { NSWorkspace.shared.open(url) }
-                    }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Palette.secondary)
+        SettingsCard {
+            if let hear = settings.serviceHearConfig {
+                SettingsRow(title: L("云端校对"),
+                            detail: L("实时字幕走本机，每句说完用 \(hear.name)（\(hear.model)）校对记录；共用上方 key"),
+                            divider: false) {
+                    Toggle("", isOn: $settings.cloudASREnabled).labelsHidden().toggleStyle(.switch)
                 }
-                asrField(L("接口地址"), text: $settings.cloudASRBase)
-                asrField(L("模型"), text: $settings.cloudASRModel)
-                HStack(spacing: 6) {
-                    Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
-                    Text("只发句子的录音（小米 MiMo 约 ¥0.5/小时）。key 只存在这台 Mac 上。")
-                        .font(.system(size: 11)).foregroundStyle(Palette.tertiary).fixedSize(horizontal: false, vertical: true)
+            } else {
+                SettingsRow(title: L("云端校对"),
+                            detail: L("每句说完后用云端模型再识别一遍并重译，实时字幕仍走本机"),
+                            divider: settings.cloudASREnabled) {
+                    Toggle("", isOn: $settings.cloudASREnabled).labelsHidden().toggleStyle(.switch)
+                }
+                if settings.cloudASREnabled {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let key = asrKey, !asrEditing {
+                            HStack(spacing: 8) {
+                                Text(AIKey.masked(key)).font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink)
+                                    .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                                    .background(RoundedRectangle(cornerRadius: 9).fill(Palette.ground))
+                                SoftButton(L("更换")) { asrDraft = ""; asrEditing = true }
+                                Button("移除") { model.cloudASR.removeKey(); asrKey = nil }
+                                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                            }
+                        } else {
+                            HStack(spacing: 8) {
+                                SecureField("API key", text: $asrDraft)
+                                    .textFieldStyle(.plain).font(.system(size: 13, design: .monospaced))
+                                    .padding(.horizontal, 12).frame(height: 34)
+                                    .background(RoundedRectangle(cornerRadius: 9).fill(Color.white))
+                                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Palette.ink.opacity(0.6), lineWidth: 1))
+                                SoftButton(L("保存"), dark: true) {
+                                    model.cloudASR.setKey(asrDraft)
+                                    asrDraft = ""
+                                    asrEditing = false
+                                    asrKey = model.cloudASR.key
+                                }
+                                if asrEditing { SoftButton(L("取消")) { asrEditing = false } }
+                            }
+                            Button("去小米 MiMo 开放平台领 key ↗") {
+                                if let url = URL(string: "https://platform.xiaomimimo.com") { NSWorkspace.shared.open(url) }
+                            }
+                            .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                        }
+                        asrField(L("接口地址"), text: $settings.cloudASRBase)
+                        asrField(L("模型"), text: $settings.cloudASRModel)
+                        HStack(spacing: 6) {
+                            Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(Palette.tertiary)
+                            Text("只发句子的录音（小米 MiMo 约 ¥0.5/小时）。key 只存在这台 Mac 上。")
+                                .font(.system(size: 11)).foregroundStyle(Palette.tertiary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(16)
                 }
             }
         }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Palette.raised))
         .onAppear { asrKey = model.cloudASR.key }
     }
 
@@ -905,6 +949,10 @@ struct AISettingsView: View {
         }
         switch provider.id {
         case .ling: return L("一小时会议约 ¥0.15–1（目前优惠价）。发出去的只有文字（用你自己的声音时还有那段录音），语音识别留在本机。")
+        case .stepfun:
+            return settings.aiConfig.transcribes
+                ? L("按 Step Plan 套餐额度计费。会议的声音和文字会发给 StepFun；录音和文字记录只存在这台 Mac 上。")
+                : L("按 Step Plan 套餐额度计费。发出去的只有文字，语音识别留在本机。")
         case .custom:
             let nearby = settings.aiConfig.base.map { AIProvider.isNearby($0.absoluteString) } ?? false
             let cost = nearby ? L("跑在你自己的机器上，不按量计费。") : L("费用以这个服务为准。")

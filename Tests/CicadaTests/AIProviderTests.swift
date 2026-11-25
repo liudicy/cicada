@@ -79,7 +79,7 @@ struct AIProviderTests {
 
     @Test func onlyLingClonesAndHearsAudio() {
         for p in AIProvider.all { #expect(p.clones == (p.id == .ling) && p.hearsAudio == (p.id == .ling)) }
-        #expect(!AIProvider.openai.hasVoices && AIProvider.zenmux.hasVoices && AIProvider.openrouter.hasVoices)
+        #expect(!AIProvider.openai.hasVoices && AIProvider.zenmux.hasVoices && AIProvider.openrouter.hasVoices && AIProvider.stepfun.hasVoices)
     }
 
     @Test func wavHeaderIsStripped() {

@@ -226,15 +226,24 @@ struct VoiceSection: View {
             }
             Spacer(minLength: 6)
             if has {
-                Button { if ling.clones { model.setVoice("clone", for: language) } } label: { Radio(on: selected) }
-                    .buttonStyle(.plain).disabled(!ling.clones)
-                    .accessibilityLabel(L("用我自己的声音"))
+                Button { if ling.clones { model.setVoice("clone", for: language) } } label: {
+                    Radio(on: selected)
+                        .padding(6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).disabled(!ling.clones)
+                .padding(-6)
+                .accessibilityLabel(L("用我自己的声音"))
             } else {
                 SoftButton(L("录制")) { recording = true }.disabled(!ling.clones)
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(selected ? Palette.accentWash : Palette.raised)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if has, ling.clones { model.setVoice("clone", for: language) }
+        }
         }
     }
 
@@ -258,6 +267,7 @@ struct Radio: View {
             if on { Circle().fill(Palette.accent).frame(width: 8, height: 8) }
         }
         .frame(width: 16, height: 16)
+        .contentShape(Circle())
     }
 }
 
@@ -287,6 +297,7 @@ struct VoiceCloneSheet: View {
         }
         .padding(28)
         .frame(width: 560)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color.white)
         .onDisappear { recorder.cancel(); player?.stop() }
     }
@@ -299,9 +310,11 @@ struct VoiceCloneSheet: View {
                 Text("录制你的声音").font(.system(size: 18, weight: .bold))
                 Text("请用平时开会的自然语气朗读以下段落，约 15 秒，在安静环境下录制效果最佳。")
                     .font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Text(VoiceReference.passage(for: ownLocale))
                 .font(.system(size: 16)).lineSpacing(7)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 20).padding(.vertical, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 14).fill(Palette.raised))

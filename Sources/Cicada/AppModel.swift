@@ -351,13 +351,20 @@ final class AppModel: ObservableObject {
         translator.onFixes = { [weak self] text, edits in self?.fixes.received(text, edits) }
         fixes.onLineFixed = { [weak self] id, line in self?.lineFixed(id, line) }
         fixes.onChange = { [weak self] in self?.objectWillChange.send() }
-        // An Intel Mac's imports: heard at a lower priority than the live meeting.
+        // Imports & 重新转写 (cloud engine): use the active AI service's ASR/Ming, or fall back to
+        // the standalone cloud ASR (e.g. Xiaomi MiMo) when explicitly asked to re-transcribe in the cloud.
         Recognition.cloudHear = { [weak self] wav, seconds, locale in
             guard let self else { return nil }
             let hint = sourceLanguages.first { $0.locale == locale }?.code
             do {
-                return try await self.translator.hear(wav: wav, seconds: seconds, target: self.settings.resolvedTarget(source: hint),
-                                                      hint: hint, priority: .notes)
+                if self.ling.transcribes || self.ling.hearsAudio {
+                    return try await self.translator.hear(wav: wav, seconds: seconds, target: self.settings.resolvedTarget(source: hint),
+                                                          hint: hint, priority: .notes)
+                } else if self.cloudASR.hasKey {
+                    let text = try await self.cloudASR.transcribe(wav: wav, language: hint ?? "auto")
+                    return CloudHeard(lang: hint ?? "auto", original: text, translation: nil)
+                }
+                return nil
             } catch {
                 // A stretch not heard is not silence: the import stays unfinished and offers 重新转写.
                 debugLog("import: hear failed: \(error)")
@@ -1302,7 +1309,7 @@ final class AppModel: ObservableObject {
         if id.hasPrefix("cloud:") {
             let voice = String(id.dropFirst("cloud:".count))
             return .stream { [weak self] text in
-                self?.ling.speech(text, voice: voice)
+                self?.ling.speech(text, voice: voice, language: language)
                     ?? AsyncThrowingStream { $0.finish(throwing: LingClient.Failure.noKey) }
             }
         }
@@ -1891,13 +1898,38 @@ final class AppModel: ObservableObject {
             voicePending.insert(id)
             speakers.tag(lineID: id, samples: samples) { [weak self] in self?.voicePending.remove(id) }
         }
-        if settings.cloudASREnabled, cloudASR.hasKey, seg.voiceSamples != nil,
+        // Skip per-sentence cloud proofreading when the meeting is already recognized in the cloud
+        // (e.g. StepFun Plan or custom ASR) — no duplicate calls or overwriting cloud with cloud.
+        if settings.cloudASREnabled, !ling.transcribes, hasProofreadEngine, seg.voiceSamples != nil,
            seg.text.filter(\.isLetter).count >= 2 {
             proofread(lineID: id, seg: seg)
-        } else if settings.cloudASREnabled {
-            debugLog("asr: skip \(id) key=\(cloudASR.hasKey) samples=\(seg.voiceSamples?.count ?? -1)")
+        } else if settings.cloudASREnabled, !ling.transcribes {
+            debugLog("asr: skip \(id) engine=\(hasProofreadEngine) samples=\(seg.voiceSamples?.count ?? -1)")
         }
         heardWords()
+    }
+
+    /// True when either the active AI service provides a dedicated ASR model (reusing its key)
+    /// or the standalone cloud proofreading key (e.g. Xiaomi MiMo) is configured.
+    var hasProofreadEngine: Bool {
+        (ling.usable && settings.serviceHearConfig != nil) || cloudASR.hasKey
+    }
+
+    /// True when 重新转写 can offer a cloud ASR engine (active service ASR, Ming, or standalone MiMo).
+    var hasCloudTranscribeEngine: Bool {
+        ling.transcribes || ling.hearsAudio || cloudASR.hasKey
+    }
+
+    /// Unified cloud proofreading call: reuses the active AI service's ASR when available (e.g.
+    /// StepFun Plan or custom ASR), otherwise falls back to the standalone `CloudASRClient` (MiMo).
+    private func proofreadAudio(samples: [Float], language: String) async throws -> String {
+        if ling.usable, let hear = settings.serviceHearConfig {
+            let wav = CloudASRClient.wav(samples)
+            let result = try await ling.transcribe(wav, language: language, timeout: 30,
+                                                   override: (hear.base, hear.model))
+            return result.text
+        }
+        return try await cloudASR.transcribe(samples: samples, language: language)
     }
 
     /// The record gets the cloud's more accurate transcript once it answers; the live subtitles
@@ -1909,7 +1941,7 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             let text: String
             do {
-                let heard = try await cloudASR.transcribe(samples: samples, language: seg.sourceCode)
+                let heard = try await proofreadAudio(samples: samples, language: seg.sourceCode)
                 text = CloudASRClient.stripInventedEnumeration(heard, original: original)
                 contentLog("asr: \(lineID) heard “\(heard)”")
             } catch {
@@ -1937,10 +1969,11 @@ final class AppModel: ObservableObject {
     /// Progress of a retroactive cloud proofread (nil when idle): meeting id, lines done, total.
     @Published var proofreading: (id: String, done: Int, total: Int)?
 
-    /// A recorded meeting can be proofread afterwards: cloud recognition on, a key, and the
-    /// recording of what was heard (system.m4a) still on disk.
+    /// A recorded meeting can be proofread afterwards: either the active AI service provides a
+    /// dedicated ASR model or standalone cloud proofreading is enabled with a key, and system.m4a exists.
     func canProofread(_ s: Session) -> Bool {
-        settings.cloudASREnabled && cloudASR.hasKey && s.id != store.liveID && proofreading == nil
+        let ready = (ling.usable && settings.serviceHearConfig != nil) || (settings.cloudASREnabled && cloudASR.hasKey)
+        return ready && s.id != store.liveID && proofreading == nil
             && FileManager.default.fileExists(atPath: store.systemAudioURL(s.id).path)
             && s.lines.contains { $0.speaker == "them" }
     }
@@ -1981,7 +2014,7 @@ final class AppModel: ObservableObject {
                       !samples.isEmpty else { continue }
                 let text: String
                 do {
-                    let heard = try await cloudASR.transcribe(samples: samples, language: line.srcLang)
+                    let heard = try await proofreadAudio(samples: samples, language: line.srcLang)
                     text = CloudASRClient.stripInventedEnumeration(heard, original: line.src)
                 } catch {
                     debugLog("asr: \(line.id) failed: \(error)")

@@ -36,4 +36,43 @@ import Testing
         // Nothing useful after stripping: keep the cloud text rather than blank the line.
         #expect(CloudASRClient.stripInventedEnumeration("10. ", original: "hello") == "10. ")
     }
+
+    @Test func stepFunASRParsesDoneAndDeltaEvents() {
+        let sse = """
+        event: transcript.text.delta
+        data: {"type":"transcript.text.delta","delta":"你好"}
+
+        event: transcript.text.done
+        data: {"type":"transcript.text.done","text":"你好，世界。"}
+
+        """
+        #expect(LingClient.parseStepFunASR(Data(sse.utf8)) == "你好，世界。")
+
+        let deltaOnly = """
+        data: {"type":"transcript.text.delta","delta":"Hello "}
+        data: {"type":"transcript.text.delta","delta":"world"}
+        """
+        #expect(LingClient.parseStepFunASR(Data(deltaOnly.utf8)) == "Hello world")
+
+        let plain = #"{"text":"直接返回"}"#
+        #expect(LingClient.parseStepFunASR(Data(plain.utf8)) == "直接返回")
+    }
+
+    @Test func stepFunPresetConfiguresAllCapabilities() {
+        let p = AIProvider.stepfun
+        #expect(p.base?.absoluteString == "https://api.stepfun.com/step_plan/v1/")
+        #expect(p.hasVoices)
+        #expect(!p.hasHearing)
+        #expect(!p.clones)
+        #expect(!p.voices.isEmpty)
+        #expect(LingClient.stepFunLanguage("zh-CN") == "zh")
+        #expect(LingClient.stepFunLanguage("Chinese") == "zh")
+        #expect(LingClient.stepFunLanguage("English") == "en")
+        #expect(LingClient.stepFunLanguage("Japanese") == "ja")
+        #expect(LingClient.stepFunLanguage("de-DE") == nil)
+        let cfg = AIConfig(provider: p, base: p.base, textModel: "step-3.5-flash",
+                           voiceModel: "stepaudio-3-tts", voiceBase: p.base)
+        #expect(cfg.hasVoices)
+        #expect(!cfg.transcribes)
+    }
 }

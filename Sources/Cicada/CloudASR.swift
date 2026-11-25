@@ -39,11 +39,16 @@ final class CloudASRClient: ObservableObject {
     /// The sentence's audio (16 kHz mono) and the on-device language guess; returns the cloud
     /// transcript, or throws (the caller keeps the on-device text).
     func transcribe(samples: [Float], language: String) async throws -> String {
+        try await transcribe(wav: Self.wav(samples), language: language)
+    }
+
+    /// Same as `transcribe(samples:language:)`, accepting an already-encoded 16 kHz mono WAV
+    /// (used when `FileImporter` re-transcribes a saved meeting through the cloud ASR engine).
+    func transcribe(wav: Data, language: String) async throws -> String {
         guard let key else { throw Failure.noKey }
         guard !running else { throw Failure.busy }
         running = true
         defer { running = false }
-        let wav = Self.wav(samples)
         let body: [String: Any] = [
             "model": model(),
             "messages": [[
@@ -94,7 +99,7 @@ final class CloudASRClient: ObservableObject {
         }
         // Nothing heard (a quiet slice, a breath): keep the on-device text, it is not an error.
         guard !text.isEmpty else { throw Failure.parse }
-        debugLog("asr: ok \(Int(Date().timeIntervalSince(started) * 1000)) ms, \(samples.count / 16) ms of audio")
+        debugLog("asr: ok \(Int(Date().timeIntervalSince(started) * 1000)) ms, \(max(0, wav.count - 44) / 32) ms of audio")
         return text
     }
 

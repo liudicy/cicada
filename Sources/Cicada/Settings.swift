@@ -160,6 +160,14 @@ final class AppSettings: ObservableObject {
     @Published var aiCustomRecognize: Bool {
         didSet { save() }
     }
+    /// Per-provider speech recognition model (e.g. StepFun Plan's `stepaudio-3-asr-max`).
+    @Published var aiHearModels: [String: String] {
+        didSet { save() }
+    }
+    /// Whether StepFun Plan also handles speech recognition (on by default so one key covers all).
+    @Published var stepfunRecognize: Bool {
+        didSet { save() }
+    }
     /// The custom service's notes: 另一个服务 (its own address, empty: the same one, and its own key
     /// in the `custom-notes` key file). Off keeps the address, so switching back and forth loses
     /// nothing. The notes model is `aiModels["custom.notes"]` (empty: the translation model).
@@ -183,6 +191,11 @@ final class AppSettings: ObservableObject {
         switch p.id {
         case .ling:
             return AIConfig(provider: p, base: p.base, textModel: aiModel, voiceModel: p.voiceModels.first?.id, voiceBase: p.base)
+        case .stepfun:
+            return AIConfig(provider: p, base: p.base,
+                            textModel: aiModels[p.id.rawValue] ?? p.textModels.first?.id ?? "",
+                            voiceModel: aiVoiceModels[p.id.rawValue] ?? p.voiceModels.first?.id,
+                            voiceBase: p.base)
         case .custom:
             let base = AIProvider.customBase(aiCustomBase)
             let voice = (aiVoiceModels["custom"] ?? "").trimmingCharacters(in: .whitespaces)
@@ -209,6 +222,26 @@ final class AppSettings: ObservableObject {
 
     /// The text model in use, for display.
     var textModel: String { aiConfig.textModel }
+
+    /// The active AI service's dedicated ASR endpoint (StepFun Plan or a custom service with a
+    /// hear model configured), even when live listening is set to on-device — so cloud proofreading
+    /// can reuse the same service and key instead of requiring a second key.
+    var serviceHearConfig: (base: URL, model: String, name: String)? {
+        let p = provider
+        switch p.id {
+        case .stepfun:
+            guard let base = p.base,
+                  let model = aiHearModels[p.id.rawValue] ?? p.hearModels.first?.id, !model.isEmpty else { return nil }
+            return (base, model, p.name)
+        case .custom:
+            let model = aiCustomHearModel.trimmingCharacters(in: .whitespaces)
+            let base = aiCustomHearBase.isEmpty ? AIProvider.customBase(aiCustomBase) : AIProvider.customBase(aiCustomHearBase)
+            guard !model.isEmpty, let base else { return nil }
+            return (base, model, base.host ?? p.name)
+        default:
+            return nil
+        }
+    }
 
     /// Keep the icon in the Dock while Cicada runs. Off: menu bar only, the icon showing just while
     /// the main, settings or onboarding window is open.
@@ -334,6 +367,8 @@ final class AppSettings: ObservableObject {
         aiCustomHearModel = defaults.string(forKey: "aiCustomHearModel") ?? ""
         aiCustomHearBase = defaults.string(forKey: "aiCustomHearBase") ?? ""
         aiCustomRecognize = defaults.bool(forKey: "aiCustomRecognize")
+        aiHearModels = defaults.dictionary(forKey: "aiHearModels") as? [String: String] ?? [:]
+        stepfunRecognize = defaults.object(forKey: "stepfunRecognize") as? Bool ?? true
         aiCustomOnly = defaults.bool(forKey: "aiCustomOnly")
         aiCustomNotesOwn = defaults.bool(forKey: "aiCustomNotesOwn")
         aiCustomNotesBase = defaults.string(forKey: "aiCustomNotesBase") ?? ""
@@ -402,6 +437,8 @@ final class AppSettings: ObservableObject {
         defaults.set(aiCustomHearModel, forKey: "aiCustomHearModel")
         defaults.set(aiCustomHearBase, forKey: "aiCustomHearBase")
         defaults.set(aiCustomRecognize, forKey: "aiCustomRecognize")
+        defaults.set(aiHearModels, forKey: "aiHearModels")
+        defaults.set(stepfunRecognize, forKey: "stepfunRecognize")
         defaults.set(aiCustomOnly, forKey: "aiCustomOnly")
         defaults.set(aiCustomNotesOwn, forKey: "aiCustomNotesOwn")
         defaults.set(aiCustomNotesBase, forKey: "aiCustomNotesBase")

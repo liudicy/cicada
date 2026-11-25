@@ -1111,11 +1111,7 @@ struct MainWindowView: View {
             }
             Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([store.folder(s.id)]) }
             if s.hasAudio, !live, !working(s) {
-                Menu("重新转写") {
-                    ForEach(sourceLanguages, id: \.locale) { lang in
-                        Button(lang.name) { importer.retry(s.id, lang: lang) }
-                    }
-                }
+                Menu("重新转写") { retranscribeMenuItems(s) }
             }
             if s.renamed ?? !s.title.hasPrefix("会议 "), s.notes?.title != nil {
                 Button("恢复自动标题") { store.rename(s.id, to: "") }
@@ -1154,7 +1150,7 @@ struct MainWindowView: View {
             VStack(spacing: 0) {
                 if s.lines.isEmpty {
                     ScrollView {
-                        header(s).frame(maxWidth: 680).padding(.horizontal, 44).padding(.vertical, 36)
+                        header(s).frame(maxWidth: 680).padding(.horizontal, 40).padding(.vertical, 36)
                             .frame(maxWidth: .infinity)
                     }
                         .overlay {
@@ -1166,7 +1162,7 @@ struct MainWindowView: View {
                 } else if tab == "notes", importer.status(of: s) == nil {
                     HStack(spacing: 0) {
                         SessionNotesView(model: model, engine: model.notes, ling: model.ling, session: s,
-                                         header: AnyView(header(s)), bar: { toTop in AnyView(pinnedBar(s, column: 600, inset: 44, toTop: toTop)) }) { t in
+                                         header: AnyView(header(s)), bar: { toTop in AnyView(pinnedBar(s, column: 680, inset: 40, toTop: toTop)) }) { t in
                             // Beside the notes, a topic's time scrolls the column; otherwise it opens the transcript.
                             if sideBySide { quoteJump = t } else { jumpTo = t; tab = "transcript" }
                         }
@@ -1261,12 +1257,14 @@ struct MainWindowView: View {
     }
 
     /// Text tabs, the transcript's language choice and 导出…, under the title: no toolbar band.
+    /// Fixed height so switching between 纪要 (plain buttons) and 文字记录 (Segments) never shifts the bar.
     private func tabsRow(_ s: Session) -> some View {
-        HStack(alignment: .center, spacing: 22) {
+        HStack(alignment: .center, spacing: 14) {
             tabs(s)
-            Spacer()
+            Spacer(minLength: 8)
             tools(s)
         }
+        .frame(height: 34)
     }
 
     /// Notes wait until an imported file is transcribed to the end.
@@ -1275,67 +1273,68 @@ struct MainWindowView: View {
     private func tabs(_ s: Session) -> some View {
         let importing = importer.status(of: s) != nil
         let active = activeTab(s)
-        return HStack(alignment: .center, spacing: 22) {
+        return HStack(alignment: .center, spacing: 18) {
             tabButton(L("纪要"), id: "notes", active: active, badge: importing ? L("转完后生成") : nil).disabled(importing)
             tabButton(L("文字记录"), id: "transcript", active: active, count: s.lines.count)
         }
     }
 
     /// The transcript's language choice (or 原话 beside the notes) and 导出….
-    private func tools(_ s: Session) -> some View {
+    /// `compact` (the scrolled pinned bar) omits the one-shot transcript actions so the title keeps room.
+    private func tools(_ s: Session, compact: Bool = false) -> some View {
         let active = activeTab(s)
-        return HStack(alignment: .center, spacing: 22) {
+        return HStack(alignment: .center, spacing: 14) {
             if active == "transcript" {
-                if let p = model.proofreading, p.id == s.id {
-                    HStack(spacing: 6) {
-                        Spinner()
-                        Text(L("云端校对中 \(p.done)/\(p.total)")).font(.system(size: 13)).foregroundStyle(Palette.secondary)
-                    }
-                } else if model.canProofread(s) {
-                    Button { model.proofreadSession(s.id) } label: {
+                if !compact {
+                    if let p = model.proofreading, p.id == s.id {
                         HStack(spacing: 5) {
-                            Image(systemName: "waveform.badge.magnifyingglass").font(.system(size: 12))
-                            Text(L("云端校对")).font(.system(size: 13))
+                            Spinner()
+                            Text(L("云端校对中 \(p.done)/\(p.total)")).font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                                .lineLimit(1)
                         }
-                        .foregroundStyle(Palette.secondary).contentShape(Rectangle())
+                        .fixedSize()
                     }
-                    .buttonStyle(.plain)
-                    .help(L("把每句话的录音发给云端识别，用更准的文字替换记录并重译"))
-                }
-                if s.hasAudio, s.id != store.liveID, model.proofreading?.id != s.id {
-                    Button { model.deleteAudio(s) } label: {
-                        Text(L("删除录音")).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
-                            .padding(.horizontal, 10).frame(height: 24)
-                            .background(Capsule().fill(Palette.error)).contentShape(Capsule())
+                    if s.hasAudio, s.id != store.liveID, model.proofreading?.id != s.id {
+                        Button { model.deleteAudio(s) } label: {
+                            Text(L("删除录音")).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                                .lineLimit(1)
+                                .padding(.horizontal, 10).frame(height: 24)
+                                .background(Capsule().fill(Palette.error)).contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .fixedSize()
+                        .help(L("删除录音文件，文字记录和纪要保留"))
                     }
-                    .buttonStyle(.plain)
-                    .help(L("删除录音文件，文字记录和纪要保留"))
                 }
                 Segments(options: [("both", L("双语")), ("src", L("原文")), ("dst", L("译文"))], value: view) { view = $0 }
             } else {
                 if model.notes.generatingID == s.id {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         Spinner()
-                        Text(L("正在整理纪要…")).font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                        Text(L("正在整理纪要…")).font(.system(size: 13)).foregroundStyle(Palette.secondary).lineLimit(1)
                     }
-                } else if model.canRewriteNotes(s) {
+                    .fixedSize()
+                } else if !compact, model.canRewriteNotes(s) {
                     Button { model.rewriteNotes(s.id) } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "arrow.clockwise").font(.system(size: 12))
-                            Text(L("重新整理")).font(.system(size: 13))
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .medium))
+                            Text(L("重新整理")).font(.system(size: 13)).lineLimit(1)
                         }
-                        .foregroundStyle(Palette.secondary).contentShape(Rectangle())
+                        .foregroundStyle(Palette.secondary)
+                        .fixedSize()
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help(L("用当前文字记录重新生成纪要"))
                 }
                 if wideEnough, !s.lines.isEmpty {
                     Button { withAnimation(.easeOut(duration: 0.2)) { showQuotes.toggle() } } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 4) {
                             Image(systemName: "sidebar.right").font(.system(size: 12))
-                            Text("原话").font(.system(size: 13))
+                            Text("原话").font(.system(size: 13)).lineLimit(1)
                         }
                         .foregroundStyle(showQuotes ? Palette.ink : Palette.secondary)
+                        .fixedSize()
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -1344,21 +1343,18 @@ struct MainWindowView: View {
             }
             // Not while the meeting is still going, nor before an import has its text.
             Button { sharing = s } label: {
-                Text("分享…").font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                Text("分享…").font(.system(size: 13)).foregroundStyle(Palette.secondary).lineLimit(1)
             }
             .buttonStyle(.plain)
+            .fixedSize()
             .disabled((s.lines.isEmpty && (s.notes?.isEmpty ?? true)) || store.liveID == s.id || importer.status(of: s) != nil)
             .sheet(item: $sharing) { shared in ShareSheet(session: shared) { sharing = nil } }
             if s.hasAudio, store.liveID != s.id, importer.status(of: s) == nil {
-                Menu {
-                    ForEach(sourceLanguages, id: \.locale) { lang in
-                        Button(lang.name) { importer.retry(s.id, lang: lang) }
-                    }
-                } label: {
+                Menu { retranscribeMenuItems(s) } label: {
                     Text("重新转写").font(.system(size: 13)).foregroundStyle(Palette.secondary)
                 }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                .help(L("用保存的录音重新识别，替换现在的文字记录和纪要；旧记录会先备份"))
+                .help(L("用保存的录音重新识别或云端校对；整场重转会先备份旧记录"))
             }
             Menu {
                 Button("复制全文") { model.export(s, kind: "copy") }
@@ -1373,6 +1369,30 @@ struct MainWindowView: View {
             }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
             .disabled(s.lines.isEmpty)
+        }
+    }
+
+    /// Unified 重新转写 menu: optional in-place cloud proofreading, plus full re-transcribe with
+    /// either the on-device Apple engine or the configured cloud ASR engine.
+    @ViewBuilder
+    private func retranscribeMenuItems(_ s: Session) -> some View {
+        if model.canProofread(s) {
+            Button("云端校对（保留时间轴与说话人）") { model.proofreadSession(s.id) }
+            Divider()
+        }
+        if !Recognition.cloudOnly {
+            Menu("用本机引擎重转") {
+                ForEach(sourceLanguages, id: \.locale) { lang in
+                    Button(lang.name) { importer.retry(s.id, lang: lang, engine: .local) }
+                }
+            }
+        }
+        if model.hasCloudTranscribeEngine {
+            Menu("用云端 ASR 引擎重转") {
+                ForEach(sourceLanguages, id: \.locale) { lang in
+                    Button(lang.name) { importer.retry(s.id, lang: lang, engine: .cloud) }
+                }
+            }
         }
     }
 
@@ -1410,7 +1430,7 @@ struct MainWindowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             Rectangle().fill(Self.hairline).frame(width: 1, height: 14)
             tabs(s).padding(.top, 6)
-            tools(s)
+            tools(s, compact: true)
         }
         .frame(maxWidth: column)
         .padding(.horizontal, inset).frame(height: 44)
@@ -1813,9 +1833,9 @@ struct SessionNotesView: View {
                     .background(RoundedRectangle(cornerRadius: 18).fill(Palette.raised))
                 }
             }
-            // A narrow measure and a tall top margin: the page reads as one quiet column.
-            .frame(maxWidth: 600, alignment: .leading)
-            .padding(.horizontal, 44).padding(.top, 52).padding(.bottom, 64)
+            // Match transcript()'s exact column geometry (680 / 40 / 36) so switching tabs never jumps.
+            .frame(maxWidth: 680, alignment: .leading)
+            .padding(.horizontal, 40).padding(.top, 36).padding(.bottom, 64)
             .frame(maxWidth: .infinity)
         }
         .coordinateSpace(name: PinnedHeader.space)
