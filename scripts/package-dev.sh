@@ -123,6 +123,6 @@ xattr -dr com.apple.quarantine "/Applications/Cicada MOD.app"
 EOF
 )
 gh release create "$TAG" --repo liudicy/cicada --prerelease \
-    --title "v$VERSION + fork 定制（Cicada MOD $FVER）" --notes "$NOTES" \
+    --title "v${VERSION} + fork 定制（Cicada MOD ${FVER}）" --notes "$NOTES" \
     "build/$NAME.dmg" "build/$NAME.zip" build/checksums-dev.txt
 echo "Published https://github.com/liudicy/cicada/releases/tag/$TAG"
