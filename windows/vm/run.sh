@@ -9,6 +9,9 @@ cd "$VM"
 share=/opt/homebrew/share/qemu
 
 install=()
+# The virtio drivers are only needed while installing: a VM without the ISO still boots.
+virtio=()
+[ -f virtio-win.iso ] && virtio=(-drive file=virtio-win.iso,media=cdrom,if=none,id=cd2,readonly=on -device usb-storage,drive=cd2)
 if [ ! -f disk.qcow2 ]; then
   qemu-img create -f qcow2 disk.qcow2 64G >/dev/null
   cp "$share/edk2-arm-vars.fd" vars.fd
@@ -30,7 +33,7 @@ qemu-system-aarch64 \
   -drive if=pflash,format=raw,file=vars.fd \
   -device nvme,drive=hd,serial=cicada,bootindex=1 -drive file=disk.qcow2,if=none,id=hd,discard=unmap \
   ${install[@]+"${install[@]}"} \
-  -drive file=virtio-win.iso,media=cdrom,if=none,id=cd2,readonly=on -device usb-storage,drive=cd2 \
+  ${virtio[@]+"${virtio[@]}"} \
   -device virtio-gpu-pci -device usb-kbd -device usb-tablet \
   -audiodev none,id=snd -device usb-audio,audiodev=snd \
   -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 \

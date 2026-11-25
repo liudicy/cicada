@@ -5,7 +5,9 @@
 #   guest.ps1 launch <exe> [args]        # start a program on the desktop without waiting
 #   guest.ps1 shot <out.png>             # screenshot taken inside Windows (what screen sharing sees)
 #   guest.ps1 click <x> <y>              # left click at physical pixel x,y
-#   guest.ps1 key <keys>                 # SendKeys to the foreground window, e.g. "hello{ENTER}"
+#   guest.ps1 move <x> <y>               # pointer to physical pixel x,y (hover)
+#   guest.ps1 wheel <x> <y> <notches>    # mouse wheel at x,y; negative notches scroll down
+#   guest.ps1 key <keys>                # SendKeys to the foreground window, e.g. "hello{ENTER}"
 #   guest.ps1 front                      # title and process of the foreground window
 #   guest.ps1 windows                    # visible top-level windows with their bounds
 #   guest.ps1 play <wav>                 # play a WAV from another process (as a meeting app would)
@@ -82,8 +84,17 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
   'click' {
     Desk "[W]::SetCursorPos($($Rest[0]), $($Rest[1])) | Out-Null; Start-Sleep -Milliseconds 100; [W]::mouse_event(2,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::mouse_event(4,0,0,0,[UIntPtr]::Zero); 'clicked'"
   }
+  'move' {
+    Desk "[W]::SetCursorPos($($Rest[0]), $($Rest[1])) | Out-Null; 'moved'"
+  }
+  'wheel' {
+    # One notch is 120; negative scrolls down. mouse_event takes it as a uint.
+    $notches = [int]$Rest[2]
+    $delta = if ($notches -lt 0) { 4294967296 - 120 } else { 120 }
+    Desk "[W]::SetCursorPos($($Rest[0]), $($Rest[1])) | Out-Null; Start-Sleep -Milliseconds 100; for (`$i = 0; `$i -lt $([Math]::Abs($notches)); `$i++) { [W]::mouse_event(0x0800,0,0,$delta,[UIntPtr]::Zero); Start-Sleep -Milliseconds 40 }; 'wheeled'"
+  }
   'key' {
-    $k = ($Rest -join ' ').Replace("'", "''")
+    $k =($Rest -join ' ').Replace("'", "''")
     Desk "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('$k'); 'sent'"
   }
   'front' {
@@ -114,5 +125,5 @@ $list
   'play' {
     Desk "(New-Object System.Media.SoundPlayer '$($Rest[0])').PlaySync(); 'played'" -timeout 300
   }
-  default { "usage: guest.ps1 desk|launch|shot|click|key|front|windows|play" }
+  default { "usage: guest.ps1 desk|launch|shot|click|move|wheel|key|front|windows|play" }
 }

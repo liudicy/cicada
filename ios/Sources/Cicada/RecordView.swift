@@ -10,6 +10,9 @@ struct RecordView: View {
     @EnvironmentObject var ling: LingClient
     @EnvironmentObject var notes: NotesEngine
     let session: Session
+    /// Opened from 搜索 (or the iPad's sidebar search): the transcript opens at the first line found,
+    /// every match marked, as the Mac's records (#33).
+    var searching = false
     @StateObject private var player = RecordPlayer()
     @State private var needsKey = false
     /// What's typed into the title; nil until it is touched, so opening it changes nothing.
@@ -20,6 +23,7 @@ struct RecordView: View {
     @AppStorage(Pref.voices) private var voicesOn = true
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // The design's 28 pt title; the day is in the line below, so a notes title's
@@ -52,11 +56,20 @@ struct RecordView: View {
                         .font(.footnote).foregroundStyle(Ink.secondary).padding(.top, 6)
                 }
                 PillSwitch(selection: $model.recordPage,
-                           options: [(.transcript, "文字记录"), (.notes, "纪要")])
+                           options: [(.notes, "纪要"), (.transcript, "文字记录")])
                     .padding(.top, 16)
 
                 switch model.recordPage {
-                case .transcript: TranscriptList(session: session, playing: player.lineID(in: session), focus: picked ?? playingNumber(voicesOn ? TranscriptExport.speakerNumbers(session) : [:]), dimOthers: picked != nil) { player.seek($0) }
+                case .transcript:
+                    // 改正听错的词 after the meeting: the waiting fixes, one at a time.
+                    if session.id != model.store.liveID {
+                        FixReviewBanner(fixes: model.fixes, session: session,
+                                        onShow: { id in withAnimation { proxy.scrollTo(id, anchor: .center) } },
+                                        onEdit: { l, start in model.editingLine = LineEdit(session: session.id, line: l.id, start: start) })
+                            .padding(.top, 14)
+                    }
+                    TranscriptList(session: session, playing: player.lineID(in: session), focus: picked ?? playingNumber(voicesOn ? TranscriptExport.speakerNumbers(session) : [:]), dimOthers: picked != nil,
+                                   playable: player.available, terms: searchTerms, found: currentMatch) { player.play(from: $0) }
                 case .notes:
                     if notes.generatingID == session.id {
                         HStack(spacing: 10) {
@@ -66,7 +79,8 @@ struct RecordView: View {
                         .frame(maxWidth: .infinity).padding(.top, 40)
                     } else {
                         // Ling wrote "说话人 6" before anyone was named; show the names since given.
-                        NotesPage(notes: session.notes.map { SpeakerLabels.named($0, SpeakerLabels.names(session)) })
+                        NotesPage(notes: session.notes.map { SpeakerLabels.named($0, SpeakerLabels.names(session)) },
+                                  edit: model.editHooks(session))
                             .padding(.top, 18)
                     }
                 }
@@ -76,6 +90,27 @@ struct RecordView: View {
             .padding(.bottom, player.available ? 110 : 40)
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .debugScroll)) { n in
+            if let id = n.object as? String { proxy.scrollTo(id, anchor: .center) }
+        }
+        .onAppear {
+            showMatches()
+            // The lazy list needs a moment to lay out (and the page to switch) before it can go to the line found.
+            if let id = currentMatch { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { proxy.scrollTo(id, anchor: .center) } }
+        }
+        .onChange(of: model.query) { showMatches() }
+        .onChange(of: currentMatch) { _, id in
+            if let id, model.recordPage == .transcript { withAnimation { proxy.scrollTo(id, anchor: .center) } }
+        }
+        // The transcript follows the recording while it plays, until scrolled by hand (as on the Mac).
+        .onScrollPhaseChange { _, phase in if phase == .interacting { player.userScrolled() } }
+        .onChange(of: player.lineID(in: session)) { _, id in
+            if player.playing, player.following, model.recordPage == .transcript, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } }
+        }
+        .onChange(of: player.following) { _, on in
+            if on, model.recordPage == .transcript, let id = player.lineID(in: session) { withAnimation { proxy.scrollTo(id, anchor: .center) } }
+        }
         }
         .background(Color.white)
         .navigationBarTitleDisplayMode(.inline)
@@ -89,13 +124,21 @@ struct RecordView: View {
                 }
                 .disabled(notes.generatingID != nil || session.lines.isEmpty)
                 .accessibilityLabel(Text("生成纪要"))
-                ShareLink(item: TranscriptExport.markdown(session), subject: Text(session.displayTitle)) {
-                    Image(systemName: "square.and.arrow.up")
+                if session.notes.map({ !$0.isEmpty }) == true {
+                    Button { model.copyNotes(session) } label: {
+                        Image(systemName: model.copiedNotes == session.id ? "checkmark" : "doc.on.doc")
+                    }
+                    .accessibilityLabel(Text("复制纪要"))
                 }
-                .accessibilityLabel(Text("导出"))
+                Button { model.exporting = session.id } label: { Image(systemName: "square.and.arrow.up") }
+                    .disabled(session.lines.isEmpty)
+                    .accessibilityLabel(Text("导出"))
             }
         }
         .tint(Ink.ink)
+        .sheet(isPresented: Binding(get: { model.exporting == session.id }, set: { if !$0 { model.exporting = nil } })) {
+            ExportSheet(session: session)
+        }
         .alert(Text("生成纪要"), isPresented: $needsKey) {
             Button("去填 key") { model.selection = nil; model.searchPath = []; model.tab = .settings; model.showSettings = true }
             Button("取消", role: .cancel) {}
@@ -106,11 +149,24 @@ struct RecordView: View {
             if let u = model.speakerUndo, u.session == session.id, !u.text.isEmpty, !player.available {
                 SpeakerUndoBar(text: u.text) { model.undoSpeakerEdit() }.padding(.horizontal, 16).padding(.bottom, 8)
             }
+            if model.copiedNotes == session.id { CopiedToast().padding(.horizontal, 16).padding(.bottom, player.available ? 0 : 8) }
+            if !player.available, let bar = matchBar { bar.padding(.bottom, 8) }
+            if !player.available { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
+            if !player.available, player.missing {
+                Text(player.own ? L("找不到录音，没法播放") : L("找不到原文件，没法播放"))
+                    .font(.footnote).foregroundStyle(Ink.secondary)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .glassEffect(.regular, in: Capsule())
+                    .padding(.bottom, 8)
+            }
             if player.available {
                 VStack(spacing: 8) {
                     if let u = model.speakerUndo, u.session == session.id, !u.text.isEmpty {
                         SpeakerUndoBar(text: u.text) { model.undoSpeakerEdit() }
                     }
+                    FixToast(fixes: model.fixes)
+                    if let bar = matchBar { bar }
+                    FollowPill(player: player)
                     PlayerBar(player: player)
                 }
                     .padding(.horizontal, 16)
@@ -124,12 +180,39 @@ struct RecordView: View {
             }
         }
         .animation(.snappy(duration: 0.2), value: model.speakerUndo?.id)
+        .animation(.snappy(duration: 0.2), value: model.copiedNotes)
+        .animation(.snappy(duration: 0.2), value: model.fixes.toast)
+        .sheet(item: Binding(get: { model.editingLine.flatMap { $0.session == session.id ? $0 : nil } },
+                             set: { model.editingLine = $0 })) { e in
+            LineEditorSheet(edit: e, fixes: model.fixes)
+        }
         .onAppear { player.load(store: model.store, session: session) }
-        .onChange(of: session.id) { titleDraft = nil; model.focusSpeaker = nil; player.load(store: model.store, session: session) }
+        .onChange(of: session.id) { titleDraft = nil; model.focusSpeaker = nil; model.openLine = nil; player.load(store: model.store, session: session) }
         .onDisappear { player.stop() }
         .onReceive(NotificationCenter.default.publisher(for: .debugPlay)) { n in
-            if let t = n.object as? Double { player.seek(t) }
+            if let t = n.object as? Double { player.play(from: t) }
         }
+    }
+
+    /// The search in this meeting: its terms (misheard names too), and the line being looked at.
+    private var searchTerms: [String] { searching ? model.searchTerms(session) : [] }
+    private var matches: [String] { TranscriptSearch.matches(session.lines, searchTerms) }
+    private var currentMatch: String? {
+        let ms = matches
+        return ms.isEmpty ? nil : ms[min(model.searchMatch, ms.count - 1)]
+    }
+
+    /// A search that finds lines here opens the transcript at the first one.
+    private func showMatches() {
+        guard searching else { return }
+        model.searchMatch = 0
+        if !matches.isEmpty { model.recordPage = .transcript }
+    }
+
+    private var matchBar: SearchMatchBar? {
+        let n = matches.count
+        guard n > 0, model.recordPage == .transcript else { return nil }
+        return SearchMatchBar(index: min(model.searchMatch, n - 1), count: n) { model.stepSearch($0, in: session) }
     }
 
     /// The speaker the recording is at, while it plays.
@@ -176,12 +259,14 @@ struct SpeakerChips: View {
     @Binding var picked: Int?
     @AppStorage(Pref.voices) private var voicesOn = true
     @State private var draft = ""
+    /// 记住这个声音: the voice and the name, waiting for the user to confirm.
+    @State private var remembering: (voice: Int, name: String)?
     /// The speaker number being named; on the model so a debug command can open it too.
     private var naming: Int? { model.namingSpeaker }
 
     var body: some View {
         let names = SpeakerLabels.names(session)
-        let voices = voicesOn ? SpeakerLabels.voiceNumbers(session.lines) : [:]
+        let voices = voicesOn ? SpeakerLabels.voiceNumbers(session) : [:]
         // Voice id by its speaker number.
         let byNumber = Dictionary(uniqueKeysWithValues: voices.map { ($1, $0) })
         let numbers = byNumber.keys.sorted()
@@ -191,6 +276,9 @@ struct SpeakerChips: View {
                     // Tap picks the speaker (only they stay in ink); a long press renames or merges.
                     Menu {
                         Button { draft = names[n] ?? ""; model.namingSpeaker = n } label: { Label("改名字", systemImage: "pencil") }
+                        if let v = byNumber[n] {
+                            Button { remembering = (v, names[n] ?? "") } label: { Label("记住这个声音", systemImage: "person.wave.2") }
+                        }
                         Section("其实是同一个人") {
                             ForEach(numbers.filter { $0 != n }, id: \.self) { other in
                                 Button(L("并入 \(SpeakerLabels.label(other, names))")) {
@@ -217,6 +305,17 @@ struct SpeakerChips: View {
                 }
             }
             .onChange(of: model.namingSpeaker) { if let n = model.namingSpeaker, draft.isEmpty { draft = names[n] ?? "" } }
+            .alert(Text(L("记住“\(remembering?.name ?? "")”的声音？")), isPresented: Binding(get: { remembering != nil }, set: { if !$0 { remembering = nil } })) {
+                Button("记住") { if let r = remembering { model.rememberSpeaker(session: session.id, voice: r.voice, name: r.name) }; remembering = nil }
+                Button("不用", role: .cancel) { remembering = nil }
+            } message: {
+                Text("请先确认对方知道。声纹只保存在这台手机，用于以后会议认出这个人，可随时在人员库里删除。")
+            }
+            .alert(Text(verbatim: model.speakerProblem?.0 ?? ""), isPresented: Binding(get: { model.speakerProblem != nil }, set: { if !$0 { model.speakerProblem = nil } })) {
+                Button("好") { model.speakerProblem = nil }
+            } message: {
+                Text(verbatim: model.speakerProblem?.1 ?? "")
+            }
             .alert(Text("是谁"), isPresented: Binding(get: { naming != nil }, set: { if !$0 { model.namingSpeaker = nil } })) {
                 TextField(L("输入名字"), text: $draft)
                 Button("保存") { save(byNumber) }
@@ -257,6 +356,7 @@ struct SpeakerUndoBar: View {
 }
 
 struct TranscriptList: View {
+    @EnvironmentObject var model: AppModel
     let session: Session
     /// The line the recording is at, highlighted like the design's.
     let playing: String?
@@ -264,6 +364,11 @@ struct TranscriptList: View {
     var focus: Int? = nil
     /// A speaker was picked on purpose: the others' lines step back.
     var dimOthers = false
+    /// With a recording, a tap on a line plays from it (and opens what was fixed in it, if anything).
+    var playable = false
+    /// A search's terms, marked in place; the line it is on stands out.
+    var terms: [String] = []
+    var found: String? = nil
     let seek: (Double) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     /// The design's 14 pt grey original over a 16 pt translation, scaling with the text size.
@@ -284,19 +389,47 @@ struct TranscriptList: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             if inline { time(l, on) }
-                            if session.sourceFile == nil {
+                            // An imported file names a line once its voice is told apart (the Mac's saysWho).
+                            if session.sourceFile == nil || numbers[l.id] != nil {
                                 Text(TranscriptExport.speakerName(l, numbers, names))
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(l.speaker == "me" ? Ink.accentText : (focus == nil || mine ? Ink.ink : Ink.tertiary))
                             }
                         }
-                        Text(l.src).font(.system(size: srcSize)).foregroundStyle(Ink.secondary).lineSpacing(2)
-                        if let d = l.dst, d != l.src {
-                            Text(d).font(.system(size: dstSize)).foregroundStyle(Ink.ink).lineSpacing(4)
+                        Text(TranscriptSearch.highlighted(FixedText.attributed(l), terms, current: l.id == found)).font(.system(size: srcSize)).foregroundStyle(Ink.secondary).lineSpacing(2)
+                        if let d = l.dst, d != l.src, d != l.shown {
+                            Text(TranscriptSearch.highlighted(AttributedString(d), terms, current: l.id == found)).font(.system(size: dstSize)).foregroundStyle(Ink.ink).lineSpacing(4)
+                        }
+                        // Tapped open: what its fixed words were heard as, 改回, and 改这句….
+                        if model.openLine == l.id {
+                            FixedWords(line: l, onRevert: { f in model.fixes.revert(f, lineID: l.id, in: session.id) },
+                                       onEdit: { edit(l) })
                         }
                     }
                 }
-                .textSelection(.enabled)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if playable { seek(l.t) }
+                    if !playable || !FixedText.applied(l).isEmpty {
+                        withAnimation(.snappy(duration: 0.2)) { model.openLine = model.openLine == l.id ? nil : l.id }
+                    }
+                }
+                // Held: the same, and 拷贝 (a long press here can't also select text).
+                .contextMenu {
+                    Button { edit(l) } label: { Label("改这句…", systemImage: "pencil") }
+                    ForEach(Array(FixedText.applied(l).enumerated()), id: \.offset) { _, f in
+                        let c = Correction.core(f.from, f.to)
+                        Section {
+                            Button { model.fixes.revert(f, lineID: l.id, in: session.id) } label: { Label("改回", systemImage: "arrow.uturn.backward") }
+                        } header: {
+                            Text("听成") + Text(verbatim: " \(c.from) → \(c.to)")
+                        }
+                    }
+                    Button {
+                        UIPasteboard.general.string = [l.shown, l.dst].compactMap { $0 }.joined(separator: "\n")
+                    } label: { Label("拷贝", systemImage: "doc.on.doc") }
+                }
+                .id(l.id)
                 .opacity(dimOthers && !mine ? 0.4 : 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 14)
@@ -319,6 +452,10 @@ struct TranscriptList: View {
         }
     }
 
+    private func edit(_ l: TranscriptLine) {
+        model.editingLine = LineEdit(session: session.id, line: l.id, start: l.shown)
+    }
+
     /// The time; with a recording it plays from that line.
     private func time(_ l: TranscriptLine, _ on: Bool) -> some View {
         Button { seek(l.t) } label: {
@@ -332,6 +469,8 @@ struct TranscriptList: View {
 
 struct NotesPage: View {
     let notes: MeetingNotes?
+    /// A finished meeting's: the summary, conclusions and to-dos open in place on a tap.
+    var edit: NotesEditHooks? = nil
     /// The design's 16 pt notes text, as the transcript's translation.
     @ScaledMetric(relativeTo: .callout) private var size: CGFloat = 16
 
@@ -339,7 +478,11 @@ struct NotesPage: View {
         if let n = notes, !n.summary.isEmpty || !n.topics.isEmpty {
             VStack(alignment: .leading, spacing: 22) {
                 if !n.summary.isEmpty {
-                    block("总结") { Text(n.summary).font(.system(size: size)).lineSpacing(5) }
+                    block("总结") {
+                        EditableNote(target: .summary, text: n.summary, hooks: edit) {
+                            Text(n.summary).font(.system(size: size)).lineSpacing(5)
+                        }
+                    }
                 }
                 if !n.topics.isEmpty {
                     block("议题") {
@@ -367,19 +510,23 @@ struct NotesPage: View {
                 if !n.conclusions.isEmpty {
                     block("结论") {
                         ForEach(Array(n.conclusions.enumerated()), id: \.element.id) { i, c in
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Text("\(i + 1)").font(.system(size: size, weight: .bold)).foregroundStyle(Ink.link)
-                                Text(c.text).font(.system(size: size)).lineSpacing(3)
+                            EditableNote(target: .item(i), text: c.text, hooks: edit) {
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Text("\(i + 1)").font(.system(size: size, weight: .bold)).foregroundStyle(Ink.link)
+                                    Text(c.text).font(.system(size: size)).lineSpacing(3)
+                                }
                             }
                         }
                     }
                 }
                 if !n.todos.isEmpty {
                     block("待办") {
-                        ForEach(n.todos) { t in
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Image(systemName: "square").font(.system(size: size)).foregroundStyle(Ink.tertiary)
-                                Text((t.owner.map { "\($0)：" } ?? "") + t.text).font(.system(size: size)).lineSpacing(3)
+                        ForEach(Array(n.todos.enumerated()), id: \.element.id) { i, t in
+                            EditableNote(target: .item(n.conclusions.count + i), text: t.text, hooks: edit) {
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Image(systemName: "square").font(.system(size: size)).foregroundStyle(Ink.tertiary)
+                                    Text((t.owner.map { "\($0)：" } ?? "") + t.text).font(.system(size: size)).lineSpacing(3)
+                                }
                             }
                         }
                     }
@@ -432,58 +579,116 @@ struct FishboneList: View {
 
 // MARK: - The recording
 
-/// Plays the meeting's system.m4a; the transcript follows it and its times seek.
+/// Plays what the record was heard from, as the Mac's RecordingPlayer: the meeting's own recording,
+/// or an imported file (audio or video) where it was copied in. The transcript follows it while it
+/// plays, until scrolled by hand; a line, or the bar, seeks.
 @MainActor
 final class RecordPlayer: ObservableObject {
     @Published private(set) var now: Double = 0
     @Published private(set) var playing = false
-    private(set) var duration: Double = 0
-    private var audio: AVAudioPlayer?
-    private var timer: Timer?
-
-    var available: Bool { audio != nil }
-
+    @Published private(set) var rate: Float = 1
+    @Published private(set) var following = true
+    /// The record says there is audio, but the file isn't there (`own`: the meeting's recording,
+    /// else the imported file).
+    @Published private(set) var missing = false
+    @Published private(set) var own = true
+    @Published private(set) var duration: Double = 0
+    private var player: AVPlayer?
+    private var observer: Any?
+    private var ended: NSObjectProtocol?
     private var loaded: String?
 
-    /// The meeting's recording; another meeting's replaces it (the page is reused when one is picked).
+    var available: Bool { player != nil }
+
+    /// Another meeting's replaces it (the page is reused when one is picked).
     func load(store: SessionStore, session: Session) {
         guard loaded != session.id else { return }
-        stop()
+        unload()
         loaded = session.id
-        audio = nil
+        let fm = FileManager.default
+        var url: URL?
+        if session.sourceFile != nil, let path = session.sourcePath {
+            own = false
+            let u = AppModel.inThisContainer(path)
+            if fm.fileExists(atPath: u.path) { url = u } else { missing = true }
+        } else if session.hasAudio {
+            let system = store.systemAudioURL(session.id), partial = AudioFileWriter.partial(system)
+            url = [system, partial].first { fm.fileExists(atPath: $0.path) }
+            missing = url == nil
+        }
+        guard let url else { return }
+        let p = AVPlayer(url: url)
+        player = p
+        observer = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] t in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.now = t.seconds.isFinite ? t.seconds : 0
+                if self.duration == 0, let d = p.currentItem?.duration.seconds, d.isFinite { self.duration = d }
+            }
+        }
+        ended = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: p.currentItem, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.playing = false }
+        }
+        Task {
+            if let d = try? await p.currentItem?.asset.load(.duration).seconds, d.isFinite { duration = d }
+        }
+        debugLog("player: \(own ? "recording" : "imported file") \(url.lastPathComponent)")
+    }
+
+    private func unload() {
+        if let observer { player?.removeTimeObserver(observer) }
+        if let ended { NotificationCenter.default.removeObserver(ended) }
+        player?.pause()
+        player = nil
+        observer = nil
+        ended = nil
+        playing = false
+        missing = false
+        own = true
+        following = true
         now = 0
         duration = 0
-        objectWillChange.send()
-        guard session.hasAudio else { return }
-        let url = store.systemAudioURL(session.id)
-        guard let a = try? AVAudioPlayer(contentsOf: url) else { return }
-        audio = a
-        duration = a.duration
-        objectWillChange.send()
     }
 
     func toggle() {
-        guard let audio else { return }
-        if audio.isPlaying { audio.pause(); playing = false; timer?.invalidate(); return }
-        try? AVAudioSession.sharedInstance().setCategory(.playback)
-        audio.play(); playing = true
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let a = self.audio else { return }
-                self.now = a.currentTime
-                if !a.isPlaying { self.playing = false; self.timer?.invalidate() }
-            }
+        guard let player else { return }
+        if playing {
+            player.pause()
+        } else {
+            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            if duration > 0, now >= duration - 0.3 { player.seek(to: .zero) }
+            player.playImmediately(atRate: rate)
+            following = true
         }
+        playing.toggle()
+    }
+
+    /// Plays from `t` (a line, the bar): the transcript follows again from there.
+    func play(from t: Double) {
+        guard player != nil else { return }
+        seek(t)
+        following = true
+        if !playing { toggle() }
     }
 
     func seek(_ t: Double) {
-        guard let audio else { return }
-        audio.currentTime = min(max(0, t), duration)
-        now = audio.currentTime
-        if !audio.isPlaying { toggle() }
+        guard let player else { return }
+        let to = min(max(0, t), max(duration, t))
+        player.seek(to: CMTime(seconds: to, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        now = to
     }
 
-    func stop() { audio?.stop(); playing = false; timer?.invalidate() }
+    func nextRate() {
+        rate = rate >= 2 ? 1 : rate + 0.5
+        if playing { player?.rate = rate }
+    }
+
+    /// The transcript was scrolled by hand while it plays: it stops following until 回到正在播放.
+    func userScrolled() { if following, playing { following = false } }
+    func follow() { following = true }
+
+    func stop() { player?.pause(); playing = false }
 
     /// The last line that started at or before the playhead, once playing has begun.
     func lineID(in s: Session) -> String? {
@@ -492,12 +697,13 @@ final class RecordPlayer: ObservableObject {
     }
 }
 
-/// The design's glass bar: play / pause, a progress line, the time and the length.
+/// The design's glass bar: play / pause, the time, a bar to drag, the length and the speed; when the
+/// file is gone, why it can't play.
 struct PlayerBar: View {
     @ObservedObject var player: RecordPlayer
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Button(action: player.toggle) {
                 Image(systemName: player.playing ? "pause.fill" : "play.fill")
                     .font(.system(size: 16, weight: .bold))
@@ -506,15 +712,12 @@ struct PlayerBar: View {
                     .background(Ink.ink, in: Circle())
             }
             .accessibilityLabel(player.playing ? Text("暂停") : Text("播放"))
-            VStack(spacing: 6) {
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Ink.line)
-                        Capsule().fill(Ink.accent)
-                            .frame(width: g.size.width * (player.duration > 0 ? min(1, player.now / player.duration) : 0))
-                    }
-                }
-                .frame(height: 4)
+            VStack(spacing: 0) {
+                Slider(value: Binding(get: { min(player.now, max(player.duration, 1)) }, set: { player.seek($0) }),
+                       in: 0...max(player.duration, 1))
+                    .tint(Ink.accent)
+                    .controlSize(.mini)
+                    .accessibilityLabel(Text("播放进度"))
                 HStack {
                     Text(TranscriptExport.clock(player.now))
                     Spacer()
@@ -523,15 +726,56 @@ struct PlayerBar: View {
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(Ink.secondary)
             }
+            Button { player.nextRate() } label: {
+                Text(verbatim: player.rate == 1 ? "1×" : player.rate == 1.5 ? "1.5×" : "2×")
+                    .font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Ink.ink)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("播放速度"))
         }
         .padding(.leading, 8)
-        .padding(.trailing, 18)
+        .padding(.trailing, 8)
         .frame(height: 62)
         .glassEffect(.regular, in: Capsule())
+    }
+}
+
+/// 回到正在播放: the transcript was scrolled away while it plays.
+struct FollowPill: View {
+    @ObservedObject var player: RecordPlayer
+    var body: some View {
+        if player.playing && !player.following {
+            Button { player.follow() } label: {
+                Label("回到正在播放", systemImage: "arrow.down.to.line")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink)
+                    .padding(.horizontal, 14).frame(minHeight: 36)
+                    .glassEffect(.regular, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+extension TranscriptSearch {
+    /// The Mac's marks in iOS's colours: every term on the pale accent, the line being looked at solid.
+    static func highlighted(_ base: AttributedString, _ terms: [String], current: Bool) -> AttributedString {
+        var a = base
+        for term in terms where !term.isEmpty {
+            var from = a.startIndex
+            while from < a.endIndex, let r = a[from...].range(of: term, options: .caseInsensitive) {
+                a[r].backgroundColor = current ? Ink.accent : Ink.accentWash
+                a[r].foregroundColor = current ? .white : Ink.accentText
+                from = r.upperBound
+            }
+        }
+        return a
     }
 }
 
 extension Notification.Name {
     /// Debug `play:<seconds>`: the open record plays from there.
     static let debugPlay = Notification.Name("cicada.debugPlay")
+    /// Debug `scrollTo:<line id>`: the open record scrolls there.
+    static let debugScroll = Notification.Name("cicada.debugScroll")
 }

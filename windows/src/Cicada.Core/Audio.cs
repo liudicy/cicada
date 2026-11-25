@@ -11,6 +11,17 @@ public interface IAudioSource
     void Stop();
 }
 
+/// Debug (`silentlisten`): a meeting with no audio at all, its lines given by `heard`.
+public sealed class SilentSource : IAudioSource
+{
+#pragma warning disable CS0067 // never raised: there is nothing to hear
+    public event Action<short[]>? Samples;
+    public event Action<string?>? Ended;
+#pragma warning restore CS0067
+    public void Start() { }
+    public void Stop() { }
+}
+
 /// Plays a WAV into listening, in real time or as fast as it can (`speed` 0).
 public sealed class FileAudioSource(string path, double speed = 1) : IAudioSource
 {
@@ -44,6 +55,24 @@ public sealed class FileAudioSource(string path, double speed = 1) : IAudioSourc
     }
 
     public void Stop() => cts?.Cancel();
+}
+
+/// Loopback capture sends nothing while nothing plays, so SystemAudioTap feeds silence itself to end
+/// segments and keep the clock going. But a packet that is merely late (a busy PC, a VM) arrives
+/// after that silence: a gap that wasn't there goes into the middle of the sentence, and with the
+/// pause between two words it reaches the segmenter's 0.6 s and the line splits in two ("…keep
+/// the twenty." / "First is the release date…"). Waiting 300 ms, as the tap did, let any stall from
+/// 300 ms up do that; it now waits a whole second, so only a stall over a second can. Silence that
+/// is real costs nothing until the pause would end a segment anyway, then 0.4 s at most, once,
+/// when the playback stops altogether (a meeting app or player keeps sending silent packets).
+public static class LoopbackGap
+{
+    public const double Late = 1.0;
+
+    /// Samples of silence to feed now: none until `sinceLastPacket` reaches Late, then all of
+    /// `sinceFed` (the time since audio, or silence, was last handed on).
+    public static int Silence(double sinceLastPacket, double sinceFed) =>
+        sinceLastPacket >= Late ? (int)(Math.Max(0, sinceFed) * Segmenter.Rate) : 0;
 }
 
 public static class Wav

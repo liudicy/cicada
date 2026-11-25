@@ -7,9 +7,9 @@ name: android
 on:
   push:
     branches: [main]
-    paths: ["android/**", "Resources/**/Localizable.strings", ".github/workflows/android.yml"]
+    paths: ["android/**", "Resources/**/Localizable.strings", "linux/native/voiceprint.c", "linux/models/voiceprint.bin", ".github/workflows/android.yml"]
   pull_request:
-    paths: ["android/**", "Resources/**/Localizable.strings", ".github/workflows/android.yml"]
+    paths: ["android/**", "Resources/**/Localizable.strings", "linux/native/voiceprint.c", "linux/models/voiceprint.bin", ".github/workflows/android.yml"]
   workflow_dispatch:
     inputs:
       sign:
@@ -38,6 +38,9 @@ jobs:
           JAVA_OPTS="-Dcicada.resources=$PWD/../Resources -Dcicada.androidStrings=$PWD/app/src/main/strings" cli/build/install/cicada-cli/bin/cicada-cli test
       - name: Translations
         run: python3 scripts/strings.py
+      # 说话人识别's voiceprint library: the NDK app/build.gradle.kts pins (sdkmanager checks it).
+      - name: NDK
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;29.0.14206865" > /dev/null
       - name: Build
         run: gradle --console=plain -q :app:assembleDebug
       - uses: actions/upload-artifact@v4

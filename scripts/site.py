@@ -31,18 +31,22 @@ OUT = os.path.join(ROOT_DIR, "build", "site")
 SITE = (os.environ.get("SITE_URL") or "https://cicada.indaloop.app/").rstrip("/") + "/"
 REPO = "https://github.com/wquguru/cicada"
 DOWNLOAD = REPO + "/releases/latest"
-# The files each platform's release carries (release.yml); {v} is the version. The Windows installer
-# has no version in its name: Cicada.exe installs and updates itself from it.
+# The files each platform's release carries (release.yml); {v} is the version.
 PLATFORMS = ["mac", "windows", "linux", "android"]
 ASSETS = {
-    "mac": {"dmg": "Cicada-{v}-macOS-AppleSilicon.dmg", "zip": "Cicada-{v}-macOS-AppleSilicon.zip"},
-    "windows": {"x64": "Cicada-Setup.exe", "arm64": "Cicada-Setup-arm64.exe"},
+    "mac": {"dmg": "Cicada-{v}-macOS-AppleSilicon.dmg", "zip": "Cicada-{v}-macOS-AppleSilicon.zip",
+            "intel": "Cicada-{v}-macOS-Intel.dmg"},
+    "windows": {"x64": "Cicada-{v}-Windows-x64.exe", "arm64": "Cicada-{v}-Windows-ARM64.exe"},
     "linux": {"tar": "Cicada-{v}-Linux.tar.gz"},
     "android": {"apk": "Cicada-{v}-Android.apk"},
 }
+# Releases whose files were named otherwise: Windows 1.1.0 only has Cicada-Setup.exe and -arm64.exe.
+OLD_ASSETS = {("windows", "1.1.0"): {"x64": "Cicada-Setup.exe", "arm64": "Cicada-Setup-arm64.exe"}}
+# The first release with an Intel Mac build: older ones have no Intel link.
+FIRST_INTEL = (1, 3, 0)
 # The author on X: the app is not notarized yet, so a real person to ask helps people trust the first launch.
 X = "https://x.com/wquguru"
-STATIC = ["style.css", "icon.svg", "icon.png", "og.png", "og-en.png", "og-ja.png", "og-ko.png", "img", "audio"]
+STATIC = ["style.css", "icon.svg", "icon.png", "og.png", "og-en.png", "og-ja.png", "og-ko.png", "img", "audio", "share.js"]
 # The home page's meeting with sound, in the language its reader listens to (the English page's is
 # Chinese): file, length in seconds, and who talks when as (person, start, end), one turn per
 # subtitle. Both clips come from scripts/make-sample.sh; the English one is the app's onboarding
@@ -145,7 +149,10 @@ def downloads(released):
         for p in shipped.get(r["version"], ()):
             if p not in out:
                 v = r["version"]
-                out[p] = (v, {k: f"{REPO}/releases/download/v{v}/{name.format(v=v)}" for k, name in ASSETS[p].items()})
+                names = OLD_ASSETS.get((p, v), ASSETS[p])
+                if p == "mac" and tuple(map(int, v.split("."))) < FIRST_INTEL:
+                    names = {k: n for k, n in names.items() if k != "intel"}
+                out[p] = (v, {k: f"{REPO}/releases/download/v{v}/{name.format(v=v)}" for k, name in names.items()})
     return out
 
 
@@ -162,7 +169,8 @@ def download_cards(t, dl):
             v, urls = dl[p]
             if p == "mac":
                 acts = (f'<a class="btn btn-orange" href="{urls["dmg"]}">{arrow}{t["dlp_mac_btn"]}</a>'
-                        f'<a class="alt" href="{urls["zip"]}">{t["dlp_mac_zip"]}</a>')
+                        f'<a class="alt" href="{urls["zip"]}">{t["dlp_mac_zip"]}</a>'
+                        + (f'<a class="alt" href="{urls["intel"]}">{t["dlp_mac_intel"]}</a>' if "intel" in urls else ""))
             elif p == "windows":
                 acts = (f'<div class="pair"><a class="btn btn-dark" href="{urls["x64"]}">x64<small>{t["dlp_win_x64"]}</small></a>'
                         f'<a class="btn btn-light" href="{urls["arm64"]}">ARM64<small>{t["dlp_win_arm"]}</small></a></div>')
@@ -241,12 +249,14 @@ def main():
     tr = strings()
     urls = []  # (absolute url, last modified) for the sitemap
 
-    def page(template, code, rel, extra, alternates=True, current=None):
-        """Writes one page: `rel` is its path under the site ("en/start/"), `code` its language."""
+    def page(template, code, rel, extra, alternates=True, current=None, shell=False):
+        """Writes one page: `rel` is its path under the site ("en/start/"), `code` its language.
+        `shell`: the share page, served by the Worker at /s/<id> rather than where it is built, so
+        its links are absolute; it stays out of the sitemap, and its strict CSP allows no inline script."""
         t = tr[code]
         prefix = dict(LANGS)[code]
         depth = rel.count("/")
-        root = "../" * depth
+        root = "/" if shell else "../" * depth
         kind = rel[len(prefix):]  # "" or "start/" or "changelog/"
         langs = LANGS if alternates else [(code, prefix)]
         alts = {c: root + p + kind for c, p in langs}
@@ -278,9 +288,13 @@ def main():
                                        "copied": t["send_copied"], "prompt": t["send_prompt"]}, ensure_ascii=False))
         v["HEADER"] = fill(translate(read("header.html"), t), v)
         v["FOOTER"] = fill(translate(read("footer.html"), t), v)
+        if shell:
+            for k in ("HEADER", "FOOTER"):
+                v[k] = re.sub(r"<script>.*?</script>\n?", "", v[k], flags=re.S)
         v.update(extra)
         write(rel + "index.html", fill(translate(read(template), t), v))
-        urls.append(SITE + rel)
+        if not shell:
+            urls.append(SITE + rel)
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     for code, prefix in LANGS:
@@ -331,6 +345,7 @@ def main():
             "SPEAK_JSON": json.dumps({"src": "../" * prefix.count("/") + f"audio/speak-{'zh' if code == 'en' else 'en'}.m4a?v=" + common["REV"], "at": SPEAK_AT}), "SAMPLE_LEN": f"0:{round(length):02d}",
             "APPS": apps, "LATEST_SECTION": latest_section,
             "ROAD_NEXT": road_next, "ROAD_LATER": road(t["road_later_items"]), "ROAD_NONE": road(t["road_none_items"]),
+            "ROAD_NONE_HIDDEN": "" if t["road_none_items"] else " hidden",
             "REQS": "".join(f"<div><dt>{e(k)}</dt><dd>{e(val)}</dd></div>" for k, val in t["reqs"]),
             "FAQ": faq, "FAQLD": json.dumps(faq_ld, ensure_ascii=False).replace("</", "<\\/"),
             "JSONLD": json.dumps(app_ld, ensure_ascii=False).replace("</", "<\\/")})
@@ -343,6 +358,11 @@ def main():
                  "step": [{"@type": "HowToStep", "position": i + 1, "name": t[k]} for i, k in enumerate(["s1_h", "s2_h", "s3_h"])]}
         page("start.html", code, prefix + "start/", {
             "JSONLD": json.dumps(howto, ensure_ascii=False).replace("</", "<\\/")}, current="start")
+        # Shared meeting (the Worker serves it at /s/<id>; share.js fills it in). The words share.js
+        # needs at run time go in as JSON.
+        share_text = {k[len("share_js_"):]: t[k] for k in t if k.startswith("share_js_")}
+        page("share.html", code, prefix + "share/", {
+            "SHARE_TEXT": json.dumps(share_text, ensure_ascii=False).replace("</", "<\\/")}, alternates=False, shell=True)
 
     # Changelog
     counts = {k: sum(1 for r in log for i in r["items"] if i["kind"] == k) for k, _ in KINDS}

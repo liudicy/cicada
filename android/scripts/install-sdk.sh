@@ -1,9 +1,9 @@
 #!/bin/bash
 # One-time toolchain for the Android app, all under ~/.cicada-android (no sudo, nothing system-wide):
-# a JDK 21, Gradle, the Android SDK (platform, build tools, emulator) and an arm64 system image for
-# the test emulator. Versions are pinned and every download is checked against its published
-# checksum before it is unpacked. Re-running skips what is already there. --old also makes
-# `cicada29`, an Android 10 emulator (the oldest Android the app supports).
+# a JDK 21, Gradle, the Android SDK (platform, build tools, the NDK for the voiceprint library,
+# emulator) and an arm64 system image for the test emulator. Versions are pinned and every download
+# is checked against its published checksum before it is unpacked. Re-running skips what is already
+# there. --old also makes `cicada29`, an Android 10 emulator (the oldest Android the app supports).
 set -euo pipefail
 D="$HOME/.cicada-android"; mkdir -p "$D"; cd "$D"
 JDK=21.0.13_9; JDK_TAG="jdk-21.0.13%2B9"
@@ -12,6 +12,8 @@ JDK_SHA_X64=9aa1d1c17ae5467a022679e7e0af5c00797d94ac462ed1a46f4db07a8a34a6dd
 GRADLE=9.8.2; GRADLE_SHA=21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607
 CLT=15641748; CLT_SHA1=b62a5d8cf63ded173b47be867be4ee058ceda6df
 API=36; BUILD_TOOLS=36.0.0
+# The NDK builds 说话人识别's voiceprint library (linux/native/voiceprint.c); app/build.gradle.kts pins the same.
+NDK=29.0.14206865
 
 # fetch <url> <file> <sha256|sha1:…>: download, then refuse anything that doesn't match.
 fetch() {
@@ -43,7 +45,7 @@ sm=sdk/cmdline-tools/latest/bin/sdkmanager; avd=sdk/cmdline-tools/latest/bin/avd
 yes | "$sm" --licenses >/dev/null || true
 images=("system-images;android-$API;google_apis;arm64-v8a")
 [ "${1:-}" = --old ] && images+=("system-images;android-29;google_apis;arm64-v8a")
-"$sm" "platform-tools" "platforms;android-$API" "build-tools;$BUILD_TOOLS" "emulator" "${images[@]}" >/dev/null
+"$sm" "platform-tools" "platforms;android-$API" "build-tools;$BUILD_TOOLS" "ndk;$NDK" "emulator" "${images[@]}" >/dev/null
 "$avd" list avd -c | grep -qx cicada || echo no | "$avd" create avd -n cicada -k "${images[0]}" -d pixel_7 >/dev/null
 if [ "${1:-}" = --old ] && ! "$avd" list avd -c | grep -qx cicada29; then
   echo no | "$avd" create avd -n cicada29 -k "${images[1]}" -d pixel_4 >/dev/null

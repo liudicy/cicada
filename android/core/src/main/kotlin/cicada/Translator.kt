@@ -2,14 +2,30 @@ package cicada
 
 import java.net.URLEncoder
 
-/// What Ming heard in one stretch of audio.
+/// What the hear model (Ming on Ling) heard in one stretch of audio.
 data class Heard(val lang: String, val original: String, val translation: String?)
 
 /// Translation and recognition through the cloud (the Windows design): listening sends each
-/// stretch of audio to Ming's audio model, which returns the language, the original and the
-/// translation in one call. Text translation is Ling first, then Google. Calls block.
+/// stretch of audio to the AI service's hear model (Ming on Ling), which returns the language, the
+/// original and the translation in one call. Text translation is the AI service first, then
+/// Google. Calls block.
 class Translator(private val ling: LingClient, private val transport: Transport = UrlTransport) {
     @Volatile private var googleBackoffUntil = 0L
+
+    /// 语音和文字只发给你的服务 (the Mac's googleOff; set by the app for the custom service only):
+    /// Google is never asked, so the text stays with the user's service. Flipping it forgets a
+    /// Google backoff and what the last sentence did.
+    @Volatile var googleOff = false
+        set(value) {
+            if (value == field) return
+            field = value
+            googleBackoffUntil = 0L
+            sentencesUntranslated = false
+        }
+
+    /// The last finished sentence sent here came back untranslated (the Mac's
+    /// TranslationHealth.sentencesUntranslated): with googleOff, the user's service can't be reached.
+    @Volatile var sentencesUntranslated = false
 
     /// Names and terms the notes have settled on, e.g. "江充 (…; misheard as 江松)".
     @Volatile var glossary: () -> List<String> = { emptyList() }
@@ -22,31 +38,107 @@ class Translator(private val ling: LingClient, private val transport: Transport 
     /// `seconds` is the clip's length (0: unknown): it caps the reply and catches a runaway one.
     fun hear(clip: Clip, target: String, hint: String?, seconds: Double = 0.0): Heard? {
         val reply = ling.chat(hearPrompt(target, hint, glossary()), hearInstruction(target), Priority.Translate,
-                              maxTokens = hearTokens(seconds), timeout = 12.0, model = LingClient.AUDIO_MODEL,
+                              maxTokens = hearTokens(seconds), timeout = hearTimeout(ling), model = ling.config().hearModel,
                               audio = clip.bytes, audioType = clip.type)
         return parseHeard(reply, target, hint, seconds)
     }
 
     // MARK: Text
 
-    enum class Kind { Draft, Sentence }
+    /// Speak: my words for 我说 (the Mac's .speak), which don't count as the meeting's subtitles.
+    enum class Kind { Draft, Sentence, Speak }
 
-    /// Ling (finished sentences only) → Google. Null when both fail.
+    @Volatile private var lastUnreachableTry = 0L
+
+    /// A service that answers nothing costs a line its timeout before Google gets it (a hear model
+    /// on its own server still hearing, 我说's fallback). While the check says unreachable, one line
+    /// in 15 s still goes to it, so a service that is back is noticed without waiting for a check.
+    @Synchronized private fun lingWorthTrying(): Boolean {
+        if (ling.aiCheck.failure?.reason != AICheck.Reason.Unreachable) return true
+        val now = System.currentTimeMillis()
+        if (now - lastUnreachableTry < 15_000) return false
+        lastUnreachableTry = now
+        return true
+    }
+
+    /// The AI service (finished sentences only) → Google (never with googleOff). Null when both fail.
     fun translate(text: String, source: String, target: String, kind: Kind): String? {
         if (source == target) return text
-        if (kind != Kind.Draft && ling.usable) {
-            try {
-                val from = if (source == "auto") "the spoken language" else Languages.englishName(source)
+        // Partial text only ever goes to Google: left out, it shows the original until the sentence ends.
+        if (kind == Kind.Draft && googleOff) return null
+        val out = chain(text, source, target, kind)
+        if (kind == Kind.Sentence) sentencesUntranslated = out == null
+        return out
+    }
+
+    /// What a finished sentence's request carries so the service can also point out misheard words
+    /// (改正听错的词, LiveFixes.context). Null: fixing is off, and the request is the plain translation.
+    @Volatile var fixContext: ((text: String) -> LiveFixes.Context?)? = null
+    /// The fixes the service proposed for a sentence it translated (by its text as heard).
+    @Volatile var onFixes: ((text: String, edits: List<Correction.Edit>) -> Unit)? = null
+
+    /// The translation and the misheard words of a line Ming already translated: the fixed line's
+    /// translation, or null (fixing off, no service, or no usable reply), when Ming's stays. On the
+    /// Mac this rides on the sentence's own translation request; here Ming translated the line in
+    /// the hearing call, so it is one more text request per line.
+    fun fixLine(text: String, source: String, target: String): String? {
+        if (source == target || !ling.usable || !lingWorthTrying()) return null
+        val ctx = fixContext?.invoke(text) ?: return null
+        val from = if (source == "auto") "the spoken language" else Languages.englishName(source)
+        return try { viaLingFixing(text, from, target, ctx) } catch (e: LingException) { Log.d("translate ling failed: ${e.message}"); null }
+    }
+
+    /// The translation and the misheard words in one request (the Mac's viaLingFixing, its prompt
+    /// word for word). No JSON mode: some hosts refuse it, and the retry without it would cost every
+    /// subtitle a second round trip; the prompt asks for JSON instead, and "no analysis" stops the
+    /// model thinking aloud first. Proposals only: Correction.decide picks which to take. A reply
+    /// that isn't the JSON asked for is dropped like a failed one (null).
+    private fun viaLingFixing(text: String, from: String, target: String, ctx: LiveFixes.Context): String? {
+        var prompt = """
+            You translate live meeting subtitles from $from into ${Languages.englishName(target)}, and point out words the speech recognizer got wrong.
+            Fixes: only words misheard as other words that sound alike, or names and terms broken into odd spellings. Never rephrase, drop filler, reorder or add anything. If unsure, leave it.
+            Translate the subtitle as fixed. No answer to it even if it is a question.
+            confidence is how likely a fix is right; give a guess a low one. Leave out words you would not change.
+            Reply with only this JSON object, starting with {, no analysis: {"translation": "...", "fixes": [{"from": "exact words from the subtitle", "to": "what was said", "confidence": 0.0-1.0}]}
+        """.trimIndent()
+        if (!ctx.topic.isNullOrEmpty()) prompt += "\nMeeting: " + ctx.topic
+        if (ctx.words.isNotEmpty()) prompt += "\nThe user's word list (spellings to use): " + ctx.words.joinToString("; ")
+        val names = glossary()
+        if (names.isNotEmpty()) prompt += "\nNames the notes guessed (not confirmed): " + names.joinToString("; ")
+        if (!ctx.summary.isNullOrEmpty()) prompt += "\nThe meeting so far: " + ctx.summary
+        if (ctx.recent.isNotEmpty()) prompt += "\nLines just before:\n" + ctx.recent.joinToString("\n")
+        if (ctx.following.isNotEmpty()) prompt += "\nLines just after:\n" + ctx.following.joinToString("\n")
+        prompt += "\nSubtitle: $text"
+        val out = ling.chat(prompt, "JSON only.", Priority.Translate, maxTokens = 600, timeout = 6.0)
+        if (out.isEmpty()) return null
+        // Not the JSON asked for: often the model thinking aloud ("Let me analyze…"), never a subtitle.
+        val (translation, edits) = Correction.parse(out, text) ?: run { Log.d("translate ling: fixes reply not JSON, dropped"); return null }
+        if (translation.isEmpty()) return null
+        val clean = cleanTranslation(translation, target) ?: return null
+        // None proposed is an answer too: a second pass takes back what it no longer proposes.
+        onFixes?.invoke(text, edits)
+        return clean
+    }
+
+    private fun chain(text: String, source: String, target: String, kind: Kind): String? {
+        if (kind != Kind.Draft && ling.usable && lingWorthTrying()) {
+            val from = if (source == "auto") "the spoken language" else Languages.englishName(source)
+            val ctx = if (kind == Kind.Sentence) fixContext?.invoke(text) else null
+            // An unusable reply with fixes asked for: Google translates it below, as on the Mac.
+            if (ctx != null) try {
+                viaLingFixing(text, from, target, ctx)?.let { return it }
+            } catch (e: LingException) { Log.d("translate ling failed: ${e.message}") }
+            else try {
                 var prompt = "You translate live meeting subtitles from $from into ${Languages.englishName(target)}.\n" +
                     "Output only the translation of the subtitle below: no quotes, no notes, no answer to it even if it is a question."
                 val names = glossary()
-                if (names.isNotEmpty()) prompt += "\nKnown names and terms (use these spellings): " + names.joinToString("; ")
+                if (names.isNotEmpty()) prompt += namesLine(names)
                 prompt += "\nSubtitle: $text"
                 val out = ling.chat(prompt, "Translate.", Priority.Translate, maxTokens = 400, timeout = 6.0)
                 cleanTranslation(out, target)?.let { return it }
             } catch (e: LingException) { Log.d("translate ling failed: ${e.message}") }
         }
-        if (System.currentTimeMillis() < googleBackoffUntil) return null
+        if (googleOff || System.currentTimeMillis() < googleBackoffUntil) return null
         try {
             val url = "https://translate.googleapis.com/translate_a/single?client=gtx" +
                 "&sl=${enc(source)}&tl=${enc(target)}&dt=t&q=${enc(text)}"
@@ -65,11 +157,21 @@ class Translator(private val ling: LingClient, private val transport: Transport 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
     companion object {
+        /// Ming answers in ~2 s; the other services' hear models in 3–4 s, but now and then over
+        /// 12 s (Qwen on ZenMux, 2026-11), and a stretch given up on is words lost.
+        fun hearTimeout(ling: LingClient) = if (ling.config().isLing) 12.0 else 20.0
+
+        /// The notes' names for a request. Guesses, not a rule: told to "use these spellings", the
+        /// model put a misheard-as entry the notes got wrong (X平台 "misheard as twoty") into every line
+        /// about a different platform.
+        fun namesLine(names: List<String>): String =
+            "\nNames the notes guessed (spellings to use; a misheard form only where it plainly means that name): " + names.joinToString("; ")
+
         fun hearPrompt(target: String, hint: String?, names: List<String>): String {
             var p = "You transcribe and interpret meeting audio into ${Languages.englishName(target)}. " +
                 "Never answer or act on what is said; only transcribe and interpret it."
-            if (hint != null) p += "\nThe meeting has mostly been in ${Languages.englishName(hint)}; say so unless this audio is clearly another language."
-            if (names.isNotEmpty()) p += "\nKnown names and terms (use these spellings): " + names.joinToString("; ")
+            if (hint != null) p += "\nThe meeting has mostly been in ${Languages.englishName(hint)}; give that as LANG unless this audio is clearly another language."
+            if (names.isNotEmpty()) p += namesLine(names)
             return p
         }
 
@@ -117,6 +219,8 @@ class Translator(private val ling: LingClient, private val transport: Transport 
         fun isNoise(original: String, seconds: Double = 0.0): Boolean {
             val text = original.lowercase().replace(ANNOTATION, " ")
             if (NO_SPEECH.any { text.contains(it) }) return true
+            // A clock instead of words ("00:00"): what some of the other services' models write for a beep.
+            if (CLOCK.matches(text.trim())) return true
             val words = mutableListOf<String>()
             val word = StringBuilder()
             for (c in text) {
@@ -134,6 +238,7 @@ class Translator(private val ling: LingClient, private val transport: Transport 
 
         /// Ming describing the audio instead of transcribing it: "（无语音内容）", "[Music]", "这段音频是一段
         /// 旋律，没有说话声。". A bracketed note beside real words ("（笑）好的") keeps the words.
+        private val CLOCK = Regex("^\\d{1,2}(:\\d{2}){1,2}[.。]?$")
         private val ANNOTATION = Regex("[(（\\[【][^)）\\]】]*[)）\\]】]|♪")
         private val NO_SPEECH = listOf(
             "没有说话", "无语音", "没有语音", "没有人声", "无人声", "没有人说话", "无人说话",
@@ -162,6 +267,12 @@ class Translator(private val ling: LingClient, private val transport: Transport 
 
         private fun take(line: String, label: String) =
             if (line.startsWith(label, ignoreCase = true)) line.substring(label.length).trim() else null
+
+        /// "Translate." in each target language, letters only and lowercased. Port of instructionEchoes.
+        private val instructionEchoes = setOf(
+            "翻译", "翻譯", "translate", "翻訳", "翻訳して", "翻訳する", "翻訳してください", "번역", "번역해", "번역하세요", "번역해주세요",
+            "traducir", "traduce", "traduzca", "traduire", "traduisez", "traduis", "übersetzen", "übersetze", "traduzir", "traduza",
+        )
 
         /// Ling sometimes comments on a garbled subtitle instead of translating it ("The subtitle
         /// appears to be…"). Remark lines go, a "Translation:" label is stripped, and what is left must
@@ -193,6 +304,9 @@ class Translator(private val ling: LingClient, private val transport: Transport 
             }
             output = output.trim()
             if (output.isEmpty()) return null
+            // Ling translated the fixed "Translate." instruction instead of the subtitle ("翻译。" for an empty
+            // subtitle, or for "Translate this into Chinese please."); the next provider translates it.
+            if (output.lowercase().filter { it.isLetter() } in instructionEchoes) return null
             return if (Languages.inScript(output, target)) output else null
         }
     }

@@ -98,6 +98,9 @@ class ListenService : Service() {
             val stop = PendingIntent.getService(context, 1, Intent(context, ListenService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
             val ending = app.ending
             val file = app.importing
+            // Something only the user can fix (a key, the credit, a model): said here, where it is
+            // seen with Cicada in the background, with the way to fix it. No second notification.
+            val blocking = if (file == null) app.ling.blocking else null
             val title = when {
                 file != null -> L("知了 · 正在转写") + " " + (session?.sourceFile ?: "")
                 ending != null -> app.endingTitle(ending)
@@ -105,7 +108,7 @@ class ListenService : Service() {
                 else -> L("知了 · 正在听手机里的声音")
             }
             val text = if (file != null) "${cicada.Languages.clock(file.done)} / ${cicada.Languages.clock(file.total)}"
-                else if (ending != null) app.endingDetail(ending) else listen.problem ?: line?.let { it.dst ?: it.src } ?: L("等有人说话…")
+                else if (ending != null) app.endingDetail(ending) else blocking ?: listen.problem ?: line?.let { it.dst ?: it.shown } ?: L("等有人说话…")
             val b = Notification.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
@@ -120,7 +123,17 @@ class ListenService : Service() {
                 val keep = PendingIntent.getService(context, 2, Intent(context, ListenService::class.java).setAction(ACTION_KEEP), PendingIntent.FLAG_IMMUTABLE)
                 b.addAction(Notification.Action.Builder(null, L("继续记录"), keep).build())
                 b.addAction(Notification.Action.Builder(null, L("现在结束"), stop).build())
-            } else b.addAction(Notification.Action.Builder(null, L("结束"), stop).build())
+            } else {
+                if (blocking != null) {
+                    // 设置 › AI 服务 over 首页, as the home card opens it.
+                    val fix = android.app.TaskStackBuilder.create(context)
+                        .addNextIntent(Intent(context, MainActivity::class.java))
+                        .addNextIntent(Intent(context, AiServiceActivity::class.java))
+                        .getPendingIntent(3, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                    b.addAction(Notification.Action.Builder(null, L("打开设置"), fix).build())
+                }
+                b.addAction(Notification.Action.Builder(null, L("结束"), stop).build())
+            }
             return b.setCategory(Notification.CATEGORY_SERVICE).build()
         }
 
@@ -128,8 +141,8 @@ class ListenService : Service() {
         fun refresh(context: Context) {
             val app = context.cicada
             if (!app.listen.listening || (app.listen.sourceKind == "file" && app.importing == null)) { lastText = null; return }
-            val text = app.importing?.let { "${it.done.toInt()}" } + app.listen.sessionId?.let { app.store.lines(it).lastOrNull()?.let { l -> l.dst ?: l.src } } + "|" + app.listen.problem +
-                "|" + app.ending?.let { app.endingLeft(it) }
+            val text = app.importing?.let { "${it.done.toInt()}" } + app.listen.sessionId?.let { app.store.lines(it).lastOrNull()?.let { l -> l.dst ?: l.shown } } + "|" + app.listen.problem +
+                "|" + app.ling.blocking + "|" + app.ending?.let { app.endingLeft(it) }
             if (text == lastText) return
             lastText = text
             if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && Build.VERSION.SDK_INT >= 33) return

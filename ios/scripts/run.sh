@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 DEVICE=${1:-"iPhone 18 Pro"}; shift || true
-ID=com.wquguru.cicada.dev
+ID=com.indaloop.cicada.dev
 
 xcrun simctl boot "$DEVICE" 2>/dev/null || true
 xcrun simctl bootstatus "$DEVICE" -b >/dev/null

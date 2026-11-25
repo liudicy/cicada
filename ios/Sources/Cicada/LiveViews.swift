@@ -25,12 +25,15 @@ struct HomeTitle: View {
                         .font(.footnote.weight(.semibold).monospacedDigit())
                         .foregroundStyle(Ink.accentText)
                     }
-                    Text(L("会议室 · \(Pref.pairText(room.languagePair.source, room.languagePair.target))"))
+                    let pair = Pref.pairText(room.languagePair.source, room.languagePair.target)
+                    Text(room.speakerMode ? L("外放 · \(pair)") : L("会议室 · \(pair)"))
                         .font(.system(size: titleSize - 4, weight: .bold)).foregroundStyle(Ink.ink)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
                     Text(dateText(Date(), "MMMdEEEE")).font(.footnote).foregroundStyle(Ink.secondary)
+                    // iPad's narrow sidebar: "Meetings" shrinks rather than breaking in two.
                     Text("会议记录").font(.system(size: titleSize, weight: .bold)).foregroundStyle(Ink.ink)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
             Spacer(minLength: 0)
@@ -56,8 +59,9 @@ struct LiveDot: View {
 struct ListenBar: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var room: RoomListen
-    @AppStorage(Pref.source) private var source = "en-US"
+    @AppStorage(Pref.source) private var source = "auto"
     @AppStorage(Pref.target) private var target = "system"
+    @AppStorage(Pref.hear) private var hear = "room"
     /// Glass on the ground (iPhone); white on the iPad's glass sidebar.
     var onGlass = false
 
@@ -77,10 +81,20 @@ struct ListenBar: View {
 
     private var idle: some View {
         Group {
-            Text("开始听").font(.headline).foregroundStyle(Ink.ink).padding(.leading, 18)
+            Text("开始听").font(.headline).foregroundStyle(Ink.ink).lineLimit(1).fixedSize().padding(.leading, 18)
             Rectangle().fill(Ink.line).frame(width: 1, height: 20)
             Menu {
+                Section {
+                    Picker(selection: $hear) {
+                        Text("会议室").tag("room")
+                        Text("手机外放").tag("speaker")
+                    } label: { Text("声音来源") }
+                    .pickerStyle(.inline)
+                    // The one grey line: what 手机外放 needs, else what iPhone can't hear at all.
+                    Text(hear == "speaker" ? L("别戴耳机，字幕会浮在小窗里") : L("听不到其他 app 的声音，线上会议请用电脑版"))
+                }
                 Picker(selection: $source) {
+                    Text("自动识别").tag("auto")
                     ForEach(sourceLanguages, id: \.locale) { Text(Pref.name(of: $0)).tag($0.locale) }
                 } label: { Text("对方说") }
                 Picker(selection: $target) {
@@ -88,7 +102,7 @@ struct ListenBar: View {
                     ForEach(targetLanguages, id: \.code) { Text($0.name).tag($0.code) }
                 } label: { Text("翻译成") }
             } label: {
-                Text(verbatim: "\(Pref.sourceName) → \(targetName(Pref.targetCode))")
+                Text(verbatim: (hear == "speaker" ? L("外放") + " · " : "") + "\(Pref.sourceName) → \(targetName(Pref.target(for: Pref.sourceCode)))")
                     .font(.subheadline).foregroundStyle(Ink.secondary).lineLimit(1).minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(minHeight: 44)
@@ -159,25 +173,32 @@ struct LivePhone: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var room: RoomListen
     @EnvironmentObject var notes: NotesEngine
-    @State private var page: LivePage = .subtitles
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
                 HomeTitle()
                 ListenBar()
-                PillSwitch(selection: $page, options: [(.subtitles, "字幕"), (.notes, notesTitle)])
+                PillSwitch(selection: $model.livePage, options: [(.notes, notesTitle), (.subtitles, "字幕")])
+                EndingStrip()
+                TranslateDownCard()
+                if let id = room.sessionID { FixAskCard(fixes: model.fixes, session: id) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
-            switch page {
+            switch model.livePage {
             case .subtitles: LiveLines().padding(.top, 12)
             case .notes:
                 ScrollView { NotesPage(notes: notes.notes).padding(20) }
+                    .safeAreaInset(edge: .bottom) { SayingNow().padding(.horizontal, 16).padding(.bottom, 8) }
             }
         }
+        .background(alignment: .topLeading) { PiPHost(pip: model.pip).frame(width: 4, height: 4) }
         .background(Ink.ground)
-        .onChange(of: model.livePage) { page = model.livePage }
+        .overlay(alignment: .bottom) { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
+        .animation(.snappy(duration: 0.2), value: model.fixes.toast)
+        .animation(.snappy(duration: 0.2), value: model.translationDown)
+        .animation(.snappy(duration: 0.2), value: model.ending)
     }
 
     private var notesTitle: LocalizedStringKey {
@@ -186,6 +207,66 @@ struct LivePhone: View {
 }
 
 enum LivePage: String { case subtitles, notes }
+
+/// Under 纪要: what is being said now (else the newest line), so the notes page still shows the
+/// room live; a tap goes to 字幕.
+struct SayingNow: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var room: RoomListen
+
+    var body: some View {
+        let live = !room.draft.isEmpty
+        let last = room.lines.last
+        if live || last != nil {
+            Button { withAnimation(.snappy(duration: 0.2)) { model.livePage = .subtitles } } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(live ? L("正在说") : L("刚才")).font(.caption.weight(.semibold)).foregroundStyle(live ? Ink.accentText : Ink.secondary)
+                        Spacer()
+                        Text("点开看字幕").font(.caption).foregroundStyle(Ink.secondary)
+                    }
+                    Text(verbatim: live ? room.draft : last?.src ?? "").font(.footnote).foregroundStyle(Ink.secondary).lineLimit(1)
+                    let dst = live ? room.draftTranslation : last?.dst ?? ""
+                    if !dst.isEmpty { Text(verbatim: dst).font(.callout).foregroundStyle(Ink.ink).lineLimit(2) }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Ink.accent.opacity(live ? 0.35 : 0), lineWidth: 1.5) }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+/// 连不上翻译: why the subtitles are only the original. Without a key, the key is the fix (Ling
+/// needs no proxy in mainland China), so the card opens 设置; with one, it comes back by itself.
+struct TranslateDownCard: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        if model.translationDown {
+            Button { if !model.ling.hasKey { model.tab = .settings; model.showSettings = true } } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Ink.accent).padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("连不上翻译，新字幕暂时只有原文").font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink)
+                        Text(model.ling.hasKey ? L("网络连不上，连上后会自动继续")
+                             : model.ling.provider.id == .ling ? L("填 Ling key 后不用代理也能翻译，还会整理出纪要。")
+                             : L("填好 \(model.ling.provider.name) 的 key 后用它翻译，还会整理出纪要。"))
+                            .font(.footnote).foregroundStyle(Ink.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    if !model.ling.hasKey { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Ink.tertiary).padding(.top, 3) }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
 
 /// The lines so far as white cards, the one being said outlined in the accent; follows the newest.
 struct LiveLines: View {
@@ -207,11 +288,14 @@ struct LiveLines: View {
                             .frame(maxWidth: .infinity).padding(.top, 40)
                     }
                     ForEach(room.lines) { l in
-                        card(who: numbers[l.id].map { SpeakerLabels.label($0, names) }, time: l.t, src: l.src, dst: l.dst, live: false)
+                        // The record's line, so its fixed words show (改正听错的词); `room.lines` keeps what was heard.
+                        let rec = session?.lines.first { $0.id == l.id }
+                        card(who: numbers[l.id].map { SpeakerLabels.label($0, names) }, time: l.t,
+                             src: rec.map(FixedText.attributed) ?? AttributedString(l.src), dst: l.dst, live: false)
                             .id(l.id)
                     }
                     if !room.draft.isEmpty {
-                        card(who: nil, time: nil, src: room.draft, dst: room.draftTranslation.isEmpty ? nil : room.draftTranslation, live: true)
+                        card(who: nil, time: nil, src: AttributedString(room.draft), dst: room.draftTranslation.isEmpty ? nil : room.draftTranslation, live: true)
                             .id("draft")
                     }
                     Color.clear.frame(height: 40).id("end")
@@ -223,7 +307,7 @@ struct LiveLines: View {
         }
     }
 
-    private func card(who: String?, time: Double?, src: String, dst: String?, live: Bool) -> some View {
+    private func card(who: String?, time: Double?, src: AttributedString, dst: String?, live: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(live ? L("正在说") : [who, time.map(TranscriptExport.clock)].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption.weight(.semibold)).foregroundStyle(live ? Ink.accentText : Ink.ink)
@@ -244,34 +328,44 @@ struct LivePad: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var room: RoomListen
     @EnvironmentObject var notes: NotesEngine
-    @State private var page: LivePage = .subtitles
 
     var body: some View {
+        VStack(spacing: 0) {
+            EndingStrip().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
+            TranslateDownCard().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
+            if let id = room.sessionID {
+                FixAskCard(fixes: model.fixes, session: id).frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
+            }
         GeometryReader { g in
             if g.size.width >= 820 {
+                // 纪要 on the left and wider, 字幕 beside it, as the Mac's notes window reads.
                 HStack(alignment: .top, spacing: 22) {
-                    column("字幕") { LiveLines().padding(.horizontal, -16) }
                     column(notesTitle) {
                         ScrollView {
                             NotesPage(notes: notes.notes).padding(20)
                                 .background(Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                         }
                     }
-                    .frame(width: g.size.width * 0.42)
+                    column("字幕") { LiveLines().padding(.horizontal, -16) }
+                        .frame(width: g.size.width * 0.42)
                 }
                 .padding(.horizontal, 20).padding(.top, 18)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    PillSwitch(selection: $page, options: [(.subtitles, "字幕"), (.notes, notesTitle)]).frame(maxWidth: 320)
-                    if page == .subtitles { LiveLines().padding(.horizontal, -16) } else {
+                    PillSwitch(selection: $model.livePage, options: [(.notes, notesTitle), (.subtitles, "字幕")]).frame(maxWidth: 320)
+                    if model.livePage == .subtitles { LiveLines().padding(.horizontal, -16) } else {
                         ScrollView { NotesPage(notes: notes.notes).padding(20).background(Color.white, in: RoundedRectangle(cornerRadius: 22)) }
                     }
                 }
                 .padding(.horizontal, 20).padding(.top, 18)
             }
         }
+        }
+        .background(alignment: .topLeading) { PiPHost(pip: model.pip).frame(width: 4, height: 4) }
         .background(Ink.ground)
-        .onChange(of: model.livePage) { page = model.livePage }
+        .overlay(alignment: .bottom) { FixToast(fixes: model.fixes).frame(maxWidth: 560).padding(.horizontal, 20).padding(.bottom, 12) }
+        .animation(.snappy(duration: 0.2), value: model.fixes.toast)
+        .animation(.snappy(duration: 0.2), value: model.fixes.asking(in: room.sessionID ?? "")?.fix)
     }
 
     private var notesTitle: LocalizedStringKey {

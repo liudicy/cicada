@@ -9,7 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The Mac app's translations, used as they are (Chinese text is the key). -->
-    <None Include="../../../Resources/**/Localizable.strings" LinkBase="Resources" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../Resources/**/Localizable.strings*" LinkBase="Resources" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../Cicada.Core/Cicada.Core.csproj" />
   </ItemGroup>
 </Project>

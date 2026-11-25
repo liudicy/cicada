@@ -18,6 +18,15 @@ interface AudioSource {
     fun stop()
 }
 
+/// Debug (the Mac's silentListen): a meeting with no audio at all, its lines given by
+/// ListenEngine.debugHeard, to try what follows a finished sentence without playing anything.
+class SilentAudioSource : AudioSource {
+    override var onSamples: ((ShortArray) -> Unit)? = null
+    override var onEnded: ((String?) -> Unit)? = null
+    override fun start() {}
+    override fun stop() {}
+}
+
 /// Plays 16 kHz samples into listening, in real time or as fast as it can (`speed` 0).
 class PcmAudioSource(private val load: () -> ShortArray, private val speed: Double = 1.0) : AudioSource {
     override var onSamples: ((ShortArray) -> Unit)? = null

@@ -110,7 +110,7 @@ public static class MicUse
     static readonly (string Key, string Name)[] Apps =
     [
         ("zoom.exe", "Zoom"), ("wemeetapp.exe", "腾讯会议"), ("feishu.exe", "飞书"), ("lark.exe", "Lark"),
-        ("dingtalk.exe", "钉钉"), ("teams.exe", "Teams"), ("ms-teams.exe", "Teams"), ("msteams_", "Teams"),
+        ("dingtalk.exe", "钉钉"), ("wxwork.exe", "企业微信"), ("teams.exe", "Teams"), ("ms-teams.exe", "Teams"), ("msteams_", "Teams"),
         ("ciscocollabhost.exe", "Webex"), ("webex.exe", "Webex"), ("cisco.webex", "Webex"),
     ];
 

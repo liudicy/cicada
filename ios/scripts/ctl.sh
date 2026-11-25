@@ -4,6 +4,6 @@
 set -euo pipefail
 DEVICE=booted
 if [[ ${1:-} == -d ]]; then DEVICE=$2; shift 2; fi
-DATA=$(xcrun simctl get_app_container "$DEVICE" com.wquguru.cicada.dev data)
+DATA=$(xcrun simctl get_app_container "$DEVICE" com.indaloop.cicada.dev data)
 printf '%s\n' "$@" >> "$DATA/Library/Caches/debug-command"
-xcrun simctl spawn "$DEVICE" notifyutil -p com.wquguru.cicada.debug
+xcrun simctl spawn "$DEVICE" notifyutil -p com.indaloop.cicada.debug

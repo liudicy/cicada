@@ -43,8 +43,8 @@
 "安装没有完成，可以重启电脑后再试。" = "Installation didn't finish. Restart your PC and try again.";
 "对方会听到%@" = "Others will hear %@";
 "对方可见" = "Visible to others";
-"对方听到的声音（%@）" = "Voice others hear (%@)";
-"对方听到的语言" = "Language others hear";
+"线上的人听到的声音（%@）" = "Voice people online hear (%@)";
+"线上的人听到的语言" = "Language people online hear";
 "对方已听到" = "Sent to meeting";
 "就绪 · Ling 已连接" = "Ready · Connected to Ling";
 "屏幕共享里看不到" = "Hidden from screen sharing";
@@ -59,7 +59,7 @@
 "打开文件夹" = "Open folder";
 "打开设置" = "Settings";
 "按住%@说话" = "Hold %@ to speak";
-"按住%@说话，对方听到的是翻译后的声音" = "Hold %@ to speak. Others hear the translated voice.";
+"按住%@说话，线上的人听到的是翻译后的声音" = "Hold %@ to speak. People online hear the translated voice.";
 "按声音标出说话人 1、2…，只在这台电脑上处理" = "Labels lines Speaker 1, 2… by voice, on this PC only";
 "换成字幕条" = "Switch to subtitle bar";
 "换成纪要" = "Switch to notes";
@@ -85,7 +85,6 @@
 "没找到麦克风" = "No microphone found";
 "没有声音？先确认电脑没静音" = "No sound? Make sure your PC isn't muted.";
 "没有找到" = "No results found";
-"没翻译成功，没有发出去" = "Couldn't translate. Nothing was sent.";
 "没能发出声音" = "Couldn't play audio";
 "清空就用纪要起的名字：%@" = "Leave blank to use the title from notes: %@";
 "点“开始听”，电脑里播放的声音会变成双语字幕和纪要" = "Select \"Start listening\" to turn your PC's audio into live bilingual subtitles and meeting notes.";
@@ -118,12 +117,9 @@
 "还没接上 Ling" = "Not connected to Ling";
 "还没有会议记录" = "No meeting records yet";
 "还没装虚拟麦克风，去设置里装一下" = "Virtual microphone isn't installed. Install it in Settings.";
-"这个 key 不能用，检查是否复制完整，或重新创建一个" = "This key didn't work. Make sure you copied the whole key, or create a new one.";
 "这个快捷键被别的程序占用了" = "This shortcut is already in use by another app";
 "这台电脑没有这种语言的声音，没有发出去" = "This PC doesn't have a voice for this language. Nothing was sent.";
-"这段时间的话没能识别。检查网络后点重试。" = "Some audio couldn't be transcribed. Check your network and try again.";
 "连不上 Ling" = "Can't connect to Ling";
-"连不上 Ling，检查网络" = "Can't connect to Ling. Check your network.";
 "连不上 Ling，没有发出去" = "Couldn't connect to Ling. Nothing was sent.";
 "重命名" = "Rename";
 "重新打开知了后生效" = "Takes effect after you restart Cicada";
@@ -152,8 +148,7 @@
 "Teams、Zoom、腾讯会议都在“音频设置”里" = "In Teams, Zoom and Tencent Meeting it's under audio settings";
 "按住说一句试试" = "Hold it and say something";
 "松开后约 2 秒，对方就会听到译文" = "About 2 seconds after you let go, the room hears the translation";
-"要让对方听懂你说的话吗？" = "Want the room to understand you?";
-"按住%@说话，对方在会议里听到翻译后的声音。不需要可以跳过。" = "Hold %@ and speak; the meeting hears you translated. Skip it if you don't need it.";
+"按住%@说话，线上的人听到翻译后的声音。不需要可以跳过。" = "Hold %@ and speak; people online hear you translated. Skip it if you don't need it.";
 "打开任务栏设置" = "Open taskbar settings";
 "拖不动？在任务栏设置里打开“知了”" = "Can't drag it? Turn on Cicada in taskbar settings";
 "在哪儿都能用" = "Works from anywhere";
@@ -161,7 +156,7 @@
 "好了，知了住在任务栏右下角" = "All set: Cicada lives at the bottom right of the taskbar";
 "Windows 会先把新图标收进 ^ 里。拖出来放在时钟旁边，开会时一眼就能看到。" = "Windows tucks new icons under ^ at first. Drag it out next to the clock so it's in sight during meetings.";
 "最大化" = "Maximize";
-"隐藏纪要窗" = "Hide notes window";
+"隐藏纪要窗" = "Hide notes";
 "退出知了" = "Quit Cicada";
 "知了还在任务栏右下角" = "Cicada is still in the taskbar corner";
 "关掉窗口不会退出，按 %@ 随时开始听。" = "Closing the window doesn't quit. Press %@ to start listening any time.";
@@ -169,7 +164,6 @@
 "VB-Cable 已装好" = "VB-Cable installed";
 "译文送进会议" = "Send the translation into the meeting";
 "没在听" = "Not listening";
-"对方听得到" = "The room can hear you";
 "去设置" = "Settings";
 "听电脑里的声音" = "Hear this PC's audio";
 "让知了听到电脑里的声音" = "Let Cicada hear your PC";
@@ -177,7 +171,7 @@
 "下载后解压，替换旧的知了" = "Unzip it and replace the old Cicada";
 "下载" = "Download";
 
-/* Cicada-Setup.exe: install, update, uninstall */
+/* The installer: install, update, uninstall */
 "知了已更新到 %@" = "Cicada is updated to %@";
 "会议记录、设置和 Ling key 都在。" = "Your meetings, settings and Ling key are all still here.";
 "知了已经装好了" = "Cicada is already installed";
@@ -227,7 +221,7 @@
 "听一下电脑里的声音" = "Check your PC's sound";
 "放一段测试声音，看音量条动起来" = "Play a test sound and watch the meter move";
 "一段 9 秒的英文会议，字幕和纪要一句句出来" = "A 9-second English meeting, with subtitles and notes as they come";
-"按住%@说话，对方听到翻译后的声音" = "Hold %@ to speak; they hear the translation";
+"按住%@说话，线上的人听到翻译后的声音" = "Hold %@ to speak; people online hear the translation";
 "可选" = "Optional";
 "继续设置" = "Continue setup";
 "还差 %@ 步" = "%@ to go";
@@ -246,3 +240,132 @@
 "对方听到译文" = "They hear the translation";
 "会议里对方说的话从电脑扬声器放出来，字幕和纪要都从这里来。Windows 上不用授权。" = "What others say in a meeting comes out of your PC's speakers. Subtitles and notes come from there. No permission needed on Windows.";
 "点按下载" = "Click to download.";
+
+/* AI 服务: other services than Ling */
+"需要 %@ 的 key 才能说" = "Needs a %@ key to speak";
+"接上 %@" = "Connect %@";
+"API key" = "API key";
+"接 AI 服务" = "AI service";
+"仅保存在本机当前账户下，仅发送至 %@" = "Stored only for this account on this computer, sent only to %@";
+"听、纪要和翻译都能用，模型已经选好。" = "Listening, notes and translation all work, with the models already chosen.";
+"听的模型" = "Listening model";
+"要能输入音频：听对方和“我说”都用它" = "Must take audio in: used for Listen and for Speak";
+"例如 qwen3-omni" = "e.g. qwen3-omni";
+"仅保存在本机当前账户下，仅发送至 Ling（ant-ling.com）" = "Saved locally under your account and sent only to Ling (ant-ling.com)";
+"仅保存在本机当前账户下，仅发送至 %@（%@）" = "Stored only for this account on this computer, sent only to %1$@ (%2$@)";
+"听的时候，电脑里的声音会发给 %@。" = "While listening, your computer's audio is sent to %@.";
+"按所选模型计费。" = "Billed by the models you choose. ";
+"还不能用" = "Not yet";
+"Ming 一次识别并翻译" = "Ming recognizes and translates in one step";
+"比 Ling 晚 1–2 秒出字" = "Text appears 1–2 s later than with Ling";
+"没填声音模型，用 Windows 的声音" = "No voice model set; using the Windows voice";
+"填好 key 前用 Windows 的声音" = "Uses the Windows voice until a key is added";
+"需支持 /audio/speech；不填则同传用 Windows 的声音" = "Must support /audio/speech; without one, interpreting uses the Windows voice";
+"听对方和“我说”都用它" = "Used for Listen and for Speak";
+"手动填写…" = "Enter manually…";
+"本机服务，不用 key" = "Local service, no key needed";
+"还没接上 %@" = "%@ not connected yet";
+"在 设置 › AI 服务 里换一个" = "Change it in Settings › AI Service";
+"%@ 太忙，稍后再试" = "%@ is busy. Try again shortly";
+"%@ 的 key 无效" = "%@ key is invalid";
+"需要 %@ 的 key 才能听" = "Needs a %@ key to listen";
+"连不上 %@" = "Can't connect to %@";
+"连不上 %@，没有发出去" = "Can't connect to %@. Nothing was sent";
+"没人说话时不乱写" = "Writes nothing when no one speaks";
+"更快" = "Faster";
+"最快，偶尔把杂音写成字" = "Fastest; sometimes turns noise into words";
+
+/* AI 服务检查 (AICheck): the ports' own words; the rest are the Mac's. */
+"正常" = "Working";
+"文字 %@ 秒" = "text %@ s";
+"听 %@ 秒" = "hearing %@ s";
+"听不了声音" = "Can't hear audio";
+"%@ 现在听不了声音" = "%@ can't hear audio right now";
+"%@ 只收文字。换成推荐的模型就能开始听。" = "%@ takes text only. Switch to the recommended model to start listening.";
+"换成推荐的并开始" = "Switch and Start";
+"重新检查并开始" = "Check Again and Start";
+"用完后就听不了对方" = "When it runs out, listening stops";
+"听对方暂时用不了" = "Listening is unavailable for now";
+"纪要和整句翻译先停下" = "Notes and full-sentence translation pause";
+"%@ 听不了声音。" = "%@ can't hear audio.";
+"上次同传没出声，用了 Windows 的声音" = "Silent last time; the Windows voice spoke instead";
+"先用 Windows 的声音" = "Using the Windows voice for now";
+"这台电脑访问不到 %@。" = "This PC can't reach %@.";
+"刚刚" = "just now";
+"%lld 分钟前" = "%lld min ago";
+"%lld 小时前" = "%lld hr ago";
+"%lld 天前" = "%lld days ago";
+"这段时间的话没能识别。网络恢复后自动继续。" = "Some audio couldn't be transcribed. It picks up again when the network is back.";
+
+/* 听哪里 › 会议室: the Mac's words name the Mac. */
+"插上麦克风后再开始听。" = "Plug in a microphone, then start again.";
+"电脑声音" = "This PC";
+"电脑声音（线上会议、视频）" = "This PC (online meetings, videos)";
+
+/* 听哪里 › 电脑和会议室: the Mac's words name the Mac. */
+"电脑和会议室" = "PC + Room";
+"电脑和会议室 · %@" = "PC + Room · %@";
+"电脑和会议室（线上和桌边的人都听）" = "PC + Room (people online and at the table)";
+"也听电脑" = "Hear the PC too";
+"电脑里放出来的" = "Played on the PC";
+"%@。点按去设置" = "%@. Click to open Settings";
+"每样可以接不同的机器；这台电脑和局域网里的服务可以用 http。" = "Each can use a different machine; services on this PC or your local network can use http.";
+"没填，用 Windows 的声音" = "Not set: the Windows voice";
+"地址要用 https；这台电脑和局域网里的服务可以用 http。" = "The address must use https; services on this PC or your local network can use http.";
+"本机和局域网服务可不填" = "Optional on this PC or your local network";
+"例如 kokoro" = "e.g. kokoro";
+"例如 af_heart" = "e.g. af_heart";
+/* The talk key: the computer was playing through the press, so what the mic heard may be its echo. */
+"对方在说话时说的，没有说出去" = "Said while they were talking, so not sent";
+"只存在这台电脑上" = "Stored only on this PC";
+/* 打开麦克风: the Mac's words name the Mac. */
+"关着 · 只听电脑声音" = "Off · PC audio only";
+"电脑声音照常在记" = "The PC's audio is still being recorded";
+
+/* 改正听错的词: Ming translates with the audio, so fixing is a request of its own; the list is on this PC. */
+"每句话说完多发一次文字请求" = "One more text request per finished sentence";
+"最多 %lld 个，满了优先用最近的。只存在这台电脑上" = "Up to %lld, recent ones first. Stored only on this PC";
+
+/* 按住说话's 更改 (#22): keyboards without right Ctrl pick another talk key. */
+"按下想用的键…" = "Press a key…";
+"Esc 取消" = "Esc to cancel";
+"左 Ctrl" = "Left Ctrl";
+"右 Shift" = "Right Shift";
+"左 Shift" = "Left Shift";
+"菜单键" = "Menu key";
+"Windows 键会打开开始菜单，换一个吧" = "The Windows key opens Start. Try another key";
+"Alt 松开时会打开窗口的菜单，换一个吧" = "Alt opens window menus when released. Try another key";
+"打字时会用到这个键，换一个不常用的吧" = "You type with this key. Pick one you rarely use";
+"只有单独按住才算，Ctrl C 这类快捷键不会开始说话" = "Only counts when held alone: shortcuts like Ctrl C won't start talking";
+"只有单独按住才算，打字时的 Shift 不会开始说话" = "Only counts when held alone: Shift while typing won't start talking";
+"按住说话时不会切换大小写" = "Holding it to talk won't switch caps";
+/* 试听's result under the voice (#22: it used to fail silently). */
+"停止" = "Stop";
+"这台电脑没有%@的声音，没放出来。" = "This PC has no %@ voice, so nothing played.";
+"在 Windows 设置里添加这个语言的语音，或者换一个 AI 服务的声音。" = "Add a voice for this language in Windows Settings, or pick an AI service voice.";
+"打开语音设置" = "Open speech settings";
+"没放出声音：找不到扬声器。" = "Nothing played: no speakers found.";
+"看看耳机或扬声器有没有连上。" = "Check that headphones or speakers are connected.";
+"%@ 的声音没连上，刚才放的是 Windows 自带的。" = "Couldn't reach the %@ voice, so that was the Windows voice.";
+"开会时也会这样换过去，不会不出声。" = "Meetings fall back the same way, so you're never silent.";
+"没放出声音。" = "Nothing played.";
+"再试一次，还不行就换一个声音。" = "Try again, or pick another voice.";
+/* VB-Cable took the speaker (CableDefaults). Copy polished and translated with gemini-4-argon, reviewed. */
+"电脑声音照常从 %@ 播放" = "PC audio will keep playing through %@";
+"电脑没声了？" = "No sound from your PC?";
+"Windows 把播放设备改成了 CABLE Input" = "Windows changed the playback device to CABLE Input";
+"恢复声音" = "Restore sound";
+"听不到电脑声音了？" = "Can't hear your PC?";
+"Windows 把输出改成了 CABLE Input，点此恢复" = "Windows switched audio output to CABLE Input. Click to restore.";
+"自动恢复失败" = "Couldn't restore audio";
+"请去 Windows 声音设置，把输出设备改回你的耳机或扬声器" = "Go to Windows Sound settings and switch the output device back to your headphones or speakers.";
+/* 存到文件夹 on Windows: controlled folder access instead of macOS privacy settings, File Explorer instead of Finder. */
+"打开 Windows 安全中心" = "Open Windows Security";
+"在 Windows 安全中心里允许知了，或换个文件夹" = "Allow Cicada in Windows Security, or pick another folder";
+"换个文件夹，或在它的属性里允许写入" = "Pick another folder, or allow writing in its Properties";
+"在文件资源管理器中显示" = "Show in File Explorer";
+"听起来不像或有杂音？换个安静的地方重录一次。录音仅保存在本机，可随时删除。" = "Doesn't sound like you, or noisy? Record again somewhere quiet. The recording stays on this PC and can be deleted anytime.";
+"会议室的麦克风断开了" = "The room microphone disconnected";
+"已停止记录；插好麦克风后再开始听。" = "Stopped recording. Plug the microphone back in, then start listening.";
+"听不到电脑的声音了" = "Can't hear the PC's audio anymore";
+"已停止记录；稍后再开始听，或重启电脑后再试。" = "Stopped recording. Start listening again in a moment, or restart the PC and try again.";

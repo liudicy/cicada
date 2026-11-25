@@ -3,7 +3,7 @@ using System.Text;
 namespace Cicada.App;
 
 /// Files carried inside Cicada.exe (EmbeddedResource in Cicada.csproj), so the exe alone is the
-/// whole app: Cicada-Setup.exe is downloaded as one file and installs by copying itself.
+/// whole app: the installer is downloaded as one file and installs by copying itself.
 static class Bundled
 {
     static readonly System.Reflection.Assembly Self = typeof(Bundled).Assembly;

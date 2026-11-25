@@ -21,7 +21,7 @@ Android 10 起可以采集其他 app 播放的声音（`AudioPlaybackCapture`）
 
 面对面里的“我说”：按住说话，松开后 Ming 译成对方的语言，用系统的文字转语音读出来；读的时候不把手机自己的声音当成对方的话。说进别的 app 的通话做不到（Android 没有虚拟麦克风），不做。
 
-第一版不做：说话人识别、离线识别、录音文件。
+第一版不做：离线识别、录音文件。说话人识别后来补上了：用 Linux 版自己写的 C 推理（`linux/native/voiceprint.c`），由 NDK 编进 app，和 Mac 同一个声纹模型、同样的阈值。
 
 最低系统 Android 10（API 29），目标 API 36。
 
@@ -30,8 +30,8 @@ Android 10 起可以采集其他 app 播放的声音（`AudioPlaybackCapture`）
 | 决策 | 选择 | 原因 |
 |---|---|---|
 | 代码放哪 | 同仓库 `android/` | 和 Windows 一样：提示词、记录格式、文案要跟 Mac 对照修改 |
-| 技术栈 | Kotlin + Android 框架自带的 View，代码写界面；不用 AndroidX、Compose、协程库 | 对应 Mac / Windows 的“不用第三方依赖”。只用 Kotlin 标准库、`java.*` 和 `android.*` |
-| 构建 | Gradle + Android Gradle Plugin，工具链由 `scripts/install-sdk.sh` 装到 `~/.cicada-android`（JDK、Gradle、SDK、模拟器），不用 Android Studio | 和 Windows 的 `install-dotnet.sh` 一样，不用 sudo，命令行就能编译和测试 |
+| 技术栈 | Kotlin + Android 框架自带的 View，代码写界面；不用 AndroidX、Compose、协程库 | 对应 Mac / Windows 的“不用第三方依赖”。只用 Kotlin 标准库、`java.*` 和 `android.*`；唯一的原生代码是说话人识别用的自己写的 C（`linux/native/voiceprint.c`） |
+| 构建 | Gradle + Android Gradle Plugin，工具链由 `scripts/install-sdk.sh` 装到 `~/.cicada-android`（JDK、Gradle、SDK、NDK、模拟器），不用 Android Studio | 和 Windows 的 `install-dotnet.sh` 一样，不用 sudo，命令行就能编译和测试 |
 | 引擎放哪 | `android/core` 是纯 JVM 的 Kotlin 库，不依赖 Android | 在 Mac 上直接跑单元测试和真实调用（`cli`），像 `Cicada.Core` |
 | JSON | 自己写的小解析器和写出器（`Json.kt`） | `org.json` 只在 Android 上有、不排序 key；自己写才能和 Mac 的 `session.json` 逐字节一致 |
 | 语音识别 | Ming 分段识别，同 Windows | 同一个 Ling key；M0 已在 Windows 方案里测过延迟和准确率 |
@@ -106,7 +106,7 @@ MediaProjection → AudioPlaybackCapture（排除知了自己） ┐
 | **M1 字幕** | 前台服务、两种声音来源、分段 → Ming、悬浮字幕 | 模拟器里播放的视频声音变成字幕；截图里看不到悬浮窗 |
 | **M2 纪要和记录** | 纪要引擎、`session.json`、会议记录、引导、设置、四种界面语言 | Mac 生成的记录 Android 能打开，写出去逐字节一致 |
 | **M3 能发布** | 签名的 APK（GitHub Release 下载，校验 SHA-256）、官网入口、电池优化引导、真机测试（至少一台国产手机） | 一台干净的真机从下载到第一次出字幕不用电脑 |
-| 以后 | 应用商店、录音、流式识别、说话人识别 | 按反馈排 |
+| 以后 | 应用商店、录音、流式识别 | 按反馈排 |
 
 ## 风险
 

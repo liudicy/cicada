@@ -71,7 +71,7 @@ sealed class TrayFlyout : Window
                 ? Ui.Row(6, Ui.Dot(Palette.Tertiary, 6), Ui.Text(L("会议已自动结束"), 13, Palette.Secondary, wrap: false))
             : app.Ling.HasKey
                 ? Ui.Row(6, Ui.Dot(Palette.Toggle, 6), Ui.Text(L("没在听"), 13, Palette.Secondary, wrap: false))
-                : Ui.Row(6, Ui.Dot(Palette.Tertiary, 6), Ui.Text(L("还没接上 Ling"), 13, Palette.Secondary, wrap: false));
+                : Ui.Row(6, Ui.Dot(Palette.Tertiary, 6), Ui.Text(app.Ling.Config.IsLing ? L("还没接上 Ling") : LF("还没接上 %@", app.Ling.Config.Name), 13, Palette.Secondary, wrap: false));
         var title = Ui.Row(12, AppIcon.Small(40), Ui.Stack(1, Ui.Text(L("知了"), 17, Palette.Ink, Palette.Strong, wrap: false), status));
         var head = Ui.Spread(title, Ui.IconButton(Icons.Gear, L("打开设置"), () => Do(app.ShowSettings), Palette.Body, 36, 18));
         stack.Children.Add(head);
@@ -82,7 +82,7 @@ sealed class TrayFlyout : Window
         {
             var size = update.Size > 0 ? $"{update.Size / 1_048_576.0:0} MB · " : "";
             var detail = app.UpdateProgress is { } p0 ? LF("正在下载 %@：%lld%%", update.Version, (long)(p0 * 100))
-                : app.UpdateFailure is { } f ? LF("没能自动更新：%@。已打开下载页", f)
+                : app.UpdateFailure is { } f ? (app.UpdatePageOpened ? LF("没能自动更新：%@。已打开下载页", f) : LF("没能自动更新：%@", f))
                 : size + SettingsWindow.UpdateHint(update);
             var text = Ui.Stack(2, Ui.Text(LF("新版本 %@", update.Version), 13, Palette.Ink, Palette.Strong, wrap: false),
                                 Ui.Text(detail, 11, Palette.Secondary),
@@ -98,6 +98,19 @@ sealed class TrayFlyout : Window
             dock.Children.Add(download); dock.Children.Add(dot); dock.Children.Add(text);
             var strip = new Border { Background = Palette.AccentPale, CornerRadius = new CornerRadius(9), Padding = new Thickness(10), Margin = new Thickness(0, 14, 0, 0), Child = dock };
             stack.Children.Add(strip);
+        }
+
+        // The AI service needs the user (can't reach it, the key, money, a model gone or deaf; the
+        // Mac's AIServiceStrip). On Windows the service hears too, so it comes before 开始听.
+        if (app.AIProblem() is { } ai)
+        {
+            var text = Ui.Stack(2, Ui.Text(ai.Title, 13, Palette.AccentText, Palette.Strong), Ui.Text(ai.Detail, 11, Palette.Secondary));
+            var open = Ui.Button(L("打开设置"), () => Do(app.ShowAISettings), Ui.Kind.Primary, height: 30);
+            open.VerticalAlignment = VerticalAlignment.Center; open.Margin = new Thickness(10, 0, 0, 0);
+            var dock = new DockPanel();
+            DockPanel.SetDock(open, Dock.Right);
+            dock.Children.Add(open); dock.Children.Add(text);
+            stack.Children.Add(new Border { Background = Palette.AccentPale, CornerRadius = new CornerRadius(9), Padding = new Thickness(10), Margin = new Thickness(0, 14, 0, 0), Child = dock });
         }
 
         // The one thing to do
@@ -141,12 +154,26 @@ sealed class TrayFlyout : Window
         var spoken = Languages.Targets.FirstOrDefault(t => t.Code == Languages.FromSystem(System.Globalization.CultureInfo.CurrentUICulture.Name))?.Code;
         var target = s.Target == "system" ? spoken ?? "zh-Hans" : s.Target;
         stack.Children.Add(Gap(ChoiceRow(L("翻译成"), Ui.TargetName(target), s.Target == "system" ? L("跟随系统") : null, Ui.TargetOptions(), s.Target, app.SetTarget), 12));
+        // 麦克风 (the Mac panel's row): turning it on mid-meeting adds the room to the same meeting.
+        var micText = Ui.Stack(2, Ui.Text(L("麦克风"), 14, Palette.Ink, Palette.Strong, wrap: false),
+                               Ui.Text(app.MicOn ? L("桌边的人说话也会记下") : L("关着 · 只听电脑声音"), 12, Palette.Secondary));
+        stack.Children.Add(Gap(Ui.Spread(micText, MicButton(app, panel: true)), 14));
+        if (app.HybridMicDenied)
+        {
+            var text = Ui.Stack(2, Ui.Text(L("听会议室要先允许麦克风"), 13, Palette.AccentText, Palette.Strong), Ui.Text(L("电脑声音照常在记"), 11, Palette.Secondary));
+            var open = Ui.Button(L("去设置"), () => Do(() => Controller.Open("ms-settings:privacy-microphone")), Ui.Kind.Primary, height: 30);
+            open.VerticalAlignment = VerticalAlignment.Center; open.Margin = new Thickness(10, 0, 0, 0);
+            var dock = new DockPanel();
+            DockPanel.SetDock(open, Dock.Right);
+            dock.Children.Add(open); dock.Children.Add(text);
+            stack.Children.Add(new Border { Background = Palette.AccentPale, CornerRadius = new CornerRadius(9), Padding = new Thickness(10), Margin = new Thickness(0, 10, 0, 0), Child = dock });
+        }
 
         // 同声传译
         stack.Children.Add(Rule());
         var cable = Endpoints.Cable() is not null;
         var speakState = s.Speak && cable && app.Ling.HasKey
-            ? (UIElement)Ui.Text(L("对方听得到"), 12, Palette.Success, wrap: false)
+            ? (UIElement)Ui.Text(L("线上的人听得到你"), 12, Palette.Success, wrap: false)
             : Ui.LinkText(s.Speak ? L("去设置") : L("打开"), () => Do(app.ShowSettings), 12);
         stack.Children.Add(Ui.Spread(Ui.Text(L("同声传译"), 14, Palette.Ink, Palette.Strong, wrap: false), speakState));
         var talk = Ui.Row(12, Ui.Keycap(PushToTalk.Label, big: false), Ui.Stack(1,
@@ -174,6 +201,18 @@ sealed class TrayFlyout : Window
         foot.Children.Add(records); foot.Children.Add(quit);
         stack.Children.Add(foot);
         return stack;
+    }
+
+    /// 打开麦克风 / 关闭麦克风, the same switch in the panel and the notes window (MicButton on the
+    /// Mac): in the panel the ink button while off, a quiet one while on; in the notes window a pale
+    /// one beside 结束, tinted while on.
+    public static Button MicButton(Controller app, bool panel)
+    {
+        var on = app.MicOn;
+        var kind = on ? (panel ? Ui.Kind.Standard : Ui.Kind.Pale) : (panel ? Ui.Kind.Primary : Ui.Kind.Standard);
+        var b = Ui.Button(on ? L("关闭麦克风") : L("打开麦克风"), () => app.SetMic(!on), kind, Icons.Mic, 32);
+        b.MinWidth = 0; b.Padding = new Thickness(12, 0, 12, 0); b.VerticalAlignment = VerticalAlignment.Center;
+        return b;
     }
 
     static FrameworkElement Gap(FrameworkElement e, double top) { e.Margin = new Thickness(e.Margin.Left, top, e.Margin.Right, e.Margin.Bottom); return e; }

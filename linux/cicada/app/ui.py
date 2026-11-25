@@ -13,11 +13,15 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
+from ..core.strings import L  # noqa: E402
+
 CSS = b"""
 * { font-family: "Noto Sans", sans-serif; font-size: 13px; }
 .ground { background-color: #F3F4F6; }
 .sheet, .sheet viewport { background-color: #FFFFFF; }
 .soft-bar { background-color: #F3F4F6; }
+.pinned-bar { background-color: #FFFFFF; border-bottom: 1px solid #ECEDF0; }
+button.pinned-title { background: none; border: none; box-shadow: none; padding: 0; min-height: 0; }
 
 /* Header bars: flat, the window buttons small glyphs (the Mac's quiet chrome, not Yaru's discs). */
 headerbar.cicada { background-image: none; background-color: #FFFFFF; border: none; box-shadow: none; min-height: 44px; padding: 0 6px; }
@@ -49,6 +53,8 @@ button.accentbtn:hover { background-color: #D44A22; }
 button.accentbtn image, button.darkbtn image { color: #FFFFFF; }
 button.darkbtn { background-image: none; background-color: #15171C; color: #FFFFFF; border: none; box-shadow: none; border-radius: 7px; padding: 4px 14px; }
 button.darkbtn:hover { background-color: #2A2D34; }
+button.darkbtn:disabled { background-color: #C9CCD3; }
+button.darkbtn:disabled label { color: #FFFFFF; }
 button.darkbtn.pill { border-radius: 14px; }
 button.livepill { background-image: none; background-color: #FDEEE8; color: #B33A14; border: none; box-shadow: none; }
 button.outline { background-image: none; background-color: #FFFFFF; border: 1px solid #E4E6EA; box-shadow: none; border-radius: 7px; padding: 3px 10px; color: #15171C; }
@@ -75,6 +81,7 @@ combobox arrow { -gtk-icon-source: -gtk-icontheme("pan-down-symbolic"); min-widt
 combobox cellview, combobox button label { font-size: 12px; }
 entry { background-image: none; background-color: #FFFFFF; border: 1px solid #E4E6EA; box-shadow: none; border-radius: 7px; min-height: 26px; padding: 0 9px; font-size: 13px; color: #15171C; caret-color: #15171C; }
 entry:focus { border-color: #E8552B; box-shadow: 0 0 0 2px rgba(232,85,43,0.18); }
+entry.error { border-color: #B3261E; }
 entry.search { background-color: #E8EAEE; border-color: transparent; min-height: 28px; font-size: 12px; }
 entry.search:focus { background-color: #FFFFFF; }
 entry selection, label selection { background-color: rgba(232,85,43,0.22); color: #15171C; }
@@ -103,8 +110,27 @@ spinner { color: #6B7080; }
 .endingstrip { background-color: #FDEEE8; border-radius: 12px; }
 .notice { background-color: #F2F3F5; border-radius: 12px; }
 dialog.endask { background-color: #FFFFFF; border: 1px solid #E4E6EA; border-radius: 12px; }
+/* The share dialog (ShareViews.swift): the review's hits on the accent's pale, the link and password on the fill. */
+.sharehit { background-color: #FCEDE7; border-radius: 8px; }
+.sharefield { background-color: #F2F3F5; border-radius: 6px; }
+/* The share dialog's Copy and its arrow as one control (a linked box). */
+.copybtn button.outline:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.copybtn button.outline.arrow { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 3px 5px; }
+.copybtn button.outline.arrow image { color: #5A5F6B; }
+dialog.sharesheet separator { background-color: #EEF0F3; min-height: 1px; }
+dialog.sharesheet entry.mono { font-family: "Ubuntu Sans Mono", monospace; }
 .notice.error { background-color: #FDECEA; }
+/* StatusLine (Views.swift): a service in trouble in one line on the plain fill; colour only in the dot. */
+.statusline { background-color: #F2F3F5; border-radius: 10px; min-height: 36px; }
+.statusdot { border-radius: 3px; min-width: 6px; min-height: 6px; background-color: #6B7080; }
+.statusdot.waiting { background-color: #C98A00; }
+.statusdot.needsyou { background-color: #B42318; }
+button.quietbtn.statusaction, button.quietbtn.statusaction:hover { background-color: transparent; padding: 4px 0; min-width: 0; }
 .panel.dark .endingstrip { background-color: rgba(232,85,43,0.16); }
+/* The light fills would sit as pale slabs, their grey text washed out, on the dark notes window. */
+.panel.dark .statusline, .panel.dark .notice { background-color: #2A2C32; }
+.panel.dark .notice.error { background-color: rgba(180,35,24,0.22); }
+.panel.dark .segmented button { color: #A3A7B1; }
 entry.notes-search { min-height: 32px; font-size: 13px; border-radius: 9px; }
 .panel.dark entry.notes-search { background-color: #2A2C32; color: #F2F3F5; }
 button.iconbtn.on { background-color: #F3F4F6; color: #15171C; }
@@ -116,9 +142,53 @@ button.iconbtn.on { background-color: #F3F4F6; color: #15171C; }
 .warnrow label { color: #5A2A16; }
 .group-title { font-weight: 700; color: #6B7080; }
 
+.aitag { border-radius: 6px; }
+.aitag.ok { background-color: #E3F3EA; }
+.aitag.ok label { color: #1F6B3A; }
+.aitag.off { background-color: #F2F3F5; }
+.aitag.off label { color: #5A5F6B; }
+.aitag.ling { background-color: #FDEEE8; }
+.aitag.ling label { color: #B23A12; }
+.aitag.warn { background-color: #FFF4D6; }
+.aitag.warn label { color: #8A5A00; }
+/* The AI service check (AICheckView.swift): a 20 px disc per step, the reason in red (busy in amber). */
+.stepdisc { border-radius: 10px; min-width: 20px; min-height: 20px; }
+.stepdisc.ok { background-color: #E3F3EA; }
+.stepdisc.ok image { color: #1F6B3A; }
+.stepdisc.fail { background-color: #FDECEA; }
+.stepdisc.fail image { color: #B3261E; }
+.stepdisc.busy { background-color: #FFF4D6; }
+.stepdisc.busy image { color: #8A5A00; }
+.stepdisc.running { background-color: #FDEEE8; }
+.stepdisc.running image { color: #B33A14; }
+.stepdisc.off { background-color: #F2F3F5; }
+.stepdisc.off image { color: #6B7080; }
+.stepwhy { color: #B3261E; }
+.stepwhy.busy { color: #8A5A00; }
+.proxybox { background-color: #F2F3F5; border-radius: 8px; }
+.proxybox label { color: #3D4149; }
+.warnstrip { background-color: #FFF4D6; border-radius: 10px; }
+.warnstrip label { color: #8A5A00; }
+.busyline { color: #8A5A00; }
 .chip { background-color: #F2F3F5; border-radius: 5px; padding: 1px 6px; color: #15171C; }
 .chip.now { background-color: #E8552B; color: #FFFFFF; }
 .chip.time { background-color: transparent; padding: 0; color: #B33A14; }
+.placetag { border-radius: 4px; border: 1px solid #E4E6EA; }
+.placetag.room { background-color: #F2F3F5; border-color: #F2F3F5; }
+.placetag label { color: #5A5F6B; }
+/* Save to folder (folder_export_view.py): the Obsidian vault tag, a problem in the card (accent-pale
+   when the folder refuses, ground grey otherwise), and the save-where choices (ink when picked). */
+.foldertag { border-radius: 4px; background-color: #F2F3F5; }
+.foldertag label { color: #5A5F6B; }
+.folderproblem { background-color: #F3F4F6; border-radius: 9px; }
+.folderproblem.denied { background-color: #FDEEE8; }
+button.folderoption { background-image: none; background-color: #FFFFFF; border: 1px solid #E4E6EA; box-shadow: none; border-radius: 9px; padding: 0; }
+button.folderoption:hover { background-color: #F6F7F9; }
+button.folderoption.picked, button.folderoption.picked:hover { background-color: #FFFFFF; border: 1.5px solid #15171C; }
+button.folderoption image { color: #6B7080; }
+button.folderoption.picked image { color: #15171C; }
+.metag { border-radius: 4px; border: 1px solid rgba(232,85,43,0.45); }
+.metag label { color: #B33A14; }
 .badge { background-color: #FDEEE8; border-radius: 5px; padding: 0 6px; color: #B33A14; }
 .softcard { background-color: #F5F6F8; border-radius: 12px; }
 .summarycard { background-color: #F5F6F8; border-radius: 12px; }
@@ -147,6 +217,13 @@ button.iconbtn.on { background-color: #F3F4F6; color: #15171C; }
 .breathemark { border-radius: 6px; animation: breathe-mark 2.2s ease-out infinite; }
 .breathemark.late { animation-delay: 1.1s; }
 .idledot { background-color: #C9CCD3; border-radius: 4px; min-width: 7px; min-height: 7px; }
+/* The custom service's per-use rows: how each use is doing (AISettings.swift sectionHeader). */
+separator.hairline { background-color: #E4E6EA; min-height: 1px; margin: 4px 0; }
+.statedot { background-color: #C9CCD3; border-radius: 4px; min-width: 8px; min-height: 8px; }
+.statedot.ok { background-color: #1F7A45; }
+.statedot.warn { background-color: #8A5A00; }
+.statedot.error { background-color: #B42318; }
+.statedot.live { background-color: #E8552B; }
 
 .sidebar { background-color: #F3F4F6; border-right: 1px solid #E4E6EA; }
 .sidebar list, .sidebar viewport { background-color: #F3F4F6; }
@@ -156,6 +233,33 @@ button.iconbtn.on { background-color: #F3F4F6; color: #15171C; }
 .sidebar list row:hover { background-color: #ECEEF1; }
 .group-label { font-weight: 700; color: #6B7080; }
 .transcript-row { border-top: 1px solid #EEF0F3; }
+/* With a recording: a lighter fill under the pointer (a click plays the line), the line playing on the pale accent. */
+.transcript-row.hover { background-color: #F5F6F8; border-radius: 10px; border-top-color: transparent; }
+.transcript-row.playing { background-color: #FCEDE7; border-radius: 10px; border-top-color: transparent; }
+button.timelink { background-image: none; background-color: transparent; border: none; box-shadow: none; padding: 0; min-height: 0; min-width: 0; }
+button.timelink:hover label { text-decoration-line: underline; }
+.transcript-row button.timelink:hover label { text-decoration-line: none; }
+
+/* The recording's player bar (RecordingPlayerBar): a soft box, a round ink play button, the played part in the accent. */
+.playerbar { background-color: #F5F6F8; border-radius: 12px; }
+.playerstrip { background-color: #FFFFFF; border-top: 1px solid #F0F1F4; }
+/* "Back to playing - m:ss", over the bottom of the page once it is scrolled away from what plays. */
+button.backpill { background-image: none; background-color: #15171C; border: none; border-radius: 17px; min-height: 34px; padding: 0 16px; box-shadow: 0 4px 10px rgba(21,23,28,0.18); }
+button.backpill:hover { background-color: #2A2D34; }
+button.backpill label { color: #FFFFFF; }
+.pillwave .stick { background-color: #FFFFFF; border-radius: 1px; }
+/* PlayingBars: three accent capsules bouncing beside the line that plays. */
+.playbars .stick { background-color: #E8552B; border-radius: 2px; }
+button.playround { background-image: none; background-color: #15171C; border: none; box-shadow: none; border-radius: 16px; min-width: 32px; min-height: 32px; padding: 0; }
+button.playround:hover { background-color: #2A2D34; }
+button.playround image { color: #FFFFFF; }
+button.ratebtn { background-image: none; background-color: #FFFFFF; border: none; box-shadow: none; border-radius: 6px; min-height: 0; min-width: 0; padding: 2px 7px; }
+button.ratebtn:hover { background-color: #ECEEF1; }
+scale.playerscale { padding: 0; margin: 0; }
+scale.playerscale trough { background-image: none; background-color: #E2E4E9; border: none; box-shadow: none; border-radius: 2px; min-height: 4px; }
+scale.playerscale highlight { background-image: none; background-color: #E8552B; border: none; border-radius: 2px; min-height: 4px; }
+scale.playerscale slider { background-image: none; background-color: #FFFFFF; border: 1px solid #D5D8DE; box-shadow: 0 1px 2px rgba(0,0,0,0.18); border-radius: 7px; min-width: 12px; min-height: 12px; margin: -5px 0; }
+scale.playerscale slider:hover { background-color: #FFFFFF; border-color: #B9BDC6; }
 .spk1 { color: #0F7B6C; } .spk2 { color: #7A4CC2; } .spk3 { color: #B03A7A; } .spk4 { color: #8A5A00; }
 button.spkchip { background-image: none; background-color: #F2F3F5; border: none; box-shadow: none; border-radius: 11px; padding: 0 9px; min-height: 22px; }
 button.spkchip:hover { background-color: #E8EAEE; }
@@ -194,6 +298,25 @@ button.pillkeep label { color: #15171C; }
 .toast label { color: #F2F3F5; }
 .toast button { background-image: none; background-color: rgba(255,255,255,0.12); color: #FFFFFF; border: none; box-shadow: none; border-radius: 6px; padding: 1px 10px; }
 .toast button label { color: #FFFFFF; }
+.toast button.undo { background-color: transparent; padding: 1px 6px; }
+.toast button.undo label { color: #FFB59C; font-weight: 700; }
+
+/* Fixing misheard words: a fixed word's chip, the confirm card, the review banner. */
+.fixchip { background-color: #F2F3F5; border-radius: 6px; }
+.panel.dark .fixchip { background-color: #2A2C32; }
+button.fixlink { background: none; border: none; box-shadow: none; padding: 0; min-height: 0; color: #B33A14; font-size: 11px; font-weight: 500; }
+button.fixlink label { color: #B33A14; }
+.fixcard { background-color: #FFFFFF; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+.panel.dark .fixcard { background-color: #22242A; border-color: #3A3C43; }
+.fixbanner { background-color: #FEF6F2; border: 1px solid #FBE0D5; border-radius: 12px; }
+button.softbtn { background-image: none; background-color: #ECEDF0; border: none; box-shadow: none; border-radius: 7px; padding: 4px 14px; color: #5A5F6B; }
+button.softbtn:hover { background-color: #E2E4E8; }
+button.softbtn:disabled { background-color: #F3F4F6; color: #A3A7B1; }
+button.softbtn:disabled label { color: #A3A7B1; }
+.fixeditor { border: 1px solid #15171C; border-radius: 8px; background-color: #FFFFFF; }
+.fixeditor text { background-color: #FFFFFF; color: #15171C; }
+.heardchip { background-color: #F2F3F5; border-radius: 5px; }
+.dashed { border: 1px dashed #CDD0D6; border-radius: 9px; }
 
 .notes-window { background-color: transparent; }
 .panel .speakbox { background-color: #FDEEE8; border-radius: 12px; }
@@ -232,6 +355,10 @@ button.pillkeep label { color: #15171C; }
 .panel.dark .chip { background-color: #34363D; color: #F2F3F5; }
 .panel.dark .chip.now { background-color: #E8552B; }
 .panel.dark .chip.time { background-color: transparent; color: #F08A6C; }
+.panel.dark .placetag { border-color: #44474F; }
+.panel.dark .placetag.room { background-color: #34363D; border-color: #34363D; }
+.panel.dark .placetag label { color: #A3A7B1; }
+.panel.dark .metag label { color: #F08A6C; }
 .panel.dark .link { color: #F08A6C; }
 .panel.dark .badge { background-color: rgba(232,85,43,0.18); color: #F08A6C; }
 .panel.dark button.iconbtn:hover { background-color: rgba(255,255,255,0.08); }
@@ -241,6 +368,33 @@ button.pillkeep label { color: #15171C; }
 .panel.dark .icon-tile.grey image { color: #A3A7B1; }
 .panel.dark .icon-tile.warn { background-color: rgba(232,85,43,0.16); }
 .panel.dark button.outline { background-color: #2A2C32; border-color: #3A3C43; color: #F2F3F5; }
+
+/* Listening, no notes asked for yet (NotesListeningView): a pale-accent row with SoundBars, then the
+   notes' shape shimmering. Both move by CSS alone, so GNOME's Reduce Animation stops them. */
+.listenrow { background-color: rgba(252,237,231,0.7); border-radius: 12px; }
+.panel.dark .listenrow { background-color: rgba(232,85,43,0.14); }
+/* SoundBars: four 3 px bars of fixed size whose orange fill grows 30% -> 100% from the middle (a
+   background, so nothing is laid out again 30 times a second); each lags the last by 0.15 s. */
+@keyframes soundbar { 0% { background-size: 100% 30%; } 50% { background-size: 100% 100%; } 100% { background-size: 100% 30%; } }
+.soundbar { min-width: 3px; min-height: 22px; border-radius: 2px; background-image: linear-gradient(#E8552B, #E8552B);
+            background-repeat: no-repeat; background-position: center; background-size: 100% 60%;
+            animation: soundbar 1.1s ease-in-out infinite; }
+.soundbar.b1 { animation-delay: -0.95s; } .soundbar.b2 { animation-delay: -0.8s; } .soundbar.b3 { animation-delay: -0.65s; }
+/* SkeletonBar: a light sweeping left to right every 1.4 s. The gradient is three bars wide, so moving
+   it from 100% to 0% takes its light (+-0.6 of a bar around the middle) from -0.5 to 1.5, the Mac's. */
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+.skeleton { border-radius: 5px; background-color: #EEF0F3; background-repeat: no-repeat; background-size: 300% 100%;
+            background-image: linear-gradient(to right, #EEF0F3 0%, #EEF0F3 30%, #F7F8FA 50%, #EEF0F3 70%, #EEF0F3 100%);
+            animation: shimmer 1.4s linear infinite; }
+.skeleton.thin { border-radius: 4px; }
+.panel.dark .skeleton { background-color: #2E3037;
+            background-image: linear-gradient(to right, #2E3037 0%, #2E3037 30%, #3A3C43 50%, #2E3037 70%, #2E3037 100%); }
+.ghost { color: #B8BDC6; }
+.panel.dark .ghost { color: #5A5F6B; }
+.slot { border: 1.5px dashed #E4E6EA; border-radius: 12px; }
+.panel.dark .slot { border-color: #3A3C43; }
+.pill { background-color: #F2F3F5; border-radius: 13px; }
+.panel.dark .pill { background-color: #34363D; }
 
 levelbar trough { min-height: 6px; padding: 0; border: none; background-color: #ECEEF1; border-radius: 3px; }
 levelbar block { min-height: 6px; border: none; border-radius: 3px; }
@@ -252,6 +406,23 @@ entry.keyentry { border-radius: 10px; min-height: 34px; }
 .stepbar { background-color: #DDDEE2; border-radius: 2px; min-height: 4px; }
 .stepbar.on { background-color: #15171C; }
 .bigcard { background-color: #FFFFFF; border: 1px solid #E4E6EA; border-radius: 18px; }
+.raised { background-color: #F6F7F9; border-radius: 8px; }
+/* The own-voice row and sheet (VoicePicker.swift): an accent wash for the voice the room hears. */
+.voicewash { background-color: #FFFAF8; }
+.voicemeter { background-color: #FFFAF8; border-radius: 12px; }
+.voicefail { background-color: #FDECEA; border-radius: 12px; }
+.voicefail label { color: #B42318; }
+.voicerows { background-color: #FFFFFF; border: 1px solid #E4E6EA; border-radius: 14px; }
+.voicepassage { background-color: #F6F7F9; border-radius: 14px; }
+button.voiceplay { background-image: none; background-color: #F2F3F5; border: none; box-shadow: none; border-radius: 16px; min-width: 32px; min-height: 32px; padding: 0; color: #15171C; }
+button.voiceplay.accent { background-color: #E8552B; color: #FFFFFF; }
+button.voiceplay.accent image { color: #FFFFFF; }
+button.voiceplay.accent spinner { color: #FFFFFF; }
+checkbutton.voicecheck check { background-image: none; background-color: #FFFFFF; border: 1px solid #B8BCC4; border-radius: 4px; min-width: 14px; min-height: 14px; box-shadow: none; color: transparent; }
+checkbutton.voicecheck check:checked { background-color: #15171C; border-color: #15171C; color: #FFFFFF; }
+checkbutton.voicecheck check:disabled { background-color: #F3F4F6; }
+checkbutton.voicecheck check:checked:disabled { background-color: #8A8E98; border-color: #8A8E98; }
+.voicetag { background-color: #E8552B; color: #FFFFFF; border-radius: 5px; padding: 1px 6px; }
 .midcard { background-color: #FFFFFF; border: 1px solid #E4E6EA; border-radius: 12px; }
 .tipcard { background-color: #FFFFFF; border-radius: 14px; }
 .hair { background-color: #E4E6EA; min-height: 1px; }
@@ -372,26 +543,14 @@ def retext(l: Gtk.Label, s: str) -> None:
     l.set_markup('<span size="%d" lang="%s"%s>%s</span>' % (round(size * 768), lang, ' weight="bold"' if bold else "", esc(s)))
 
 
-def marked(s: str, terms: list, size: int = 13, cls: str = "ink", current: bool = False, lang: str | None = None) -> Gtk.Label:
+def marked(s: str, terms: list, size: int = 13, cls: str = "ink", current: bool = False, lang: str | None = None,
+           width_chars: int = 40) -> Gtk.Label:
     """text() with every search term highlighted in place (the current match in the accent)."""
-    l = text(s, size, cls, lang=lang)
-    low = s.lower()
-    spans = []
-    for t in terms:
-        t = t.lower()
-        i = low.find(t) if t else -1
-        while i >= 0:
-            spans.append((i, i + len(t)))
-            i = low.find(t, i + len(t))
-    if not spans:
+    from ..core.transcript_search import spans
+    l = text(s, size, cls, lang=lang, width_chars=width_chars)
+    merged = spans(s, terms)
+    if not merged:
         return l
-    spans.sort()
-    merged = []
-    for a, b in spans:
-        if merged and a <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(b, merged[-1][1]))
-        else:
-            merged.append((a, b))
     mark = ' background="#E8552B" foreground="#FFFFFF"' if current else ' background="#FBE0D5"'
     out, at = [], 0
     for a, b in merged:
@@ -402,6 +561,83 @@ def marked(s: str, terms: list, size: int = 13, cls: str = "ink", current: bool 
     size_, lang_, bold = l.cicada_format
     l.set_markup('<span size="%d" lang="%s"%s>%s</span>' % (round(size_ * 768), lang_, ' weight="bold"' if bold else "", "".join(out)))
     return l
+
+
+def fixed(line, size: int = 13, cls: str = "ink", terms: list = (), current: bool = False, lang: str | None = None,
+          width_chars: int = 40) -> Gtk.Label:
+    """A line as shown (改正听错的词): each fixed word underlined in grey (the Mac's dotted underline;
+    Pango has no dotted one), a word waiting for the user on a pale wash. While searching, the search
+    marks instead."""
+    from ..core.correction import apply
+    if terms or not line.fixes:
+        return marked(line.shown, list(terms), size, cls, current, lang=lang or line.srcLang, width_chars=width_chars)
+    s, marks = apply(line.fixes, line.src)
+    asks = []
+    for f in line.fixes:
+        if f.ask is True:
+            i = s.find(f.from_)
+            if i >= 0:
+                asks.append((i, i + len(f.from_)))
+    spans = sorted([(a, b, ' underline="single" underline_color="#9EA2AC"') for a, b in marks]
+                   + [(a, b, ' background="#FBE0D5"') for a, b in asks])
+    out, at = [], 0
+    for a, b, attr in spans:
+        if a < at:
+            continue
+        out.append(esc(s[at:a]))
+        out.append("<span%s>%s</span>" % (attr, esc(s[a:b])))
+        at = b
+    out.append(esc(s[at:]))
+    l = text(s, size, cls, lang=lang or line.srcLang, width_chars=width_chars)
+    size_, lang_, bold = l.cicada_format
+    l.set_markup('<span size="%d" lang="%s"%s>%s</span>' % (round(size_ * 768), lang_, ' weight="bold"' if bold else "", "".join(out)))
+    return l
+
+
+def fixed_words(items, on_revert) -> Gtk.Widget:
+    """Under a line: each fixed word, what it was heard as, and 改回. `items`: [(line id, fix)]."""
+    from ..core.correction import label
+    w = Wrap(6)
+    for line_id, f in items:
+        cf, ct = label(f)
+        row = hbox(6)
+        lab = Gtk.Label()
+        lab.set_markup('<span size="%d"><span foreground="#6B7080">%s</span> %s <span foreground="#6B7080">→</span> %s</span>'
+                       % (11 * 768, esc(L("听成")), esc(cf), esc(ct)))
+        classes(lab, "ink")
+        row.pack_start(lab, False, False, 0)
+        b = Gtk.Button(label=L("改回"))
+        classes(b, "fixlink")
+        b.set_can_focus(False)  # the notes window never takes focus
+        b.connect("clicked", lambda *_a, i=line_id, f=f: on_revert(i, f))
+        row.pack_start(b, False, False, 0)
+        w.add(panel(pad(row, 3, 8), "fixchip"))
+    return w
+
+
+def soft_button(label: str, on_click, dark: bool = False) -> Gtk.Button:
+    """The Mac's SoftButton: dark for the answer, soft grey for the rest. Never takes focus."""
+    b = Gtk.Button(label=label)
+    classes(b, "darkbtn" if dark else "softbtn")
+    b.set_can_focus(False)
+    b.connect("clicked", lambda *_: on_click())
+    return b
+
+
+def fix_toast(fixes, message: str) -> Gtk.Widget:
+    """The last fix decision said back (the Mac's FixToast): dark, with 撤销 while there is something
+    to undo. Shown in place, not as an overlay: the notes window lays out top to bottom."""
+    row = hbox(14)
+    row.pack_start(text(message, 13, "", wrap=False), True, True, 0)
+    if fixes.can_undo:
+        b = Gtk.Button(label=L("撤销"))
+        classes(b, "undo")
+        b.set_can_focus(False)
+        b.connect("clicked", lambda *_: fixes.undo())
+        row.pack_start(b, False, False, 0)
+    box = panel(pad(row, 5, 6, 5, 14), "toast")
+    box.set_halign(Gtk.Align.CENTER)
+    return box
 
 
 def helper(s: str) -> Gtk.Label:
@@ -456,6 +692,33 @@ def link(label: str, on_click) -> Gtk.Button:
     b.set_relief(Gtk.ReliefStyle.NONE)
     b.connect("clicked", lambda *_: on_click())
     return b
+
+
+def status_line(tone: str, s: str, action: str | None = None, on_action=None) -> Gtk.EventBox:
+    """A service in trouble, said the same way wherever it shows (the Mac's StatusLine): a dot, what
+    waits for what · what still works, and at most one action. Colour sits in the dot only, so a
+    passing wait doesn't read as a fault: "waiting" (yellow) comes back by itself, "needsyou" (red)
+    needs the user, "info" (grey) is just so they know."""
+    row = hbox(8)
+    d = Gtk.Box()
+    d.set_size_request(6, 6)
+    d.set_valign(Gtk.Align.CENTER)
+    d.set_halign(Gtk.Align.CENTER)
+    classes(d, "statusdot", tone)
+    row.pack_start(d, False, False, 0)
+    label = text(s, 12, "secondary", width_chars=24)
+    label.set_valign(Gtk.Align.CENTER)
+    row.pack_start(label, True, True, 0)
+    if action:
+        b = Gtk.Button()
+        b.add(text(action, 12, "ink", bold=True, wrap=False, ellipsize=False))
+        classes(b, "quietbtn", "statusaction")
+        b.set_relief(Gtk.ReliefStyle.NONE)
+        b.set_can_focus(False)  # the notes window never takes focus
+        b.set_valign(Gtk.Align.CENTER)
+        b.connect("clicked", lambda *_: on_action())
+        row.pack_end(b, False, False, 0)
+    return panel(pad(row, 7, 12), "statusline")
 
 
 def dot(live: bool) -> Gtk.Widget:
@@ -544,13 +807,17 @@ def boxed(rows) -> Gtk.Widget:
     return panel(box, "boxed")
 
 
-def prow(title: str, control: Gtk.Widget | None = None, subtitle: str | None = None, title_widget=None) -> Gtk.Widget:
-    """One preferences row: title (and a grey subtitle) on the left, its control on the right."""
+def prow(title: str, control: Gtk.Widget | None = None, subtitle: str | None = None, title_widget=None,
+         subtitle_widget=None) -> Gtk.Widget:
+    """One preferences row: title (and a grey subtitle) on the left, its control on the right.
+    `subtitle_widget`: a grey line the caller rewrites later, in place of `subtitle`."""
     row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
     left.set_valign(Gtk.Align.CENTER)
     left.pack_start(title_widget or text(title, 13, "ink", wrap=False, ellipsize=False), False, False, 0)
-    if subtitle:
+    if subtitle_widget is not None:
+        left.pack_start(subtitle_widget, False, False, 0)
+    elif subtitle:
         left.pack_start(text(subtitle, 11, "tertiary", width_chars=50), False, False, 0)
     row.pack_start(left, True, True, 0)
     if control is not None:
@@ -599,6 +866,34 @@ def ring_pixbuf(fraction: float, px: int = 26, track: str = "#3A3D45", color: st
     return loader.get_pixbuf()
 
 
+def place_tag(line) -> Gtk.Widget:
+    """现场 / 线上 beside the other side's label in a meeting that heard both (the Mac's PlaceTag): filled
+    for the room microphone, outlined for the computer's audio."""
+    room = line.via == "room"
+    l = text(L("现场") if room else L("线上"), 10, "", wrap=False, ellipsize=False)
+    pad(l, 0, 5)  # a margin: GTK 3 ignores CSS padding on an EventBox
+    c = panel(l, "placetag", *(["room"] if room else []))
+    c.set_valign(Gtk.Align.CENTER)
+    c.set_tooltip_text(L("会议室的麦克风听到的") if room else L("电脑里放出来的"))
+    return c
+
+
+def me_tag() -> Gtk.Widget:
+    """My own line (the Mac's MeTag): said through 同声传译, so what the other side heard was its
+    translation. 你 in the accent, then an outlined 同传 pill."""
+    pill = text(L("同传"), 10, "", wrap=False, ellipsize=False)
+    pad(pill, 1, 5)  # a margin: GTK 3 ignores CSS padding on an EventBox
+    p = panel(pill, "metag")
+    p.set_valign(Gtk.Align.CENTER)
+    box = hbox(5)
+    box.set_halign(Gtk.Align.START)  # the tooltip covers the tag, not the row
+    box.pack_start(text(L("你"), 11, "accent", bold=True, wrap=False, ellipsize=False), False, False, 0)
+    box.pack_start(p, False, False, 0)
+    # Linux turns it on and off (开始说, the shortcut), it has no key to hold: not the Mac's tooltip.
+    box.set_tooltip_text(L("同声传译时说的，对方听到的是译文"))
+    return box
+
+
 def chip(s: str, now: bool = False) -> Gtk.Widget:
     l = text(s, 11, "", bold=True, wrap=False, ellipsize=False)
     if now:
@@ -606,6 +901,92 @@ def chip(s: str, now: bool = False) -> Gtk.Widget:
     c = panel(l, "chip", "now" if now else "time")
     c.set_valign(Gtk.Align.BASELINE)
     return c
+
+
+class _Fraction(Gtk.Bin):
+    """Gives its child `fraction` of the width it is given (the Mac's GeometryReader), asking for none."""
+
+    def __init__(self, child: Gtk.Widget, fraction: float):
+        super().__init__()
+        self.fraction = fraction
+        self.add(child)
+
+    def do_size_allocate(self, a):
+        self.set_allocation(a)
+        r = Gdk.Rectangle()
+        r.x, r.y, r.width, r.height = a.x, a.y, max(1, int(a.width * self.fraction)), a.height
+        self.get_child().size_allocate(r)
+
+
+class Wrap(Gtk.Fixed):
+    """The Mac's FlowLayout: children left to right at their natural size, wrapping onto the next
+    line. (A FlowBox lines its children up in columns, which spreads a row of chips apart.)"""
+
+    def __init__(self, spacing: int = 6):
+        super().__init__()
+        self.spacing = spacing
+
+    def _lines(self, width: int):
+        """[(row height, [(child, x, w, h)…])…] for this width."""
+        lines, row, x, h = [], [], 0, 0
+        for c in self.get_children():
+            if not c.get_visible():
+                continue
+            w = c.get_preferred_width()[1]
+            ch = c.get_preferred_height_for_width(w)[1]
+            if row and x + w > width:
+                lines.append((h, row))
+                row, x, h = [], 0, 0
+            row.append((c, x, w, ch))
+            x += w + self.spacing
+            h = max(h, ch)
+        if row:
+            lines.append((h, row))
+        return lines
+
+    def do_get_request_mode(self):
+        return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
+
+    def do_get_preferred_width(self):
+        ws = [c.get_preferred_width()[1] for c in self.get_children() if c.get_visible()]
+        return max(ws, default=0), sum(ws) + self.spacing * max(0, len(ws) - 1)
+
+    def do_get_preferred_height_for_width(self, width):
+        lines = self._lines(width)
+        h = sum(lh for lh, _ in lines) + self.spacing * max(0, len(lines) - 1)
+        return h, h
+
+    def do_get_preferred_height(self):
+        return self.do_get_preferred_height_for_width(self.do_get_preferred_width()[1])
+
+    def do_size_allocate(self, a):
+        self.set_allocation(a)
+        y = a.y
+        for lh, row in self._lines(a.width):
+            for c, x, w, h in row:
+                r = Gdk.Rectangle()
+                r.x, r.y, r.width, r.height = a.x + x, y + (lh - h) // 2, min(w, a.width), h
+                c.size_allocate(r)
+            y += lh + self.spacing
+
+
+def skeleton(fraction: float = 1.0, height: int = 12) -> Gtk.Widget:
+    """SkeletonBar: a placeholder line with a light sweeping across it (the .skeleton CSS)."""
+    bar = Gtk.Box()
+    bar.set_size_request(-1, height)
+    classes(bar, "skeleton", "thin" if height < 10 else "")
+    return _Fraction(bar, fraction)
+
+
+def sound_bars() -> Gtk.Widget:
+    """SoundBars: four small orange bars rising and falling, "listening" at the size of a line of text."""
+    row = hbox(3)
+    for i in range(4):
+        b = Gtk.Box()
+        classes(b, "soundbar", "b%d" % i if i else "")
+        row.pack_start(b, False, False, 0)
+    row.set_valign(Gtk.Align.CENTER)
+    return row
 
 
 class Toasts:

@@ -10,6 +10,8 @@ public sealed class TranscriptLine
 {
     [JsonPropertyName("dst")] public string? Dst { get; set; }
     [JsonPropertyName("dstLang")] public string DstLang { get; set; } = "";
+    /// Words the AI service fixed (Correction); `src` stays what was heard. Absent when none.
+    [JsonPropertyName("fixes")] public List<LineFix>? Fixes { get; set; }
     /// "h<n>-<segment>" for heard lines, "m<n>" for the user's own.
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     /// "them" (system audio) or "me" (microphone).
@@ -18,10 +20,38 @@ public sealed class TranscriptLine
     [JsonPropertyName("srcLang")] public string SrcLang { get; set; } = "";
     /// Seconds from the start of the session.
     [JsonPropertyName("t")] public double T { get; set; }
+    /// 电脑和会议室: "room" when the room mic heard it; absent for the computer's audio (and older records).
+    [JsonPropertyName("via")] public string? Via { get; set; }
     /// Experimental voice id on the Mac; Windows doesn't tell voices apart yet.
     [JsonPropertyName("voice")] public int? Voice { get; set; }
 
+    /// What the line says once its fixes are in: shown, searched, exported and read by the notes.
+    [JsonIgnore] public string Shown => Fixes is { Count: > 0 } f ? Correction.Apply(f, Src).Text : Src;
+
+    /// Shallow: Fixes is shared, so it is only ever replaced with a new list, never changed in place.
     public TranscriptLine Copy() => (TranscriptLine)MemberwiseClone();
+}
+
+/// A word the AI service said speech recognition got wrong in a finished line ("莫拉" → "Morpho"),
+/// field for field the Mac's LineFix. The flags are written only when true, as Swift leaves out nil.
+public sealed record LineFix
+{
+    /// Waiting for the user (a name sound can't check): not applied until confirmed.
+    [JsonPropertyName("ask")] public bool? Ask { get; init; }
+    [JsonPropertyName("from")] public string From { get; init; } = "";
+    /// The user said no (改回 or 不对): kept so the same line isn't fixed that way again.
+    [JsonPropertyName("off")] public bool? Off { get; init; }
+    [JsonPropertyName("to")] public string To { get; init; } = "";
+    /// The user's own: said 对, or wrote it (改这句…). A later pass never drops or overrides it.
+    [JsonPropertyName("user")] public bool? User { get; init; }
+
+    public LineFix() { }
+    public LineFix(string from, string to, bool ask = false, bool off = false, bool user = false)
+    {
+        From = from; To = to; Ask = ask ? true : null; Off = off ? true : null; User = user ? true : null;
+    }
+
+    [JsonIgnore] public bool Applied => Ask != true && Off != true;
 }
 
 public sealed class VoiceGuess
@@ -109,6 +139,20 @@ public sealed class NoteItem
     /// When it was said (first evidence line).
     [JsonPropertyName("t")] public double? T { get; set; }
     [JsonPropertyName("text")] public string Text { get; set; } = "";
+
+    /// The owner as stored ("你", "对方", "说话人2" or a name) in the UI language.
+    [JsonIgnore]
+    public string? OwnerShown => Owner switch
+    {
+        null or "" => null,
+        "你" or "对方" or "未识别" => Strings.L(Owner),
+        _ when Owner.StartsWith("说话人", StringComparison.Ordinal) && int.TryParse(Owner[3..].Trim(), out var n) => Strings.LF("说话人 %lld", n),
+        _ => Owner,
+    };
+
+    /// The to-do with its owner after it: "（对方）" in Chinese, " (Them)" in English.
+    [JsonIgnore]
+    public string WithOwner => Text + (OwnerShown is { } o ? Strings.LF("待办的负责人 %@", o) : "");
 }
 
 /// A name or term as the notes settled on it, and how speech recognition heard it.
@@ -123,5 +167,14 @@ public sealed class NoteTerm
     {
         var list = terms.ToList();
         return [.. list.Where(t => t.Heard.Count > 0), .. list.Where(t => t.Heard.Count == 0)];
+    }
+
+    /// The reply's terms in the order they were shown before, new ones after: the model often
+    /// returns the same names reshuffled, which would make the chips jump on every update.
+    public static List<NoteTerm> KeepingOrder(IReadOnlyList<NoteTerm> old, IReadOnlyList<NoteTerm> next)
+    {
+        var rank = new Dictionary<string, int>();
+        for (var i = 0; i < old.Count; i++) rank.TryAdd(old[i].Name, i);
+        return [.. next.Select((t, i) => (t, i)).OrderBy(p => rank.TryGetValue(p.t.Name, out var r) ? r : old.Count + p.i).ThenBy(p => p.i).Select(p => p.t)];
     }
 }

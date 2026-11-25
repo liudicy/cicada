@@ -32,6 +32,7 @@ class ListeningActivity : Activity() {
     private var tab = 0 // 0 实时纪要, 1 字幕
     private var shown: String? = null
     private var unobserve: (() -> Unit)? = null
+    private var toast: FixViews.Toast? = null
     private val tick = object : Runnable {
         // The clock, and states that come without an event (20 s of silence): render() is keyed.
         override fun run() { badgeText.text = NotesViews.status(cicada); render(); NotesViews.tickEnding(content, cicada); cicada.main.postDelayed(this, 1000) }
@@ -72,6 +73,7 @@ class ListeningActivity : Activity() {
         setContentView(ui.screen(this, null, back = true, ground = Palette.ground, center = badge, bottom = bottomHost, scroll = false, body = body,
                                  actions = listOf(actionHost)))
         buildAction()
+        toast = FixViews.Toast(this, ui, cicada, above = 104)
     }
 
     private lateinit var actionHost: FrameLayout
@@ -97,8 +99,9 @@ class ListeningActivity : Activity() {
     /// 在视频上看, which has no video to go back to.
     private fun buildBottom() {
         val kind = cicada.listen.sourceKind
-        if (kind == bottomKind) return
-        bottomKind = kind
+        // Keyed on the language too: one changed in 设置 meanwhile would leave 结束 in the old one.
+        if ("$kind ${L("结束")}" == bottomKind) return
+        bottomKind = "$kind ${L("结束")}"
         bottomHost.removeAllViews()
         sayButton = null; sayLabel = null; sayHelper = null
         if (kind != "mic" || !cicada.settings.speakBack) {
@@ -188,6 +191,7 @@ class ListeningActivity : Activity() {
         buildAction()
         updateSay()
         sourceText.text = NotesViews.sourceLine(app)
+        toast?.refresh()
         val key = NotesViews.liveKey(app) + tab + app.listen.spoken
         if (key == shown) return
         shown = key
@@ -196,12 +200,16 @@ class ListeningActivity : Activity() {
         content.removeAllViews()
         NotesViews.endingStrip(ui, app)?.let { content.addView(it) }
         NotesViews.banner(ui, app) { switchToMic() }?.let { content.addView(it) }
+        // 这样改对吗？: a name the service proposed, asked about once (× puts it off until after the meeting).
+        app.listen.sessionId?.let { sid ->
+            app.fixes.asking(sid)?.let { a -> content.addView(FixViews.confirmCard(ui, a, { yes -> app.fixes.answer(a.fix, yes, sid) }, { app.fixes.later(a.fix, sid) })) }
+        }
         if (tab == 1) {
             content.addView(ui.spacer(), LinearLayout.LayoutParams(-1, 0, 1f))
             content.addView(NotesViews.bubbles(ui, app, 12))
             scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
         } else {
-            val card = NotesViews.notesBody(ui, app.notes.notes, app.notes.status, app.listen.listening).apply {
+            val card = NotesViews.notesBody(ui, app.notes.notes, app.notes.status, app.listen.listening, heard = NotesViews.currentLines(app).size).apply {
                 background = ui.rounded(Palette.card, 22)
                 setPadding(ui.dp(18), ui.dp(18), ui.dp(18), ui.dp(20))
             }

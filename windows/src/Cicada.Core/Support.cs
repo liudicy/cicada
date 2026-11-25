@@ -22,7 +22,8 @@ public static class Paths
 
     public static string Sessions => Path.Combine(Root, "Sessions");
     public static string Settings => Path.Combine(Root, "settings.json");
-    public static string KeyFile => Path.Combine(Root, "ling-api-key");
+    /// One key file per AI service, named as on the Mac.
+    public static string KeyFile(string service = "ling") => Path.Combine(Root, service == "ling" ? "ling-api-key" : "ai-key-" + service);
     public static string Log => Path.Combine(Path.GetTempPath(), Dev ? "cicada-dev-debug.log" : "cicada-debug.log");
 }
 

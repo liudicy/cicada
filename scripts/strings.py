@@ -9,6 +9,7 @@ Keys come from the compiler (-emit-localized-strings), so interpolations are exa
 keys the app looks up ("已听到 %lld 句"). zh-Hans/Localizable.strings maps every key to itself:
 the development region is English, so without it Chinese systems would fall back to English.
 English plurals live in en.lproj/Localizable.stringsdict.
+The ports read these tables too: a key the Mac no longer uses stays while a port still uses it.
 """
 import glob, json, os, re, subprocess, sys, tempfile
 
@@ -27,7 +28,7 @@ def specs(s):
 
 def code_keys():
     out = tempfile.mkdtemp()
-    subprocess.run(["swift", "build", "--product", "LiveSubs", "-Xswiftc", "-emit-localized-strings",
+    subprocess.run(["swift", "build", "--product", "Cicada", "-Xswiftc", "-emit-localized-strings",
                     "-Xswiftc", "-emit-localized-strings-path", "-Xswiftc", out],
                    cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
     # The iOS app's text shares the same tables (ios/AGENTS.md); it needs Xcode's iOS SDK.
@@ -43,6 +44,23 @@ def code_keys():
             for e in entries:
                 if CJK.search(e["key"]):  # "%@ · %@" and the like need no translation
                     keys.setdefault(e["key"], os.path.basename(f).split(".")[0])
+    return keys
+
+
+# Where each port's L("…") / LF("…") calls are, as its own scripts/strings.py reads them.
+PORTS = {"Windows": ["windows/src/**/*.cs"], "Android": ["android/app/src/**/*.kt", "android/core/src/**/*.kt"],
+         "Linux": ["linux/cicada/**/*.py"]}
+PORT_CALL = re.compile(r'\bLF?\("((?:[^"\\]|\\.)*)"')
+
+
+def port_keys():
+    keys = {}
+    for port, patterns in PORTS.items():
+        for pattern in patterns:
+            for f in sorted(glob.glob(os.path.join(ROOT, pattern), recursive=True)):
+                for k in PORT_CALL.findall(open(f, encoding="utf-8").read()):
+                    k = re.sub(r"\\(.)", lambda m: "\n" if m.group(1) == "n" else m.group(1), k)
+                    if CJK.search(k): keys.setdefault(k, set()).add(port)
     return keys
 
 
@@ -68,12 +86,15 @@ def write(path, pairs):
 
 def main():
     keys = code_keys()
+    ports = port_keys()
     bad = False
     for lang in LANGS:
         path = TABLE.format(lang)
         table = load(path)
         missing = [k for k in keys if k not in table]
-        unused = [k for k in table if k not in keys]
+        unused = [k for k in table if k not in keys and k not in ports]
+        # Kept, translated, for the ports; anything they still lack their own scripts report.
+        kept = [(k, v, "Only the ports: " + ", ".join(sorted(ports[k]))) for k, v in table.items() if k not in keys and k in ports]
         todo = [k for k, v in table.items() if v == "TODO"]
         mismatch = [k for k, v in table.items() if v != "TODO" and specs(k) != specs(v)]
         for k in missing: print(f"{lang} missing   {keys[k]}: {k}")
@@ -81,7 +102,7 @@ def main():
         for k in todo: print(f"{lang} todo      {k}")
         for k in mismatch: print(f"{lang} specifier {k} -> {table[k]}")
         if "--write" in sys.argv:
-            write(path, [(k, table.get(k, "TODO"), g) for k, g in keys.items()])
+            write(path, [(k, table.get(k, "TODO"), g) for k, g in keys.items()] + sorted(kept, key=lambda p: p[2]))
         subprocess.run(["plutil", "-lint", "-s", path], check=True)
         print(f"{lang}: {len(keys)} keys, {len(missing)} missing, {len(unused)} unused, {len(todo)} TODO, {len(mismatch)} bad specifiers")
         bad |= bool(missing or todo or mismatch)

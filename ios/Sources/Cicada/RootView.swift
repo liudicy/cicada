@@ -19,6 +19,14 @@ struct RootView: View {
         .tint(Ink.accent)
         // The Mac's palette is light only (Palette in Views.swift); a dark one comes later, for both.
         .preferredColorScheme(.light)
+        .fullScreenCover(isPresented: $model.showFace, onDismiss: { model.closeFace() }) {
+            FaceView(face: model.face).environmentObject(model)
+        }
+        .fullScreenCover(isPresented: $model.showWelcome) { Welcome().environmentObject(model).environmentObject(model.ling).environmentObject(model.room) }
+        .alert(Text(model.importProblem ?? ""), isPresented: Binding(get: { model.importProblem != nil },
+                                                                     set: { if !$0 { model.importProblem = nil } })) {
+            Button("好") { model.importProblem = nil }
+        }
         .alert(Text(model.comingSoon ?? ""), isPresented: Binding(get: { model.comingSoon != nil },
                                                                  set: { if !$0 { model.comingSoon = nil } })) {
             Button("好") { model.comingSoon = nil }

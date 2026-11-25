@@ -7,8 +7,8 @@ cd "$(dirname "$0")/../.."
 OUT=ios/build/host-recognizer
 mkdir -p ios/build
 xcrun --sdk macosx swiftc -O -swift-version 5 -parse-as-library -target arm64-apple-macos26.0 \
-  Sources/LiveSubs/Recognition.swift Sources/LiveSubs/Languages.swift Sources/LiveSubs/AudioFiles.swift \
-  ios/tools/host-recognizer/main.swift -o "$OUT"
+  Sources/Cicada/Recognition.swift Sources/Cicada/Languages.swift Sources/Cicada/AudioFiles.swift \
+  ios/tools/host-recognizer/main.swift ios/tools/host-recognizer/CloudStubs.swift -o "$OUT"
 # Simulator UDIDs: the booted ones, or the named devices.
 if [[ $# -eq 0 ]]; then
   ids=($(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}'))

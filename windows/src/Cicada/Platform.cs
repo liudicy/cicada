@@ -84,54 +84,12 @@ static class AutoStart
 }
 
 /// The default playback device's name ("扬声器 (Realtek High Definition Audio)") for onboarding.
+/// Through Endpoints, never a second [ComImport] MMDeviceEnumerator: the enumerator is one COM object
+/// per process, and while an RCW of another class for it lives, `new` of Endpoints' class throws
+/// InvalidCastException, so the virtual cable looked uninstalled after onboarding's sound step.
 static class AudioDevice
 {
-    public static string? DefaultName()
-    {
-        try
-        {
-            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-            Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(0 /* eRender */, 1 /* eMultimedia */, out var device));
-            Marshal.ThrowExceptionForHR(device.OpenPropertyStore(0 /* STGM_READ */, out var store));
-            var key = new PropertyKey { fmtid = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), pid = 14 }; // PKEY_Device_FriendlyName
-            Marshal.ThrowExceptionForHR(store.GetValue(ref key, out var value));
-            var name = value.vt == 31 /* VT_LPWSTR */ ? Marshal.PtrToStringUni(value.pointer) : null;
-            PropVariantClear(ref value);
-            return name;
-        }
-        catch (Exception e) { Log.Debug($"audio device: name unavailable {e.GetType().Name}"); return null; }
-    }
-
-    [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumerator { }
-
-    [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IMMDeviceEnumerator
-    {
-        [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
-        [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
-    }
-
-    [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IMMDevice
-    {
-        [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
-        [PreserveSig] int OpenPropertyStore(int access, out IPropertyStore store);
-    }
-
-    [ComImport, Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IPropertyStore
-    {
-        [PreserveSig] int GetCount(out int count);
-        [PreserveSig] int GetAt(int index, out PropertyKey key);
-        [PreserveSig] int GetValue(ref PropertyKey key, out PropVariant value);
-    }
-
-    [StructLayout(LayoutKind.Sequential)] struct PropertyKey { public Guid fmtid; public int pid; }
-
-    [StructLayout(LayoutKind.Explicit, Size = 24)]
-    struct PropVariant { [FieldOffset(0)] public ushort vt; [FieldOffset(8)] public IntPtr pointer; }
-
-    [DllImport("ole32.dll")] static extern int PropVariantClear(ref PropVariant value);
+    public static string? DefaultName() => Endpoints.Default(Endpoints.Flow.Render)?.Name;
 }
 
 /// The meeting apps reading a microphone now (MicUse in Cicada.Core reads the entries): what
@@ -154,7 +112,9 @@ static class MicReaders
                 {
                     if (name == "NonPackaged") continue;
                     using var k = parent.OpenSubKey(name);
-                    if (k?.GetValue("LastUsedTimeStop") is long stop) entries.Add((name, stop));
+                    // An app granted the mic but never used has both times 0: not in a call.
+                    if (k?.GetValue("LastUsedTimeStop") is long stop && k.GetValue("LastUsedTimeStart") is long start && start > 0)
+                        entries.Add((name, stop));
                 }
             }
             Read(root);
@@ -162,5 +122,34 @@ static class MicReaders
         }
         catch (Exception e) { Log.Debug($"mic users: unreadable ({e.GetType().Name})"); }
         return MicUse.Calls(entries);
+    }
+}
+
+/// Windows' own proxy settings (Settings › Network & internet › Proxy, which proxy apps switch on as
+/// "system proxy"): only read, to word the "can't reach" hint. Cicada never sets or uses one itself.
+static class WinProxy
+{
+    const string Key = @"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
+
+    /// A manual proxy, or an auto-config (PAC) script, is on.
+    public static bool SystemOn()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(Key);
+            return k?.GetValue("ProxyEnable") is int on && on == 1 || k?.GetValue("AutoConfigURL") is string { Length: > 0 };
+        }
+        catch (Exception e) { Log.Debug($"proxy: unreadable ({e.GetType().Name})"); return false; }
+    }
+
+    /// The settings that decide where requests go, as one string to compare (WatchProxy).
+    public static string Snapshot()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(Key);
+            return $"{k?.GetValue("ProxyEnable")}|{k?.GetValue("ProxyServer")}|{k?.GetValue("AutoConfigURL")}|{k?.GetValue("ProxyOverride")}";
+        }
+        catch { return ""; }
     }
 }

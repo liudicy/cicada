@@ -4,4 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Cicada</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- 改正听错的词's pinyin, inside the assembly (Correction.cs says where it came from). -->
+    <EmbeddedResource Include="Data/pinyin.tsv" LogicalName="pinyin.tsv" />
+  </ItemGroup>
 </Project>

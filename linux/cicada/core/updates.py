@@ -7,17 +7,21 @@ UI-free and stdlib only: the app shows the state, this module finds, fetches and
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import tarfile
 import tempfile
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 
-from . import jsonfmt
+from . import jsonfmt, proxy
 from .support import Log, Paths
 
 # The list, not releases/latest: every platform shares one version, and a release that only ships
@@ -28,6 +32,10 @@ FEED = "https://api.github.com/repos/wquguru/cicada/releases?per_page=20"
 EVERY = 4 * 60 * 60
 STALE = 60 * 60
 USER_AGENT = "Cicada-Linux"
+# Downloading: seconds without a byte before it counts as stalled (each read, not the whole file),
+# and how many times a cut-off download is picked up again.
+STALL = 30
+ATTEMPTS = 3
 
 
 class Update:
@@ -42,7 +50,7 @@ class Update:
 
 
 class Failure(Exception):
-    """Why installing in place didn't work, said to the user (the release page opens instead): a
+    """Why installing in place didn't work, said to the user beside the release page: a
     Mac string key and its values, translated by the app."""
 
     def __init__(self, key: str, *args):
@@ -169,9 +177,25 @@ def should_notify(version: str, told: str | None, busy: bool) -> bool:
     return not busy and version != told
 
 
-def _get(url: str, timeout: float = 20):
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"})
-    return urllib.request.urlopen(req, timeout=timeout)  # noqa: S310 - our feed, or file:// in tests
+def _get(url: str, timeout: float = 20, headers=None):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json",
+                                               **(headers or {})})
+    return proxy.urlopen(req, timeout=timeout)  # our feed, or file:// in tests
+
+
+def why(e: BaseException) -> str:
+    """A failure for the log: its kind and reason, with any URL in it left out (a URL may carry a
+    token one day; the host is logged on its own)."""
+    if isinstance(e, urllib.error.HTTPError):
+        return "HTTP %d" % e.code
+    if isinstance(e, urllib.error.URLError) and isinstance(e.reason, BaseException):
+        e = e.reason
+    text = re.sub(r"[A-Za-z][A-Za-z0-9+.-]*://\S+", "<url>", str(e)).strip()
+    return type(e).__name__ + (": " + text if text else "")
+
+
+def _host(url: str) -> str:
+    return urllib.parse.urlsplit(url).hostname or urllib.parse.urlsplit(url).scheme
 
 
 def check(current: str) -> tuple:
@@ -203,18 +227,38 @@ def install_root() -> str | None:
     return here if os.path.realpath(here) == lib and os.path.isfile(os.path.join(here, "VERSION")) else None
 
 
-def _download(url: str, to: str, progress, expected: int = 0) -> None:
-    with _get(url, timeout=60) as r, open(to, "wb") as f:
-        total = int(r.headers.get("Content-Length") or expected or 0)
-        got = 0
-        while True:
-            chunk = r.read(64 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
-            got += len(chunk)
-            if total and progress:
-                progress(min(1.0, got / total))
+def _download(url: str, to: str, progress, expected: int = 0, attempts: int = ATTEMPTS) -> None:
+    """A slow link is fine (a 13 MB release took 100 s in a VM behind a proxy): only `STALL` seconds
+    without a byte counts as failing, and a cut-off download picks up where it stopped (Range)."""
+    got, total = 0, 0
+    with open(to, "wb") as f:
+        for attempt in range(1, attempts + 1):
+            try:
+                with _get(url, timeout=STALL, headers={"Range": "bytes=%d-" % got} if got else None) as r:
+                    if got and getattr(r, "status", None) != 206:
+                        f.seek(0)  # the server sent the whole file again
+                        f.truncate()
+                        got = 0
+                    if not got:
+                        total = int(r.headers.get("Content-Length") or expected or 0)
+                    while True:
+                        chunk = r.read(64 * 1024)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        got += len(chunk)
+                        if total and progress:
+                            progress(min(1.0, got / total))
+                if total and got < total:
+                    raise http.client.IncompleteRead(b"", total - got)
+                return
+            except urllib.error.HTTPError:
+                raise  # the server said no: asking again won't change it
+            except (OSError, http.client.HTTPException) as e:
+                Log.d("update: download from %s stopped at %d of %d bytes, try %d of %d (%s)"
+                      % (_host(url), got, total, attempt, attempts, why(e)))
+                if attempt == attempts:
+                    raise
 
 
 def _safe_extract(tar_path: str, into: str) -> None:
@@ -244,6 +288,7 @@ def prepare(u: Update, progress=None) -> str:
         except Failure:
             raise
         except Exception as e:  # noqa: BLE001
+            Log.d("update: download of %s failed (%s)" % (u.version, why(e)))
             code = getattr(e, "code", None)
             raise (Failure("下载失败（HTTP %lld）", code) if code else Failure("下载失败")) from e
         h = hashlib.sha256()

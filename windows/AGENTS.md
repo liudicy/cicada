@@ -3,7 +3,7 @@
 The Windows port: listening only. The root `AGENTS.md` applies too (Ling key, `LingClient`, no third-party dependencies, the Mac app as the reference, one `VERSION`). Commands, layout and how to verify are in `README.md`; the plan is `docs/windows-plan.md`.
 
 - .NET 10, WPF with the UI in code (no XAML), no NuGet packages. `src/Cicada.Core` is UI-free and must build and test on the Mac.
-- The key: `AIKey` in `Cicada.Core/Ling.cs`, the `ling-api-key` file only; every Ling or Ming call goes through `LingClient`.
+- Keys: `AIKey` in `Cicada.Core/Ling.cs`, one DPAPI-sealed file per AI service (`ling-api-key`, `ai-key-<service>`, as on the Mac). The services and their recommended models are `Cicada.Core/AIProviders.cs`; every AI call goes through `LingClient`, which reads the service from settings each time.
 - The notes window never takes focus (`WS_EX_NOACTIVATE`) and stays out of captures (`WDA_EXCLUDEFROMCAPTURE`) unless 共享屏幕时让对方看到 is on.
 - Shared UI text comes from `Resources/*.lproj/Localizable.strings`; Windows-only text is in `src/Cicada/Strings/`. Run `python3 scripts/strings.py` after changing either.
 - Verify with `scripts/test.sh`, then in the VM (`vm/`) with `cicadactl.ps1`. Real x64 hardware, Bluetooth and real screen sharing need a person.

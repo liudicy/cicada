@@ -25,7 +25,7 @@ final class HostStream: RecognitionStream, @unchecked Sendable {
     private let out: AsyncThrowingStream<Recognition.Piece, Error>.Continuation
     private let dir: URL
     private let audio: FileHandle
-    private let queue = DispatchQueue(label: "com.wquguru.cicada.host-recognizer")
+    private let queue = DispatchQueue(label: "com.indaloop.cicada.host-recognizer")
     private var reader: Task<Void, Never>?
     private var done = false
 

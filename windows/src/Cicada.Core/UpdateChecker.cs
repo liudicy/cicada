@@ -9,11 +9,11 @@ namespace Cicada;
 /// UpdateChecker: at launch, then whenever the last answer is 4 hours old (a 15-minute tick, so a
 /// laptop that sleeps a lot still checks), and when the tray panel opens once it is an hour old.
 /// Failures (offline, rate-limited, the repository not public: 404) are silent. This only finds
-/// the update; the app offers Cicada-Setup.exe for download, which upgrades the installed copy
-/// when opened (older releases only have the zip).
+/// the update; the app offers the release's installer (Cicada-<v>-Windows-<arch>.exe) for download,
+/// which upgrades the installed copy when opened.
 public sealed class UpdateChecker
 {
-    /// `Setup` is this PC's Cicada-Setup exe when the release has one; `Size` is the download's;
+    /// `Setup` is this PC's installer when the release has one; `Size` is the download's;
     /// `Checksums` the release's checksums.txt, which the in-app download is checked against.
     public sealed record Update(string Version, string Page, string? Zip, long Size, string? Setup = null, string? Checksums = null)
     {
@@ -39,6 +39,11 @@ public sealed class UpdateChecker
     public DateTimeOffset? LastChecked { get; private set; }
     public event Action? Changed;
 
+    /// How long the feed, checksums.txt or the installer's headers may take to answer.
+    public static readonly TimeSpan Within = TimeSpan.FromSeconds(30);
+    /// The download fails when no bytes arrive for this long (not when it is merely slow).
+    public TimeSpan Stall { get; set; } = TimeSpan.FromSeconds(30);
+
     readonly HttpClient http;
     readonly Action<DateTimeOffset> remember;
     Timer? timer;
@@ -48,8 +53,10 @@ public sealed class UpdateChecker
     {
         LastChecked = lastChecked;
         this.remember = remember;
-        http = handler is null ? new HttpClient() : new HttpClient(handler);
-        http.Timeout = TimeSpan.FromSeconds(20);
+        http = new HttpClient(handler ?? Handler());
+        // No overall timeout: an 85 MB installer on a slow line takes minutes. Each request has its
+        // own limit instead (Within), and the download a stall limit (Stall).
+        http.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
         // GitHub's API refuses requests without a User-Agent.
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Cicada-Windows");
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
@@ -91,10 +98,25 @@ public sealed class UpdateChecker
     {
         if (Uri.TryCreate(feed, UriKind.Absolute, out var uri) && uri.IsFile) return await File.ReadAllTextAsync(uri.LocalPath);
         if (!feed.Contains("://")) return await File.ReadAllTextAsync(feed);
-        using var r = await http.GetAsync(feed);
+        using var cts = new CancellationTokenSource(Within);
+        using var r = await http.GetAsync(feed, cts.Token);
         r.EnsureSuccessStatusCode();
-        return await r.Content.ReadAsStringAsync();
+        return await r.Content.ReadAsStringAsync(cts.Token);
     }
+
+    /// The default handler: sockets with a 4 MB receive buffer instead of Windows' 64 KB default.
+    /// On the test VM's throttled direct path to GitHub it was never slower in paired runs and
+    /// sometimes several times faster (once 14 MB/s against 0.07); the path itself swung so much
+    /// that the gain isn't pinned down. A system proxy still applies: the callback then connects to it.
+    static SocketsHttpHandler Handler() => new()
+    {
+        ConnectCallback = async (context, cancel) =>
+        {
+            var socket = new System.Net.Sockets.Socket(System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true, ReceiveBufferSize = 4 << 20 };
+            try { await socket.ConnectAsync(context.DnsEndPoint, cancel); return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true); }
+            catch { socket.Dispose(); throw; }
+        },
+    };
 
     /// The zip this PC should run: ARM64 on an ARM PC (even when this copy is the emulated x64 one).
     public static string Arch => RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "ARM64" : "x64";
@@ -124,7 +146,7 @@ public sealed class UpdateChecker
         {
             if (r.Draft || r.Prerelease || r.Assets is null) continue;
             var zip = r.Assets.FirstOrDefault(a => IsZip(a.Name, arch)) ?? (arch == "x64" ? null : r.Assets.FirstOrDefault(a => IsZip(a.Name, "x64")));
-            var setup = r.Assets.FirstOrDefault(a => a.Name == SetupName(arch)) ?? (arch == "x64" ? null : r.Assets.FirstOrDefault(a => a.Name == SetupName("x64")));
+            var setup = r.Assets.FirstOrDefault(a => IsSetup(a.Name, arch)) ?? (arch == "x64" ? null : r.Assets.FirstOrDefault(a => IsSetup(a.Name, "x64")));
             if (zip is null && setup is null) continue;
             var sums = r.Assets.FirstOrDefault(a => a.Name == "checksums.txt");
             var u = new Update(r.TagName.TrimStart('v'), r.HtmlUrl, zip?.Url, (setup ?? zip)!.Size, setup?.Url, sums?.Url);
@@ -134,8 +156,12 @@ public sealed class UpdateChecker
         static bool IsZip(string name, string arch) => name.StartsWith("Cicada-") && name.EndsWith($"-Windows-{arch}.zip");
     }
 
-    /// The installer's release asset: no version in the name, so the site's link never goes stale.
-    public static string SetupName(string arch) => arch == "ARM64" ? "Cicada-Setup-arm64.exe" : "Cicada-Setup.exe";
+    /// The installer's release asset, named like every platform's file: Cicada-1.2.0-Windows-x64.exe.
+    /// 1.1.0 named it Cicada-Setup.exe / Cicada-Setup-arm64.exe and only finds those, so releases
+    /// still carry copies under the old names (release.yml) and this accepts both.
+    public static bool IsSetup(string name, string arch) =>
+        (name.StartsWith("Cicada-") && name.EndsWith($"-Windows-{arch}.exe")) || name == LegacySetupName(arch);
+    public static string LegacySetupName(string arch) => arch == "ARM64" ? "Cicada-Setup-arm64.exe" : "Cicada-Setup.exe";
 
     /// One notification per version (the version last told is kept in settings), and none while
     /// listening: the next stop tells. Full screen and screen sharing are Windows' Do Not Disturb.
@@ -164,14 +190,19 @@ public sealed class UpdateChecker
         Directory.CreateDirectory(folder);
         var file = Path.Combine(folder, name);
         string? expected;
+        var stage = "checksums";
         try
         {
             expected = ChecksumFor(await Read(u.Checksums), name);
+            stage = "installer";
             await Fetch(u.Setup, file, u.Size, progress);
         }
-        catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException)
+        catch (Exception e) when (e is HttpRequestException or IOException or OperationCanceledException)
         {
-            Log.Debug($"update: download failed {e.GetType().Name}");
+            // Why, for the log: a stall, a refused connection, a 404…
+            var why = e is OperationCanceledException ? (stage == "installer" && e.Data["stalled"] is true ? $"nothing arrived for {Stall.TotalSeconds:0} s" : "timed out") : e.Message;
+            Log.Debug($"update: download failed at {stage}: {e.GetType().Name}: {why}{(e.InnerException is { } inner ? $" ({inner.GetType().Name}: {inner.Message})" : "")}");
+            try { Directory.Delete(folder, true); } catch { }
             throw new Failure("下载失败");
         }
         string got;
@@ -200,20 +231,30 @@ public sealed class UpdateChecker
     async Task Fetch(string url, string to, long expected, Action<double>? progress)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile) { File.Copy(uri.LocalPath, to, true); progress?.Invoke(1); return; }
-        using var r = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        var started = DateTime.UtcNow;
+        using var cts = new CancellationTokenSource(Within);
+        using var r = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
         r.EnsureSuccessStatusCode();
         var total = r.Content.Headers.ContentLength ?? expected;
-        await using var src = await r.Content.ReadAsStreamAsync();
+        await using var src = await r.Content.ReadAsStreamAsync(cts.Token);
         await using var dst = File.Create(to);
-        var buffer = new byte[81920];
+        var buffer = new byte[1 << 17];
         long got = 0; int n, last = -1;
-        while ((n = await src.ReadAsync(buffer)) > 0)
+        while (true)
         {
+            // The limit restarts with every read: slow is fine, stopped is not.
+            cts.CancelAfter(Stall);
+            try { n = await src.ReadAsync(buffer, cts.Token); }
+            catch (OperationCanceledException e) { e.Data["stalled"] = true; Log.Debug($"update: stalled after {got} of {total} bytes"); throw; }
+            if (n == 0) break;
             await dst.WriteAsync(buffer.AsMemory(0, n));
             got += n;
             // Whole percents only: each one re-renders the flyout and settings.
             if (total > 0 && (int)(got * 100 / total) is var pct && pct != last) { last = pct; progress?.Invoke(Math.Min(1, (double)got / total)); }
         }
+        if (r.Content.Headers.ContentLength is { } length && got != length) throw new IOException($"the connection ended after {got} of {length} bytes");
+        var seconds = Math.Max(0.001, (DateTime.UtcNow - started).TotalSeconds);
+        Log.Debug($"update: fetched {got / 1e6:0.0} MB in {seconds:0.0} s ({got / 1e6 / seconds:0.0} MB/s)");
     }
 
     /// Why installing didn't work: a shared string key, said to the user (the browser fallback opens).

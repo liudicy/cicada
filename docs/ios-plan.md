@@ -2,6 +2,8 @@
 
 状态：设计稿已有（claude.ai 画布“知了 iOS 设计”，9 屏）。M0 已在 Mac 上完成（2026-11-04，worktree `../live-subs-ios-core`、分支 `ios-core`，还没提交）：12 个文件能脱离 Mac app 单独通过类型检查，Mac 的 117 个测试通过，开发版放示例会议的字幕、翻译、纪要、诊断、录音和三种导出都正常，英文界面也看过。M1 也已完成（同一天，Xcode 27.2 / iOS 27.2 模拟器）：共用的 13 个文件用 iOS SDK 编译通过；iPhone 和 iPad 模拟器里能读 Mac 生成的会议记录，列表、文字记录、纪要、搜索、设置都能显示，中文和英文界面都正常，iPad 上是双栏；Mac 的测试在 Xcode 27 的编译器下也通过。
 
+2026-11-16（设计画布“知了 iOS M2–M4”，11 屏）：M2、M3 在模拟器里做完，M4 除 TestFlight 外做完。引导三步（麦克风和语音模型、外放示例会议、Ling key）；导入走 Mac 的 `FileImporter`（共用，`ImportSettings` 协议代替 `AppSettings`），来源是文件、相册和“用知了打开”，后台靠 `BGContinuedProcessingTask`；导出 Markdown、Word（iOS 自己写的最小 .docx）、SRT；面对面同声传译（`FaceToFace.swift`）；App Intents（开始听、暂停、结束并出纪要）给操作按钮、控制中心、Siri 和实时活动的按钮，`build.sh` 自己跑 `appintentsmetadataprocessor`，不需要 `.xcodeproj`。模拟器验证不了的：后台导入（模拟器没有 `BGTaskScheduler`）、灵动岛和锁屏按钮、真的念出声、Siri；没有 key 时 Google 一直 429，所以翻译和念译文只用调试命令 `faceTurn:` 验证过。2026-11-17：真机签名和 TestFlight 打通，仍不用 `.xcodeproj`。bundle id 是 `com.indaloop.cicada`（Mac 不变），team Indaloop LLC；`ios/tools/provision.py` 通过 App Store Connect API 建 App ID、设备、证书和描述文件，`ios/scripts/testflight.sh` 打包上传。App Store Connect 里的 app 叫“知了 Cicada”，build 1.10.1 (779) 已在内部测试组 Indaloop 里可装。下一步：真机上验证模拟器验证不了的几项。
+
 iPhone 和 iPad 拿不到其他 app 的声音，也不能往别的 app 的麦克风里送声音，所以 iOS 版不是 Mac 版的移植，而是“面对面会议 + 导入录音 + 会议记录”的随身版：
 
 - 用麦克风听会议室，实时双语字幕和纪要
@@ -77,9 +79,9 @@ iOS 新写：
 |---|---|---|
 | **M0 共用引擎**（已完成） | `ios/shared-sources.txt`、`ios/scripts/typecheck.sh`，第一批 12 个文件 | macOS SDK 下类型检查通过；Mac 的 `scripts/test.sh` 通过；开发版播 `sample.m4a`，字幕、纪要、录音、导出都正常；英文界面正常 |
 | **M1 跑起来**（已完成） | `ios/` 骨架、构建脚本、模拟器里能启动；会议记录列表和详情读 Mac 生成的 `session.json`；`scripts/strings.py` 也扫 `ios/` | iPhone 和 iPad 模拟器截图和设计稿对得上 |
-| **M2 听会议室** | 麦克风 → 字幕 → 纪要 → 存记录；引导、设置、Ling key | 模拟器里放示例会议，字幕和纪要跟上；生成的记录 Mac 能打开 |
-| **M3 说和导入** | 面对面同声传译、导入录音或视频、导出 | 导入 `sample.m4a` 得到和 Mac 一致的记录；按住说话能念出译文 |
-| **M4 能发布** | 实时活动和灵动岛、App Intents、四种界面语言、TestFlight；`scripts/changelog.py` 加 `(ios)` 分组 | 一台没装过的 iPhone 从 TestFlight 装上到第一次出字幕顺利走完 |
+| **M2 听会议室**（模拟器里已完成） | 麦克风 → 字幕 → 纪要 → 存记录；引导、设置、Ling key | 模拟器里放示例会议，字幕和纪要跟上；生成的记录 Mac 能打开 |
+| **M3 说和导入**（模拟器里已完成） | 面对面同声传译、导入录音或视频、导出 | 导入 `sample.m4a` 得到和 Mac 一致的记录；按住说话能念出译文 |
+| **M4 能发布**（TestFlight 内部测试已通，差真机验证） | 实时活动和灵动岛、App Intents、四种界面语言、TestFlight；`scripts/changelog.py` 加 `(ios)` 分组 | 一台没装过的 iPhone 从 TestFlight 装上到第一次出字幕顺利走完 |
 
 ## 风险
 

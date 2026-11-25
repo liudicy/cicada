@@ -10,6 +10,12 @@ REPO=wquguru/cicada
 [[ "$(gh release view "$TAG" -R "$REPO" --json isDraft -q .isDraft)" == true ]] || { echo "$TAG is not a draft" >&2; exit 1; }
 assets=$(gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name')
 echo "$assets"
+# Every release ships every platform: refuse a draft that is missing one (the release workflow
+# leaves Android out with only a warning when its signing key is missing).
+for f in checksums.txt macOS-AppleSilicon.dmg macOS-AppleSilicon.zip macOS-Intel.dmg Windows-x64.exe \
+         Windows-ARM64.exe Android.apk Linux.tar.gz; do
+  grep -q -- "$f\$" <<< "$assets" || { echo "$TAG has no *$f" >&2; exit 1; }
+done
 latest=false; grep -q '\.dmg$' <<< "$assets" && latest=true
 read -r -p "Publish $TAG (latest: $latest)? [y/N] " ok
 [[ "$ok" == y ]] || exit 1

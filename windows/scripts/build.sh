@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds the Windows app on the Mac: build/Cicada-win-x64/ and build/Cicada-win-arm64/, each a
 # self-contained Cicada.exe with everything inside it. RELEASE=1 for a release build, which also
-# writes build/Cicada-Setup.exe and Cicada-Setup-arm64.exe (the same exe, for people to download);
+# writes build/Cicada-<v>-Windows-x64.exe and -ARM64.exe (the same exe, for people to download);
 # else a dev build, which keeps its records under "Cicada Dev" and opens the debug pipe.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -41,10 +41,11 @@ for rid in win-x64 win-arm64; do
   rm -rf "$out"
   scripts/dotnet.sh publish src/Cicada -c "$config" -r "$rid" -o "$out" -p:DebugType=embedded -v quiet -nologo 2>&1 | grep -E ' error |warning CS' | sort -u || true
   [ -f "$out/Cicada.exe" ] || { echo "build failed for $rid" >&2; exit 1; }
-  # The exe is the whole app (the UI text and the sample are inside it): Cicada-Setup.exe is a copy.
+  # The exe is the whole app (the UI text and the sample are inside it): the installer is a copy.
   [ "$(ls "$out" | grep -v '^Cicada.exe$' | grep -v '^test$' | grep -v '^Cicada Dev.cmd$' || true)" = "" ] || { echo "unexpected files beside Cicada.exe in $out: $(ls "$out")" >&2; exit 1; }
   if [ "$config" = Release ]; then
-    setup=build/Cicada-Setup.exe; [ "$rid" = win-arm64 ] && setup=build/Cicada-Setup-arm64.exe
+    arch=x64; [ "$rid" = win-arm64 ] && arch=ARM64
+    setup="build/Cicada-$(cat "$root/VERSION")-Windows-$arch.exe"
     cp "$out/Cicada.exe" "$setup"; echo "$setup"
   fi
   if [ "$config" = Debug ]; then

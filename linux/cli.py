@@ -10,8 +10,11 @@
   cli.py segments <file.wav>                where the segmenter cuts
   cli.py roundtrip <session.json>… [--diff] reads and writes records, says if a byte changed
 
+  --provider ling|openrouter|zenmux  the AI service (default ling), with its recommended models;
+  --hear-model <id>                   another hear model on it
+
 Records go to CICADA_HOME (default: a temp folder). The key comes from CICADA_KEY_FILE, else this
-app's own key file, else the Mac app's; it is never printed."""
+app's own key file for the service, else the Mac app's; it is never printed."""
 from __future__ import annotations
 
 import os
@@ -25,7 +28,7 @@ sys.path.insert(0, HERE)
 
 from cicada.core import strings  # noqa: E402
 from cicada.core.audio import PcmAudioSource, Wav  # noqa: E402
-from cicada.core.ling import AUDIO_MODEL, TRANSLATE, AIKey, LingClient  # noqa: E402
+from cicada.core.ling import TRANSLATE, AIKey, LingClient  # noqa: E402
 from cicada.core.listen import ListenEngine  # noqa: E402
 from cicada.core.models import Session  # noqa: E402
 from cicada.core.notes import NotesEngine  # noqa: E402
@@ -36,16 +39,25 @@ from cicada.core.support import Log, Paths, clock  # noqa: E402
 from cicada.core.translator import Translator, hear_instruction, hear_prompt, parse_heard  # noqa: E402
 
 
+SERVICE = "ling"
+
+
 def key_file() -> str | None:
     env = os.environ.get("CICADA_KEY_FILE")
     if env:
         return env
-    for p in (os.path.expanduser("~/.config/cicada/ling-api-key"),
-              os.path.expanduser("~/Library/Application Support/LiveSubs Dev/ling-api-key"),
-              os.path.expanduser("~/Library/Application Support/LiveSubs/ling-api-key")):
+    name = "ling-api-key" if SERVICE == "ling" else "ai-key-" + SERVICE
+    for p in (os.path.expanduser("~/.config/cicada/" + name),
+              os.path.expanduser("~/Library/Application Support/LiveSubs Dev/" + name),
+              os.path.expanduser("~/Library/Application Support/LiveSubs/" + name)):
         if os.path.isfile(p):
             return p
     return None
+
+
+def client(settings: AppSettings) -> LingClient:
+    """The AI service the settings name, with the key file found for it."""
+    return LingClient(AIKey(key_file(), service=lambda: SERVICE), config=settings.ai_config)
 
 
 def main(args: list) -> int:
@@ -56,6 +68,15 @@ def main(args: list) -> int:
     def opt(name, fallback):
         return args[args.index(name) + 1] if name in args and args.index(name) + 1 < len(args) else fallback
     strings.load(opt("--ui", "zh-Hans"), [os.path.join(HERE, "..", "Resources"), os.path.join(HERE, "strings")])
+    global SERVICE
+    SERVICE = opt("--provider", "ling")
+    hear = opt("--hear-model", "")
+
+    def make_settings(**kw) -> AppSettings:
+        s = AppSettings(aiProvider=SERVICE, **kw)
+        if hear:
+            s.aiHearModels[SERVICE] = hear
+        return s
     cmd = args[0]
     if cmd == "segments":
         pcm = Wav.read_file(args[1])
@@ -87,10 +108,10 @@ def main(args: list) -> int:
                                                                                   b[at] if at < len(b) else None))
         return 0 if changed == 0 else 1
     if cmd == "hear":
-        ling = LingClient(AIKey(key_file()))
+        ling = client(make_settings())
         target = opt("--target", "zh-CN")
         r = ling.chat(hear_prompt(target, None, []), hear_instruction(target), TRANSLATE, max_tokens=800, timeout=20.0,
-                      model=AUDIO_MODEL, audio=Wav.bytes(Wav.read_file(args[1])))
+                      model=ling.config().hear_model, audio=Wav.bytes(Wav.read_file(args[1])))
         print(r)
         print("->", parse_heard(r, target, None))
         return 0
@@ -99,9 +120,8 @@ def main(args: list) -> int:
         from array import array as _array
         from cicada.core.speak import SpeakEngine
         Log.echo = "--log" in args
-        key = AIKey(key_file())
-        ling = LingClient(key)
-        settings = AppSettings(target=opt("--from", "zh-CN"), speakTo=opt("--to", "en"))
+        settings = make_settings(target=opt("--from", "zh-CN"), speakTo=opt("--to", "en"))
+        ling = client(settings)
         out = bytearray()
 
         class Collect:
@@ -135,12 +155,11 @@ def main(args: list) -> int:
         Log.echo = "--log" in args
         if not os.environ.get("CICADA_HOME"):
             Paths.home_override = tempfile.mkdtemp(prefix="cicada-cli-")
-        key = AIKey(key_file())
-        if key.read() is None:
-            print("no Ling key (set CICADA_KEY_FILE)")
+        settings = make_settings(target=opt("--target", "zh-CN"))
+        ling = client(settings)
+        if not ling.has_key:
+            print("no %s key (set CICADA_KEY_FILE)" % SERVICE)
             return 2
-        settings = AppSettings(target=opt("--target", "zh-CN"))
-        ling = LingClient(key)
         store = SessionStore()
         notes = NotesEngine(ling, store)
         engine = ListenEngine(ling, Translator(ling), store, notes, settings)

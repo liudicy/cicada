@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A white ground, so the mark reads like the system's own icons beside it. -->
+<!-- The orange ground of the Mac icon (site/icon.svg): a diagonal gradient and a soft sheen on the
+     top half, placed so the adaptive icon's visible 72dp (18..90) matches the Mac's 100-unit square. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M0,0h108v108h-108z" />
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="18" android:startY="18" android:endX="90" android:endY="90"
+                android:startColor="#FFF57447" android:endColor="#FFDC461C" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M0,0h108v54h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="18" android:endX="0" android:endY="54"
+                android:startColor="#33FFFFFF" android:endColor="#00FFFFFF" />
+        </aapt:attr>
+    </path>
 </vector>

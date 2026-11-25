@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 """Drives the running dev build through its control socket (cicada/app/debug.py has the commands):
   cicadactl state | start | stop | feed <wav> | sample | view notes|subtitles | show records|notes|settings|onboarding
-            target <code> | key-reload | windows | quit
+            target <code> | key-reload | windows | quit | dock [on|off] | close records
             calls <program=name,…>|none|real | realcalls | endtimes <silence> <countdown> <grace>|off | endkeep
             notes-tab notes|transcript | notes-search <text> | notes-wide on|off | onboarding-step <n> | settings-scroll <0-1>
+            records-search <text> | records-search-step 1|-1 (the records window's Ctrl+F search: meetings, matches, the line)
+            codecs | play [<seconds>] | pause | rate | playstate | follow | play-line <n> | line-rect <n>|pill | settings-general (保存会议录音 and its player)
+            fixes on|off | heard <text> | fix-state | fix-answer yes|no | fix-later | fix-revert <line> | fix-undo
+            fix-edit <line>=<text>[|one][|keep0] | fix-editor <line>=<text> | vocab-add <word>=<heard>[|…] | vocab-state
+            word-list [import <text>|edit <word>|heard <word>=<form>|delete <word>] (改正听错的词, debug.py › _fixes)
+            share <id>[,full][,pw] | unshare <id> | share-last | shareSheet <id>|"" | share-ui <action> (分享…, debug.py › _share)
+            export-folder <path>|off|on | export-state | export-all | export-retry | export-choose (存到文件夹, debug.py › _export)
+            voice <lang>[=<id>] | voice-clone <wav>|off|state | voice-preview [<lang>] | voice-dialog open|feed <wav>|finish|play original|clone|save|close
+            (我自己的声音, debug.py › _voice)
 Run it inside the Linux session (linux/vm/vmctl.sh ssh does that for the test VM)."""
 import os
 import socket

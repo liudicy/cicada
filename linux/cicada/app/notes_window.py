@@ -11,10 +11,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from gi.repository import Gdk, GLib, Gtk
+from gi.repository import Gdk, GLib, Gtk, Pango
 
 from ..core import notes as notesmod
-from ..core import speakers
+from ..core import problem
+from ..core import live_fixes, roommic, speakers, transcript_search
 from ..core.strings import L, LF
 from ..core.support import Log, clock
 from . import ui, x11
@@ -50,6 +51,8 @@ class NotesWindow(Gtk.Window):
         self._bottom = None  # the subtitle bar's bottom edge: it grows upward as text wraps
         self.connect("configure-event", self._configured)
         self.connect("realize", lambda w: x11.never_take_focus(w.get_window()))
+        # Mutter flags it as demanding attention once it's mapped (just after map-event).
+        self.connect("map-event", lambda w, _e: GLib.timeout_add(200, lambda: x11.no_attention(w.get_window()) or False) and False)
         self.connect("delete-event", lambda *_: self.hide() or True)
         self._queued = False
         self._built = False
@@ -157,6 +160,11 @@ class NotesWindow(Gtk.Window):
         self.header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         ui.pad(self.header, 8, 8, 4, 16)
         outer.pack_start(self.header, False, False, 0)
+        # 听哪里 while listening (正在听 · 会议室 换 ⌄): changed here, the same meeting goes on.
+        self.source_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.source_row.set_no_show_all(True)
+        if not self.subtitles:
+            outer.pack_start(ui.pad(self.source_row, 0, 16, 4, 16), False, False, 0)
         self.live = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.body = None
         self.footer_time = None
@@ -191,6 +199,12 @@ class NotesWindow(Gtk.Window):
             self.lang_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             self.lang_wrap = ui.pad(self.lang_box, 0, 12, 8, 12)
             outer.pack_start(self.lang_wrap, False, False, 0)
+            # 改正听错的词: 这样改对吗？ above both tabs (the window opens on 纪要, where a card in the
+            # transcript would never be seen), and the last decision with 撤销.
+            self.fix_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            self.fix_wrap = ui.pad(self.fix_box, 0, 12, 8, 12)
+            self.fix_wrap.set_no_show_all(True)
+            outer.pack_start(self.fix_wrap, False, False, 0)
             self.columns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0, homogeneous=True)
             self.scroll = Gtk.ScrolledWindow()
             self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -260,6 +274,7 @@ class NotesWindow(Gtk.Window):
             self._layout()
             self._fill_ending()
             self._fill_languages()
+            self._fill_fix()
             adj = self.scroll.get_vadjustment()
             keep = adj.get_value()
             self._fill_body()
@@ -301,6 +316,27 @@ class NotesWindow(Gtk.Window):
             note = ui.text(self.app.ending_title(p) + " · " + LF("%lld 秒后结束", self.app.ending_left(p)), 12, "accent", wrap=False)
             h.pack_start(note, False, False, 8)
         h.show_all()
+        self._fill_source()
+
+    def _fill_source(self) -> None:
+        """麦克风 under the header (the Mac's 打开麦克风 beside 结束: here the header's mic icon is
+        同声传译's): what the mic does now, and the button that turns it on or off."""
+        row = self.source_row
+        ui.clear(row)
+        listen = self.app.listen
+        if not listen.listening or listen.source_kind == "file" or self.subtitles:
+            row.hide()
+            return
+        on = self.app.mic_on
+        line = ui.hbox(8, ui.text(L("桌边的人说话也会记下") if on else L("关着 · 只听电脑声音"), 12, "secondary", wrap=False))
+        b = ui.button(L("关闭麦克风") if on else L("打开麦克风"), lambda: self.app.set_mic(not on),
+                      "outline" if on else "darkbtn", "audio-input-microphone-symbolic")
+        b.set_can_focus(False)
+        line.pack_end(b, False, False, 0)
+        row.pack_start(line, False, False, 0)
+        for c in row.get_children():
+            c.show_all()
+        row.show()  # show_all() skips a no_show_all widget itself
 
     # 纪要 / 文字记录, side by side
 
@@ -419,16 +455,7 @@ class NotesWindow(Gtk.Window):
         self._fill_transcript(scroll=True)
 
     def _terms(self) -> list:
-        """The query, plus every way the notes say that name was heard (江充 also finds 江松)."""
-        q = self.query.strip()
-        if not q:
-            return []
-        out = [q]
-        for t in self.app.notes.notes.terms:
-            forms = [t.name] + list(t.heard)
-            if any(f and (q.lower() in f.lower() or f.lower() in q.lower()) for f in forms):
-                out += [f for f in forms if f and f not in out]
-        return out
+        return transcript_search.terms(self.query, self.app.notes.notes.terms)
 
     def _fill_transcript(self, scroll: bool = False) -> None:
         if not self.transcript_col.get_visible():
@@ -436,11 +463,10 @@ class NotesWindow(Gtk.Window):
         session = self._session()
         lines = session.lines if session else []
         terms = self._terms()
-        low = [t.lower() for t in terms]
 
         def hit(l):
-            return any(t in l.src.lower() or t in (l.dst or "").lower() for t in low)
-        self.matches = [l.id for l in lines if hit(l)] if terms else []
+            return transcript_search.line_matches(l, terms)
+        self.matches = transcript_search.matches(lines, terms)
         if self.matches:
             self.match_index %= len(self.matches)
         current = self.matches[self.match_index] if self.matches else None
@@ -449,8 +475,12 @@ class NotesWindow(Gtk.Window):
         names = speakers.names(session) if voices else {}
         pending = self.app.listen.listening and self.app.listen.pending > 0
         topics = [(t.start, t.title) for t in self.app.notes.notes.topics]
-        key = (len(lines), lines[-1].id if lines else None, (lines[-1].dst or "") if lines else "", tuple(terms), current,
-               tuple(sorted(nums.items())), tuple(sorted(names.items())), pending, tuple(topics))
+        self._places = roommic.heard_both(lines)  # 电脑和会议室: each of their lines says where
+        key = (self._places, len(lines), lines[-1].id if lines else None, (lines[-1].dst or "") if lines else "", tuple(terms), current,
+               tuple(sorted(nums.items())), tuple(sorted(names.items())), pending, tuple(topics),
+               # 改正听错的词: any line's fixes changing (a fix in, 改回, 对) redraws it.
+               tuple((l.id, tuple((f.from_, f.to, f.ask, f.off, f.user) for f in l.fixes)) for l in lines if l.fixes))
+        self._newest = lines[-1].id if lines and self.app.listen.listening else None
         self._fill_search_tools()
         if key == self._transcript_key and not scroll:
             return
@@ -481,9 +511,10 @@ class NotesWindow(Gtk.Window):
         # (it follows what's said), else where the reader was.
         if target is not None and scroll:
             def to_match():
-                ok, _x, y = target.translate_coordinates(box, 0, 0)
-                if ok:
-                    adj.set_value(max(0, y - adj.get_page_size() / 3))
+                # PyGObject gives (x, y), or None when they share no toplevel.
+                pos = target.translate_coordinates(box, 0, 0)
+                if pos is not None:
+                    adj.set_value(max(0, pos[1] - adj.get_page_size() / 3))
             self._after_layout = to_match
         elif not terms and self.app.listen.listening:
             self._after_layout = lambda: adj.set_value(adj.get_upper())
@@ -509,16 +540,97 @@ class NotesWindow(Gtk.Window):
         row = ui.vbox(2)
         top = ui.hbox(8)
         if l.speaker == "me":
-            top.pack_start(ui.text(L("你"), 11, "accent", bold=True, wrap=False, ellipsize=False), False, False, 0)
+            top.pack_start(ui.me_tag(), False, False, 0)
         elif l.id in nums:
             n = nums[l.id]
             top.pack_start(ui.text(speakers.label(n, names), 11, "spk%d" % ((n - 1) % 4 + 1), bold=True, wrap=False, ellipsize=False), False, False, 0)
+        if l.speaker != "me" and getattr(self, "_places", False):
+            top.pack_start(ui.place_tag(l), False, False, 0)
         top.pack_start(ui.text(clock(l.t), 11, "tertiary", wrap=False, ellipsize=False), False, False, 0)
         row.pack_start(top, False, False, 0)
-        if l.dst and l.dst != l.src:
-            row.pack_start(ui.marked(l.src, terms, 12, "secondary", current, lang=l.srcLang), False, False, 0)
-        row.pack_start(ui.marked(l.dst or l.src, terms, 13, "ink", current, lang=l.dstLang if l.dst else l.srcLang), False, False, 0)
-        return row
+        if l.dst and l.dst != l.shown:
+            row.pack_start(ui.fixed(l, 12, "secondary", terms, current), False, False, 0)
+            row.pack_start(ui.marked(l.dst, terms, 13, "ink", current, lang=l.dstLang), False, False, 0)
+        else:
+            row.pack_start(ui.fixed(l, 13, "ink", terms, current), False, False, 0)
+        applied = [(l.id, f) for f in l.fixes or [] if f.applied]
+        if not applied:
+            return row
+        # 改正听错的词: pointing at the line shows what each fixed word was heard as, with 改回. The newest
+        # line shows it open too: hover in a window that never takes focus is not to be counted on.
+        sid = self._session().id
+
+        def revert(line_id, fix):
+            self.app.fixes.revert(fix, line_id, sid)
+        words = ui.gap(ui.fixed_words(applied, revert), 2)
+        row.pack_start(words, False, False, 0)
+        if l.id == getattr(self, "_newest", None):
+            return row
+        words.set_no_show_all(True)
+        for c in words.get_children():  # ready, so show() alone reveals them
+            c.show_all()
+        hover = Gtk.EventBox()
+        hover.add_events(Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        hover.add(row)
+        hover.connect("enter-notify-event", lambda *_: words.show() or False)
+
+        def left(_w, event):
+            if event.detail != Gdk.NotifyType.INFERIOR:
+                words.hide()
+            return False
+        hover.connect("leave-notify-event", left)
+        return hover
+
+    # 改正听错的词
+
+    def _fill_fix(self) -> None:
+        """这样改对吗？: a name sound can't check, asked about once, clicks only (the window never takes
+        focus). 对 fixes every line waiting on it and adds it to 词表; × asks again after the meeting.
+        The Mac hides it while the window is shown to the other side; Linux can't keep the window out
+        of a share (the footer says so), so it is always shown. Then the last decision, with 撤销."""
+        session = self._session()
+        fx = self.app.fixes
+        a = fx.asking(session.id) if session is not None else None
+        toast = fx.toast_text()
+        key = (session.id if session else None, a[1].from_ if a else None, a[1].to if a else None, a[3] if a else 0,
+               a[0].id if a else None, fx.toast if toast else None, fx.can_undo)  # the toast with its time
+        if key == getattr(self, "_fix_key", None):
+            return
+        self._fix_key = key
+        ui.clear(self.fix_box)
+        if a is not None:
+            self.fix_box.pack_start(self._fix_card(session.id, *a), False, False, 0)
+        if toast:
+            self.fix_box.pack_start(ui.fix_toast(fx, toast), False, False, 0)
+            # Gone once its time is up.
+            GLib.timeout_add(int(1000 * (live_fixes.TOAST_SECONDS + 0.2)), lambda: self.refresh() and False)
+        self.fix_wrap.set_visible(a is not None or bool(toast))
+        for c in self.fix_box.get_children():  # show_all() stops at a no_show_all box
+            c.show_all()
+
+    def _fix_card(self, sid, line, fix, _position, of) -> Gtk.Widget:
+        from ..core.correction import label
+        cf, ct = label(fix)
+        fx = self.app.fixes
+        head = ui.hbox(8)
+        head.pack_start(ui.text(L("这样改对吗？"), 13, "ink", bold=True, wrap=False, ellipsize=False), False, False, 0)
+        head.pack_start(ui.text(L("确认后整场一起改，以后也这样改"), 12, "tertiary", wrap=False), True, True, 0)
+        if of > 1:
+            head.pack_end(ui.text("1 / %d" % of, 12, "tertiary", wrap=False, ellipsize=False), False, False, 0)
+        what = Gtk.Label()
+        what.set_xalign(0)
+        what.set_markup('<span size="%d">%s <span foreground="#6B7080">→</span> <b>%s</b></span>'
+                        % (14 * 768, ui.esc(cf), ui.esc(ct)))
+        ui.classes(what, "ink")
+        where = ui.text("%s · %s" % (clock(line.t), line.src), 11, "tertiary", wrap=False, lang=line.srcLang)
+        left = ui.vbox(2, what, where)
+        row = ui.hbox(8)
+        row.pack_start(left, True, True, 0)
+        row.pack_start(ui.soft_button(L("对"), lambda: fx.answer(fix, True, sid), dark=True), False, False, 0)
+        row.pack_start(ui.soft_button(L("不对"), lambda: fx.answer(fix, False, sid)), False, False, 0)
+        row.pack_start(ui.icon_button("window-close-symbolic", L("稍后再看"), lambda: fx.later(fix, sid), px=11, focus=False),
+                       False, False, 0)
+        return ui.panel(ui.pad(ui.vbox(8, head, row), 10, 12), "fixcard")
 
     # Ending by itself
 
@@ -588,7 +700,11 @@ class NotesWindow(Gtk.Window):
                 listen.notes_for[sid] = choice
                 notes.generate(sid)
                 GLib.timeout_add(150, lambda: self.refresh() or False)
-            b = ui.button(LF("改用%@重新整理", name(other[1])), again, "outline")
+            # A Latin name gets spaces in Chinese ("改用 English 重新整理"), unlike the Mac's one key;
+            # a Chinese one doesn't ("改用简体中文重新整理"). Both translate alike.
+            label = name(other[1])
+            spaced = label[:1].isascii()
+            b = ui.button(LF("改用 %@ 重新整理" if spaced else "改用%@重新整理", label), again, "outline")
             b.set_can_focus(False)
             b.set_halign(Gtk.Align.START)
             self.lang_box.pack_start(b, False, False, 0)
@@ -678,6 +794,19 @@ class NotesWindow(Gtk.Window):
             row.pack_end(b, False, False, 0)
         box.pack_start(row, False, False, 0)
 
+    def _reason(self) -> str | None:
+        ling = self.app.ling
+        return ling.check_result.reason if ling.has_key else None
+
+    def shows_problem(self, reason) -> bool:
+        """Whether this window, as it is laid out, says what's wrong (then no notification): the
+        subtitle bar and the live card only what stops hearing; the notes column the rest."""
+        if not problem.blocking(reason) and reason != "unreachable":
+            return True
+        if self.subtitles or getattr(self, "body", None) is None:
+            return problem.stops_hearing(reason) or reason == "unreachable"
+        return self.wide or self.tab == "notes"
+
     def _fill_live(self) -> None:
         box = self.live
         ui.clear(box)
@@ -691,18 +820,33 @@ class NotesWindow(Gtk.Window):
         if kind == "source":
             # Saved only if something was heard before the audio service went away.
             body = L("音频服务已断开，本次会议记录已保存") if session is not None and session.lines else L("没能开始听")
-            self._state_card(box, "audio-volume-muted-symbolic", "warn", L("系统声音中断"), body, L("开始听"), self.app.toggle_listening)
+            self._state_card(box, "audio-volume-muted-symbolic", "warn", listen.problem or L("系统声音中断"), body, L("开始听"),
+                             self.app.toggle_listening)
         elif kind == "network" and (line is None or listen.listening):
-            self._state_card(box, "network-offline-symbolic", "warn", L("连不上 Ling"), L("请检查网络。恢复后会自动继续，断开期间的声音无法识别"))
+            service = self.app.ling.provider.name
+            self._state_card(box, "network-offline-symbolic", "warn", L("连不上 Ling") if service == "Ling" else LF("连不上 %@", service),
+                             L("请检查网络。恢复后会自动继续，断开期间的声音无法识别"))
         elif kind == "key":
+            ling = self.app.ling.provider.id == "ling"
             self._state_card(box, "dialog-password-symbolic", "warn", listen.problem or L("Ling key 无效"),
-                             L("在设置里更换 Ling key"), L("设置"), self.app.show_settings)
+                             L("在设置里更换 Ling key") if ling else L("在 设置 › AI 服务 里换一个"), L("设置"), self.app.show_settings)
+        elif problem.stops_hearing(self._reason()) and kind not in ("network", "busy"):
+            # Nothing is heard until it's fixed (no credit, a bad address…): said where the subtitles
+            # would be, with the way to fix it, not "等有人说话".
+            from .aicheck_view import blocking, blocking_detail
+            self._state_card(box, "dialog-warning-symbolic", "warn", blocking(self.app), blocking_detail(self.app),
+                             L("设置"), lambda: self.app.show_settings(ai=True))
         elif line is None:
             if listen.listening:
                 hearing = listen.pending > 0 or listen.level >= 0.01
-                self._state_card(box, "audio-speakers-symbolic", "grey",
+                room = listen.source_kind == "room"
+                # Busy or erring before anything was heard: said here, or it reads as a quiet meeting.
+                # In the wrapping line, not the one-line title, which would cut it off.
+                trouble = listen.problem if kind == "busy" else None
+                self._state_card(box, "audio-input-microphone-symbolic" if room else "audio-speakers-symbolic", "grey",
                                  L("正在识别…") if hearing else L("等有人说话"),
-                                 L("正在听电脑播放的声音，有声音后约 3 秒出字幕"))
+                                 trouble or (L("正在用麦克风听会议室，有人说话后约 3 秒出字幕") if room
+                                             else L("正在听电脑播放的声音，有声音后约 3 秒出字幕")))
             else:
                 self._state_card(box, "audio-speakers-symbolic", "grey", None,
                                  L("点“开始听”，将电脑播放的声音转为双语字幕和纪要"))
@@ -715,10 +859,13 @@ class NotesWindow(Gtk.Window):
                     n = nums[line.id]
                     box.pack_start(ui.text(speakers.label(n, speakers.names(session)), 11, "spk%d" % ((n - 1) % 4 + 1),
                                            bold=True, wrap=False), False, False, 0)
-            if line.dst and line.dst != line.src:
-                box.pack_start(ui.text(line.src, 13 if self.subtitles else 12, "secondary",
-                                       wrap=not self.subtitles, width_chars=60, lang=line.srcLang), False, False, 0)
-            box.pack_start(ui.text(line.dst or line.src, big, "ink", bold=True, width_chars=60 if self.subtitles else 30,
+            if line.dst and line.dst != line.shown:
+                src = ui.fixed(line, 13 if self.subtitles else 12, "secondary")
+                if self.subtitles:
+                    src.set_line_wrap(False)
+                    src.set_ellipsize(Pango.EllipsizeMode.END)
+                box.pack_start(src, False, False, 0)
+            box.pack_start(ui.text(line.dst or line.shown, big, "ink", bold=True, width_chars=60 if self.subtitles else 30,
                                    lang=line.dstLang if line.dst else line.srcLang), False, False, 0)
             if not self.subtitles and (listen.pending > 0 or kind == "busy"):
                 foot = ui.hbox(6)
@@ -741,8 +888,9 @@ class NotesWindow(Gtk.Window):
             return
         from ..core.support import TARGETS
         names = {c: n for n, c in TARGETS}
-        stage = {"hearing": L("正在听你说…"), "interpreting": L("正在翻译…"),
-                 "speaking": L("正在说") + " · " + names.get(sp.target, sp.target)}.get(sp.stage, L("同声传译"))
+        # Marked 同传 while on, as the Mac's live labels (theirs end in spaces for the text after them).
+        stage = {"hearing": L("同传 · 你在说…  ").rstrip(), "interpreting": L("同传 · 翻译中…  ").rstrip(),
+                 "speaking": L("同传") + " · " + L("正在说") + " · " + names.get(sp.target, sp.target)}.get(sp.stage, L("同声传译"))
         top = ui.hbox(8)
         mic = ui.icon("audio-input-microphone-symbolic", 14)
         ui.classes(mic, "accent" if sp.active else "secondary")
@@ -753,7 +901,7 @@ class NotesWindow(Gtk.Window):
             original, translation = sp.last
             if not self.subtitles:
                 box.pack_start(ui.text(LF("你说：%@", original), 11, "secondary", width_chars=34, lang=sp.source), False, False, 0)
-            box.pack_start(ui.text(LF("对方听到：%@", translation), 13 if not self.subtitles else 15, "ink", bold=True,
+            box.pack_start(ui.text(LF("线上听到：%@", translation), 13 if not self.subtitles else 15, "ink", bold=True,
                                    width_chars=34 if not self.subtitles else 70, lang=sp.target), False, False, 0)
         if sp.problem:
             box.pack_start(ui.text(sp.problem, 11, "warn", width_chars=34), False, False, 0)
@@ -770,40 +918,129 @@ class NotesWindow(Gtk.Window):
         ui.retext(self.footer_time, L("刚刚更新") if ago < 10 else LF("%lld 秒前更新", ago) if ago < 60 else LF("%lld 分钟前更新", ago // 60))
 
     def _banner(self, body, engine) -> None:
-        """Why the notes stopped, above them, notes or not (the Mac's banner): a dead key, too many
-        requests, or a round that failed; each says where the notes stop."""
+        """Why the notes stopped, above them, notes or not (the Mac's banner): one status line for a
+        dead key, a busy or unreachable service, or a round that failed; each says what waits and
+        what still works."""
         s = self._session()
         covered = engine.notes.covered
         last = s.lines[covered - 1].t if s is not None and 0 < covered <= len(s.lines) else 0.0
-        if engine.status == notesmod.INVALID_KEY:
-            text, tone = LF("key 已失效（令牌被删或免费额度用尽），纪要停留在 %@。", clock(last)), "error"
-        elif engine.status == notesmod.RATE_LIMITED:
-            text, tone = LF("请求过于频繁，稍后会自动重试。纪要停留在 %@。", clock(last)), ""
-        elif engine.status == notesmod.FAILED:
-            text, tone = L("这轮没整理好，下一轮会自动重试。"), ""
-        else:
-            return
-        row = ui.hbox(10)
-        row.pack_start(ui.text(text, 12, "ink", width_chars=24), True, True, 0)
-        if tone == "error":
-            b = ui.button(L("更换 key"), self.app.show_settings, "darkbtn")
+        reason = self._reason()
+        ling = self.app.ling
+        # Who the line names: a custom service by its address, which says more than 这个服务.
+        name = ling.service_label
+        # All but the key are about a round of the meeting going on now: a record opened later has none.
+        live = self.app.listen.listening
+        status = engine.status
+        action = on_action = None
+        if status == notesmod.INVALID_KEY:
+            tone = "needsyou"
+            text = LF("key 失效了 · 纪要停在 %@", clock(last)) if last > 0 else L("key 失效了 · 纪要等新的 key")
+            action, on_action = L("换 key"), lambda: self.app.show_settings(ai=True)
+        elif problem.blocking(reason) and (reason in problem.NOTES_ONLY or not self.live_box.get_visible()):
+            # Only the user can fix it (the live card says it too, when it shows): what, and 打开设置.
+            from .aicheck_view import blocking, blocking_detail
+            row = ui.hbox(10)
+            row.pack_start(ui.vbox(2, ui.text(blocking(self.app), 12, "ink", bold=True, width_chars=24),
+                                   ui.text(blocking_detail(self.app), 12, "secondary", width_chars=24)), True, True, 0)
+            b = ui.button(L("打开设置"), lambda: self.app.show_settings(ai=True), "darkbtn")
             b.set_can_focus(False)
             b.set_valign(Gtk.Align.CENTER)
             row.pack_end(b, False, False, 0)
-        card = ui.panel(ui.pad(row, 12), "notice", *([tone] if tone else []))
-        body.pack_start(ui.pad(card, 0, 0, 10, 0), False, False, 0)
+            body.pack_start(ui.pad(ui.panel(ui.pad(row, 12), "notice", "error"), 0, 0, 10, 0), False, False, 0)
+            return
+        elif live and self.app.translator.google_off and self.app.translator.sentences_untranslated:
+            # 语音和文字只发给你的服务, and the service didn't translate the last sentence: it picks up
+            # by itself, and no 改用 Ling, which would send the meeting elsewhere.
+            notes_wait = status in (notesmod.UNREACHABLE, notesmod.UPDATING) and ling.check_result.reason == "unreachable"
+            tone = "waiting"
+            text = LF("译文和纪要等 %@ 恢复 · 字幕先显示原文", name) if notes_wait else LF("译文等 %@ 恢复 · 字幕先显示原文", name)
+        elif status == notesmod.RATE_LIMITED and live:
+            # A 429 holds hearing at the start gate and its retries wait it out: subtitles come late
+            # for a moment, not lost; the live card says so if hearing itself stays busy.
+            tone, text = "waiting", LF("%@ 很忙 · 纪要稍后补上，字幕照常", name)
+        elif status in (notesmod.UNREACHABLE, notesmod.UPDATING) and live and ling.check_result.reason == "unreachable":
+            # The network or the proxy, not the notes: it picks up by itself. Both: the notes' own
+            # request failed and the service answers nothing (notes that only timed out while
+            # translations came back retry next round). The retry that follows (UPDATING) hangs as
+            # long as a timeout: the line stays meanwhile. The service hears the meeting here, so the
+            # subtitles wait too.
+            tone, text = "waiting", LF("字幕和纪要等 %@ 恢复 · 连上后自动继续", name)
+            if self.app.can_switch_to_ling():
+                action, on_action = L("改用 Ling"), self.app.switch_to_ling
+        elif status == notesmod.FAILED and live:
+            tone, text = "info", L("这轮纪要没写好 · 下轮自动补上")
+        else:
+            return
+        body.pack_start(ui.pad(ui.status_line(tone, text, action, on_action), 0, 0, 10, 0), False, False, 0)
+
+    def _listening_view(self) -> Gtk.Widget:
+        """NotesListeningView: one quiet status row, then the notes' own shape waiting to be filled, so
+        the first version lands where the reader is already looking."""
+        view = ui.vbox(22)
+        row = ui.hbox(12, ui.sound_bars())
+        row.pack_start(ui.text(L("有人开口后，约半分钟出第一版"), 13, "ink", width_chars=20), True, True, 0)
+        self._heard = ui.text("", 12, "tertiary", wrap=False, ellipsize=False)
+        self._heard.set_no_show_all(True)
+        self._heard.set_valign(Gtk.Align.CENTER)
+        row.pack_end(self._heard, False, False, 0)
+        view.pack_start(ui.panel(ui.pad(row, 12, 14), "listenrow"), False, False, 0)
+        summary = ui.vbox(10, ui.text(L("总结"), 15, "ghost", bold=True, wrap=False))
+        for f in (0.94, 0.8, 0.56):
+            summary.pack_start(ui.skeleton(f, 10), False, False, 0)
+        view.pack_start(summary, False, False, 0)
+        topics = ui.vbox(12, ui.text(L("议题"), 15, "ghost", bold=True, wrap=False))
+        for time, lines, opacity in (("00:00", (0.52, 0.88, 0.7), 1.0), ("--:--", (0.4, 0.76), 0.6)):
+            bars = ui.vbox(8)
+            for i, f in enumerate(lines):
+                bars.pack_start(ui.skeleton(f, 11 if i == 0 else 8), False, False, 0)
+            slot = ui.hbox(12, ui.text(time, 12, "ghost", wrap=False, ellipsize=False))
+            slot.get_children()[0].set_valign(Gtk.Align.START)
+            slot.pack_start(bars, True, True, 0)
+            card = ui.panel(ui.pad(slot, 14), "slot")
+            card.set_opacity(opacity)
+            topics.pack_start(card, False, False, 0)
+        view.pack_start(topics, False, False, 0)
+        # Wraps: the English chips don't fit one line in the narrow window.
+        flow = ui.Wrap(6)
+        flow.add(ui.pad(ui.text(L("会整理出"), 12, "tertiary", wrap=False, ellipsize=False), 4, 0))
+        for t in (L("结论"), L("待办"), L("人名和术语"), L("鱼骨图")):
+            flow.add(ui.panel(ui.pad(ui.text(t, 12, "secondary", wrap=False, ellipsize=False), 4, 10), "pill"))
+        view.pack_start(ui.gap(flow, 4), False, False, 0)
+        return view
 
     def _fill_body(self) -> None:
         body = self.body
-        ui.clear(body)
         engine = self.app.notes
         n = engine.notes
         listening = self.app.listen.listening
+        # The Mac's notesPane: notes; else the key; else a request actually out; else, while listening,
+        # the placeholder, which stays up after lines arrive until that first request goes out.
+        session = self._session()
+        generating = engine.status == notesmod.UPDATING and (session is None or engine.working_id == session.id)
+        placeholder = n.is_empty and listening and not generating and engine.status not in (notesmod.NO_KEY, notesmod.INVALID_KEY)
+        # Kept across rebuilds (one per heard line) so its CSS animations don't start over.
+        keep = getattr(self, "_listening", None) if placeholder else None
+        for c in body.get_children():
+            if c is not keep:
+                body.remove(c)
+                c.destroy()
+        self._listening = keep
         self._banner(body, engine)
+        if placeholder:
+            if keep is None:
+                self._listening = self._listening_view()
+                body.pack_start(self._listening, False, False, 0)
+            else:
+                body.reorder_child(keep, -1)  # below the banner
+            heard = len(session.lines) if session is not None else 0
+            ui.retext(self._heard, LF("已听到 %lld 句", heard) if heard else "")
+            self._heard.set_visible(heard > 0)
+            body.show_all()
+            return
         if n.is_empty:
             hint = {notesmod.NO_KEY: L("生成纪要需要 API key"),
-                    notesmod.UPDATING: L("正在整理纪要…")}.get(engine.status, L("会中每 45 秒更新") if listening else "")
-            if engine.status in (notesmod.INVALID_KEY, notesmod.RATE_LIMITED, notesmod.FAILED):
+                    notesmod.UPDATING: L("正在整理纪要…")}.get(engine.status, "")
+            if engine.status in (notesmod.INVALID_KEY, notesmod.RATE_LIMITED, notesmod.FAILED, notesmod.UNREACHABLE):
                 hint = ""  # the banner says it
             if hint:
                 body.pack_start(ui.helper(hint), False, False, 0)
@@ -825,7 +1062,7 @@ class NotesWindow(Gtk.Window):
             for p in t.points:
                 body.pack_start(ui.gap(ui.text(p, 13, "body", width_chars=30), 4), False, False, 0)
         for title, items in ((L("结论"), [c.text for c in n.conclusions]),
-                             (L("待办"), [t.text + (" · " + t.owner if t.owner else "") for t in n.todos])):
+                             (L("待办"), [t.with_owner for t in n.todos])):
             if not items:
                 continue
             body.pack_start(ui.gap(ui.text(title, 11, "tertiary", bold=True), 16), False, False, 0)

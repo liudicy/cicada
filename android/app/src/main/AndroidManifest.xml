@@ -14,6 +14,17 @@
     <!-- The daily update check: waits for a network, and keeps its schedule across a restart. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 存到文件夹: whether anything opens a saved Markdown file or its folder (else the link is left out). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="text/markdown" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="vnd.android.document/directory" />
+        </intent>
+    </queries>
 
     <application
         android:name=".CicadaApp"
@@ -21,6 +32,7 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:localeConfig="@xml/locales_config"
         android:allowAudioPlaybackCapture="false"
         android:supportsRtl="false"
@@ -35,6 +47,10 @@
         <activity android:name=".RecordsActivity" android:exported="false" android:parentActivityName=".MainActivity" />
         <activity android:name=".RecordActivity" android:exported="false" android:parentActivityName=".MainActivity" />
         <activity android:name=".SettingsActivity" android:exported="false" android:parentActivityName=".MainActivity" />
+        <activity android:name=".AiServiceActivity" android:exported="false" android:parentActivityName=".SettingsActivity" />
+        <activity android:name=".VoicesActivity" android:exported="false" android:parentActivityName=".SettingsActivity" />
+        <activity android:name=".VoiceRecordActivity" android:exported="false" android:parentActivityName=".VoicesActivity" />
+        <activity android:name=".WordListActivity" android:exported="false" android:parentActivityName=".SettingsActivity" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".OnboardingActivity" android:exported="false" />
         <!-- 导入录音或视频: from 首页, or another app's share sheet (分享到知了). -->
         <activity android:name=".ImportActivity" android:exported="true" android:parentActivityName=".MainActivity"

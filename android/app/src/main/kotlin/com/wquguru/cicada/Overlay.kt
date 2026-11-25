@@ -36,6 +36,8 @@ class Overlay(private val app: CicadaApp) {
     private var live: LinearLayout? = null
     private var notes: FrameLayout? = null
     private var shownKey: String? = null
+    /// The 这样改对吗？ card is up (for the debug state: a secure window can't be screenshotted).
+    private var asking = false
     private val tick = object : Runnable {
         override fun run() { if (root != null) { clockText?.text = NotesViews.clock(app); render(); NotesViews.tickEnding(root, app); app.main.postDelayed(this, 1000) } }
     }
@@ -126,6 +128,9 @@ class Overlay(private val app: CicadaApp) {
             addView(clock(if (dark) Palette.onScrim else Palette.ink), LinearLayout.LayoutParams(-2, -2).apply { leftMargin = ui.dp(8) })
             if (app.settings.showInCapture) addView(ui.badge(L("对方可见")), LinearLayout.LayoutParams(-2, -2).apply { leftMargin = ui.dp(8) })
             addView(ui.spacer())
+            // Back to 正在听 in Cicada (the full notes, 结束): without it the only way was the
+            // notification or the launcher. A video that does picture-in-picture keeps playing.
+            addView(ui.iconButton(R.drawable.i_external, L("回到正在听"), fg, 20, dark) { app.openLive() })
             addView(if (subtitles) ui.iconButton(R.drawable.i_list, L("换成纪要"), fg, 20, dark) { app.setView("notes") }
                     else ui.iconButton(R.drawable.i_captions, L("换成字幕条"), fg, 22, dark) { app.setView("subtitles") })
             addView(ui.iconButton(R.drawable.i_chevron_down, L("收起成小圆点"), fg, 22, dark) { collapsed = true; rebuild() })
@@ -328,17 +333,42 @@ class Overlay(private val app: CicadaApp) {
                 line == null -> box.addView(ui.text(L("等有人说话…"), 15f, if (dark) Palette.onScrim else Palette.secondary).apply { setPadding(ui.dp(if (dark) 0 else 14), ui.dp(10), 0, ui.dp(10)) })
                 dark -> {
                     val col = ui.stack(4)
-                    if (!line.dst.isNullOrEmpty() && line.dst != line.src) col.addView(ui.text(line.src, 13f, Palette.onScrim, lines = 2))
-                    col.addView(ui.text(line.dst ?: line.src, 20f, Color.WHITE, bold = true, lines = 3).apply { leading(1.2f) })
+                    // My line (我说) says so, as the Mac's subtitle bar does.
+                    if (!line.dst.isNullOrEmpty() && line.dst != line.shown) col.addView(ui.text(NotesViews.said(line), 13f, Palette.onScrim, lines = 2))
+                    else if (line.speaker == "me") col.addView(ui.text(L("你 · 同传"), 13f, Palette.onScrim))
+                    col.addView(ui.text(line.dst ?: line.shown, 20f, Color.WHITE, bold = true, lines = 3).apply { leading(1.2f) })
                     box.addView(col)
                 }
                 else -> box.addView(NotesViews.liveCard(ui, app, line, 18f, Palette.ground, lines = 3, dots = false).apply { setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12)) })
+            }
+            // 这样改对吗？ in the live notes, never while the window is shown to the other side (共享屏幕时
+            // 让对方看到): names wait for after the meeting then. Taps reach it; it never takes focus.
+            asking = false
+            val sid = app.listen.sessionId
+            if (!dark && sid != null) {
+                if (!app.settings.showInCapture) app.fixes.asking(sid)?.let { a ->
+                    asking = true
+                    box.addView(FixViews.confirmCard(ui, a, { yes -> app.fixes.answer(a.fix, yes, sid) }, { app.fixes.later(a.fix, sid) }), ui.lp(top = 8))
+                }
+                app.fixes.toastNow()?.let { t ->
+                    box.addView(LinearLayout(app).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        background = ui.rounded(Palette.ink, 12)
+                        setPadding(ui.dp(12), 0, ui.dp(4), 0)
+                        addView(ui.text(t.text, 13f, Color.WHITE, lines = 2), ui.weight())
+                        if (app.fixes.canUndo) addView(ui.text(L("撤销"), 13f, Color.parseColor("#FFB59B"), bold = true).apply {
+                            gravity = Gravity.CENTER; minHeight = ui.dp(40); setPadding(ui.dp(10), 0, ui.dp(10), 0)
+                            ui.tappable(this, 10, dark = true) { app.background.execute { app.fixes.undo() } }
+                        })
+                    }, ui.lp(top = 8))
+                }
             }
         }
         notes?.let { box ->
             box.removeAllViews()
             val column = ui.stack(10)
-            column.addView(NotesViews.notesBody(ui, app.notes.notes, app.notes.status, app.listen.listening, compact = true))
+            column.addView(NotesViews.notesBody(ui, app.notes.notes, app.notes.status, app.listen.listening, compact = true, heard = NotesViews.currentLines(app).size))
             val privacy = if (app.settings.showInCapture) L("共享屏幕时对方能看到") else L("截图和录屏里看不到")
             val fresh = NotesViews.updated(app.notes.notes.updatedAt)
             column.addView(LinearLayout(app).apply {
@@ -358,6 +388,7 @@ class Overlay(private val app: CicadaApp) {
         "secure" to params?.let { it.flags and WindowManager.LayoutParams.FLAG_SECURE != 0 },
         "focusable" to params?.let { it.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE == 0 },
         "view" to app.settings.view,
+        "fixCard" to (root != null && asking),
         "x" to params?.x, "y" to params?.y,
     )
 }

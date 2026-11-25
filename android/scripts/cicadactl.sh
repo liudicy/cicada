@@ -2,7 +2,8 @@
 # Drives the dev build in the emulator or a phone (adb): scripts/cicadactl.sh state | start mic |
 # feed en.wav | sample | view subtitles | capture on | stop | … (see DebugReceiver.kt). Prints the
 # app's one-line JSON reply. `push <file>` copies a file into the app's files/ for feed and import;
-# `key` copies the Mac app's Ling key in (never printed); `log` prints the debug log.
+# `key` copies the Mac app's Ling key in (never printed), `aikey <file>` another service's; `log`
+# prints the debug log.
 set -euo pipefail
 adb="$HOME/.cicada-android/sdk/platform-tools/adb"
 pkg=com.wquguru.cicada.dev
@@ -16,6 +17,12 @@ case "${1:-state}" in
     [ -f "$f" ] || f="$HOME/Library/Application Support/LiveSubs/ling-api-key"
     "$adb" shell "run-as $pkg sh -c 'mkdir -p files && cat > files/ling-api-key && chmod 600 files/ling-api-key'" < "$f"
     set -- key reload ;;
+  aikey)
+    # Another service's key from the Mac app (`aikey ai-key-zenmux`, after `provider zenmux`): the
+    # app seals it as the current service's key and deletes the plain copy. Never printed.
+    f="${CICADA_KEY_FILE:-$HOME/Library/Application Support/LiveSubs Dev/$2}"
+    "$adb" shell "run-as $pkg sh -c 'cat > files/key-import'" < "$f"
+    set -- key import key-import ;;
   log) exec "$adb" shell "run-as $pkg cat cache/cicada-dev-debug.log" ;;
 esac
 send() { "$adb" shell am broadcast -a com.wquguru.cicada.dev.DEBUG -p "$pkg" -f 0x20 --es cmd "'$*'" 2>&1; }

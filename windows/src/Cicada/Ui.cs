@@ -31,6 +31,12 @@ static class Palette
     public static readonly SolidColorBrush AccentFill = B(0xC9441D);
     public static readonly SolidColorBrush AccentPale = B(0xFDEBE4);
     public static readonly SolidColorBrush AccentText = B(0xA8370F);
+    /// 回放: a line's time as a link, the line at the playhead (the Mac's accentPale), the player
+    /// bar's box, and a line under the pointer that a click would play (the Mac's raised).
+    public static readonly SolidColorBrush TimeLink = B(0xB33B14);
+    public static readonly SolidColorBrush Playing = B(0xFCEDE7);
+    public static readonly SolidColorBrush PlayerFill = B(0xF5F6F8);
+    public static readonly SolidColorBrush Raised = B(0xF5F6F8);
     public static readonly SolidColorBrush Success = B(0x0F7B3F);
     public static readonly SolidColorBrush Danger = B(0xC42B1C);
     public static readonly SolidColorBrush ErrorBg = B(0xFDECEA);
@@ -64,6 +70,7 @@ static class Icons
     public const string Notes = "M5.5,2.5 H11.5 L15,6 V17.5 H5.5 Z M11.5,2.5 V6 H15 M8,10 H13 M8,13 H13";
     public const string Stop = "M6.5,4 H13.5 A2.5,2.5 0 0 1 16,6.5 V13.5 A2.5,2.5 0 0 1 13.5,16 H6.5 A2.5,2.5 0 0 1 4,13.5 V6.5 A2.5,2.5 0 0 1 6.5,4 Z";
     public const string Play = "M6.5,4.5 L15.5,10 L6.5,15.5 Z";
+    public const string Pause = "M6,4.5 H8.8 V15.5 H6 Z M11.2,4.5 H14 V15.5 H11.2 Z";
     public const string Gear = "M12.5,10 A2.5,2.5 0 1 1 7.5,10 A2.5,2.5 0 1 1 12.5,10 Z M10,2.5 V4.5 M10,15.5 V17.5 M2.5,10 H4.5 M15.5,10 H17.5 M4.7,4.7 L6.1,6.1 M13.9,13.9 L15.3,15.3 M4.7,15.3 L6.1,13.9 M13.9,6.1 L15.3,4.7";
     public const string Search = "M14.5,9 A5.5,5.5 0 1 1 3.5,9 A5.5,5.5 0 1 1 14.5,9 Z M13,13 L17,17";
     public const string Export = "M10,3 V13 M6,7 L10,3 L14,7 M4,12 V16.5 H16 V12";
@@ -82,8 +89,10 @@ static class Icons
     public const string Folder = "M2.5,5.5 H7.5 L9,7.5 H17.5 V16 H2.5 Z";
     public const string Keyboard = "M4,5.5 H16 A1.5,1.5 0 0 1 17.5,7 V13 A1.5,1.5 0 0 1 16,14.5 H4 A1.5,1.5 0 0 1 2.5,13 V7 A1.5,1.5 0 0 1 4,5.5 Z M5.5,8.5 H6.5 M8.5,8.5 H9.5 M11.5,8.5 H12.5 M6.5,11.5 H13.5";
     public const string Chevron = "M6,8 L10,12 L14,8";
+    public const string ChevronUp = "M6,12 L10,8 L14,12";
     public const string Check = "M4.5,10.5 L8,14 L15.5,6";
     public const string Info = "M17,10 A7,7 0 1 1 3,10 A7,7 0 1 1 17,10 Z M10,9 V14 M10,6.5 V7";
+    public const string Warning = "M10,3 L17.5,16 H2.5 Z M10,8 V11.5 M10,13.8 V14";
     public const string Mic = "M10,2.5 A2.5,2.5 0 0 1 12.5,5 V10 A2.5,2.5 0 0 1 7.5,10 V5 A2.5,2.5 0 0 1 10,2.5 Z M5,9.5 A5,5 0 0 0 15,9.5 M10,14.5 V17.5";
     public const string Lock = "M5.5,9 H14.5 V16.5 H5.5 Z M7.5,9 V6.5 A2.5,2.5 0 0 1 12.5,6.5 V9";
     public const string Arrow = "M4,10 H15.5 M11,5.5 L15.5,10 L11,14.5";
@@ -181,13 +190,53 @@ static class Ui
         return b;
     }
 
+    /// A split button, as Windows' own: the label does the usual thing, the chevron beside it opens
+    /// a menu of the alternatives. One soft-grey button with a hairline between the halves; `Open`
+    /// is the chevron's click, for the debug pipe.
+    public static (FrameworkElement Button, Action Open) SplitButton(string label, Action onClick, IReadOnlyList<(string label, Action act)> items, double height = 32)
+    {
+        Button Half(UIElement content, Thickness padding)
+        {
+            var b = new Button { Content = content, Background = Palette.Mica, Foreground = Palette.Ink, BorderThickness = new Thickness(0), Height = height, Padding = padding, Cursor = Cursors.Hand };
+            b.Template = Template(plain: true, radius: 0, soft: true);
+            return b;
+        }
+        var main = Half(Text(label, 14, Palette.Ink, wrap: false), new Thickness(14, 0, 12, 0));
+        main.Click += (_, _) => onClick();
+        AutomationName(main, label);
+        var arrow = Half(Icon(Icons.Chevron, 14, Palette.Secondary, stroke: 1.8), new Thickness(7, 0, 7, 0));
+        AutomationName(arrow, string.Join(" / ", items.Select(i => i.label)));
+        var line = new Border { Width = 1, Background = Palette.Line, Margin = new Thickness(0, 7, 0, 7) };
+        var g = new Grid { Background = Palette.Mica, VerticalAlignment = VerticalAlignment.Center };
+        for (int i = 0; i < 3; i++) g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(line, 1); Grid.SetColumn(arrow, 2);
+        g.Children.Add(main); g.Children.Add(line); g.Children.Add(arrow);
+        // The halves are square; the whole is clipped to the usual 10-point corners.
+        g.SizeChanged += (_, e) => g.Clip = new RectangleGeometry(new Rect(e.NewSize), 10, 10);
+        void Open()
+        {
+            var menu = new ContextMenu { PlacementTarget = g, Placement = PlacementMode.Bottom, FontFamily = Palette.Font };
+            foreach (var (text, act) in items)
+            {
+                var item = new MenuItem { Header = text };
+                item.Click += (_, _) => act();
+                menu.Items.Add(item);
+            }
+            menu.IsOpen = true;
+        }
+        arrow.Click += (_, _) => Open();
+        return (g, Open);
+    }
+
     /// A square icon-only button with a tooltip and an accessible name.
     public static Button IconButton(string icon, string name, Action onClick, Brush? color = null, double size = 40, double iconSize = 16, bool fill = false, bool onDark = false)
     {
         var b = new Button
         {
             Content = Icon(icon, iconSize, color ?? Palette.Body, fill), Width = size, Height = size, Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0), Cursor = Cursors.Hand, ToolTip = name,
+            // No padding: the Fluent theme's 11 a side leaves a 34-wide button 12 for a 16 icon, and
+            // the Viewbox clips its right edge.
+            BorderThickness = new Thickness(0), Cursor = Cursors.Hand, ToolTip = name, Padding = new Thickness(0),
         };
         b.Template = Template(plain: true, onDark: onDark, radius: 10);
         b.Click += (_, _) => onClick();
@@ -198,7 +247,7 @@ static class Ui
     static void AutomationName(UIElement e, string name) => System.Windows.Automation.AutomationProperties.SetName(e, name);
 
     /// Rounded, no Windows 7 chrome. Plain buttons get a grey wash on hover; filled ones dim a little.
-    static ControlTemplate Template(bool plain, bool onDark = false, Type? target = null, double radius = 10, bool soft = false)
+    public static ControlTemplate Template(bool plain, bool onDark = false, Type? target = null, double radius = 10, bool soft = false)
     {
         var t = new ControlTemplate(target ?? typeof(Button));
         var border = new FrameworkElementFactory(typeof(Border), "bg");
@@ -356,6 +405,47 @@ static class Ui
         {
             Background = error ? Palette.ErrorBg : Palette.WarnBg, BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 12, 12, 12), Child = dock,
+        };
+    }
+
+    public enum Tone { Waiting, NeedsYou, Info }
+
+    /// #C98A00: WarnIcon is too dark to tell from the text at 6 px.
+    static readonly SolidColorBrush waitingDot = Frozen(Color.FromRgb(0xC9, 0x8A, 0x00));
+    static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+
+    /// A service in trouble, said the same way wherever it shows (Views.swift › StatusLine): a dot,
+    /// what waits for what · what still works, and at most one action. Colour sits in the dot only,
+    /// so a passing wait doesn't read as a fault: yellow waits and comes back by itself, red needs
+    /// you, grey is just so you know.
+    public static Border StatusLine(Tone tone, string text, (string Title, Action Run)? action = null)
+    {
+        var dot = Dot(tone switch { Tone.Waiting => waitingDot, Tone.NeedsYou => Palette.Danger, _ => Palette.Tertiary }, 6);
+        dot.Margin = new Thickness(0, 0, 8, 0);
+        var dock = new DockPanel();
+        DockPanel.SetDock(dot, Dock.Left);
+        dock.Children.Add(dot);
+        if (action is { } a)
+        {
+            var label = Text(a.Title, 12, Palette.Ink, FontWeights.SemiBold, wrap: false);
+            var b = new Button
+            {
+                Content = label, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Cursor = Cursors.Hand,
+                Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(8, 0, -6, 0), VerticalAlignment = VerticalAlignment.Center,
+            };
+            b.Template = Template(plain: true, radius: 6);
+            b.Click += (_, _) => a.Run();
+            AutomationName(b, a.Title);
+            DockPanel.SetDock(b, Dock.Right);
+            dock.Children.Add(b);
+        }
+        var words = Text(text, 12, Palette.Secondary);
+        words.VerticalAlignment = VerticalAlignment.Center;
+        dock.Children.Add(words);
+        return new Border
+        {
+            Background = Palette.Subtle, CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 7, 12, 7),
+            MinHeight = 36, Child = dock,
         };
     }
 

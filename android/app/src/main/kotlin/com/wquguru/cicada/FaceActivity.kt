@@ -113,16 +113,17 @@ class FaceActivity : Activity() {
         val their = l.theirLanguage
         val mineLang = app.settings.targetCode
         val line: TranscriptLine? = NotesViews.currentLines(app).lastOrNull()
-        val key = listOf(line?.id, line?.src, line?.dst, l.holding, l.saying, app.voice.speaking, l.sayProblem, their).joinToString("|")
+        val key = listOf(line?.id, line?.shown, line?.dst, l.holding, l.saying, app.voice.speaking, l.sayProblem, their).joinToString("|")
         if (key == shown) return
         shown = key
         // What each side reads, in their own language.
         val mine = line?.speaker == "me"
-        val translated = line?.dst?.takeIf { it.isNotEmpty() && it != line.src }
+        val translated = line?.dst?.takeIf { it.isNotEmpty() && it != line.shown }
         theirLabel.text = NotesViews.languageName(their)
-        theirText.text = when { line == null -> "…"; mine -> translated ?: "…"; else -> line.src }
-        myLabel.text = (if (line == null || mine) L("你") else L("对方")) + " · " + NotesViews.languageName(mineLang)
-        myText.text = when { line == null -> L("按住下面的按钮说话，松开后对方会听到译文"); mine -> line.src; else -> translated ?: line.src }
+        theirText.text = when { line == null -> "…"; mine -> translated ?: "…"; else -> line.shown }
+        // My line was said with 我说: the other side heard its translation (同传, as on the Mac).
+        myLabel.text = (if (mine) L("你 · 同传") else if (line == null) L("你") else L("对方")) + " · " + NotesViews.languageName(mineLang)
+        myText.text = when { line == null -> L("按住下面的按钮说话，松开后对方会听到译文"); mine -> line.shown; else -> translated ?: line.shown }
         myText.setTextColor(if (line == null) Palette.secondary else Palette.ink)
         val live = l.holding || app.voice.speaking
         status.text = l.sayProblem ?: when {

@@ -10,6 +10,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import cicada.Languages
 import cicada.Strings.L
+import cicada.Strings.LF
 
 /// 导入录音或视频 (the Mac's FileImport): pick a file, or share one to 知了 from another app, and it
 /// becomes a meeting record: transcribed, translated and summarised like one that was heard. It
@@ -80,7 +81,7 @@ class ImportActivity : Activity() {
             done != null -> {
                 column.addView(ui.card(fileRow(done.sourceFile ?: "", done.durationSeconds), gap = 16).apply {
                     addView(ui.text(L("转写完成"), 17f, Palette.ink, bold = true), ui.lp(top = 18))
-                    addView(ui.helper("${done.lines.size} ${L("句")} · ${L("纪要在会议记录里")}"), ui.lp(top = 4))
+                    addView(ui.helper("${LF("%lld 句", done.lines.size)} · ${L("纪要在会议记录里")}"), ui.lp(top = 4))
                     addView(ui.button(L("查看会议记录"), "primary") {
                         startActivity(Intent(this@ImportActivity, RecordActivity::class.java).putExtra("id", done.id)); finish()
                     }, ui.lp(top = 18))

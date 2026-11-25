@@ -14,7 +14,11 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import cicada.KeyState
 import cicada.MeetingNotes
+import cicada.Providers
+import cicada.Strings
 import cicada.Strings.L
+import cicada.Strings.LF
+import cicada.keepsSavedKey
 
 /// First run, three screens, one job each, the main button pinned at the bottom: Ling key → what
 /// Cicada can hear and the permissions for it → try the sample meeting.
@@ -50,7 +54,25 @@ class OnboardingActivity : Activity() {
         render()
     }
 
-    override fun onResume() { super.onResume(); unobserve = cicada.observe { if (step == 2) render() }; shown = null; render(); cicada.main.post(tick) }
+    override fun onResume() { super.onResume(); unobserve = cicada.observe { if (step == 2) render(); checkShown?.invoke() }; shown = null; render(); cicada.main.post(tick) }
+
+    /// The key step's (or its sheet's) check, redrawn when the AI client changes: the same step
+    /// list as the settings, and on to the next step once it passes.
+    private var checkShown: (() -> Unit)? = null
+    private var checkKey: String? = null
+
+    /// Fills `into` with the steps of a check this page started; true once it passed.
+    private fun showCheck(into: LinearLayout): Boolean {
+        val ling = cicada.ling
+        val c = ling.aiCheck
+        val key = c.summary + Strings.language
+        if (key == checkKey) return c.passed
+        checkKey = key
+        into.removeAllViews()
+        if (ling.hasKey && AiCheckViews.showSteps(c) && !c.passed)
+            into.addView(ui.group(listOf(AiCheckViews.steps(this, ui, recheck = true) { cicada.key.remove(); cicada.aiChanged(check = false) })))
+        return c.passed
+    }
     override fun onPause() { super.onPause(); unobserve?.invoke(); unobserve = null; cicada.main.removeCallbacks(tick) }
 
     // Back goes to the previous step. Android 13+ delivers back through OnBackInvokedCallback
@@ -154,7 +176,7 @@ class OnboardingActivity : Activity() {
             field.background = ui.rounded(Palette.card, 16, if (problem) Palette.link else Palette.outline, 2)
             if (problem) status.announceForAccessibility(text)
         }
-        showStatus(L("加密存在本机，只发给 Ling"), false)
+        showStatus(LF("加密存在这台手机上，只发给 %@", app.ling.serviceName), false)
         // When the keyboard opens the page shrinks: once it has (the IME inset arrives), scroll to
         // the end so the field and the line under it sit above the pinned button.
         var imeShown = false
@@ -167,21 +189,37 @@ class OnboardingActivity : Activity() {
             }
             imeShown = ime
         }
+        // Another service's key pasted here: what it is, and 改用 it with one tap.
+        val other = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val steps = ui.stack(0)
+        var tried = false
+        checkKey = null
+        checkShown = {
+            if (step == 0 && tried && app.ling.hasKey) {
+                if (showCheck(steps)) { tried = false; checkShown = null; next() }
+                else if (!app.ling.aiCheck.running) showStatus(LF("加密存在这台手机上，只发给 %@", app.ling.serviceName), false)
+            }
+        }
         submit = submit@{
             val text = box.text.toString().trim()
+            other.removeAllViews()
+            // Onboarding never blocks: a key that was checked and failed still goes on (the steps say why).
+            if (tried && !app.ling.aiCheck.running && (text.isEmpty() || text == app.ling.currentKey())) { checkShown = null; next(); return@submit }
+            // The guide opened again with a working key saved: an empty field keeps it.
+            if (!tried && keepsSavedKey(text, app.ling.currentKey(), app.ling.keyState)) { checkShown = null; next(); return@submit }
+            if (AiServiceActivity.keyHint(ui, text, "ling", status, other) { tried = true; checkKey = null; status.text = L("正在检查…") }) {
+                field.background = ui.rounded(Palette.card, 16, Palette.link, 2)
+                return@submit
+            }
             if (!text.startsWith("sk-")) { showStatus(L("要粘贴 sk- 开头的 Ling key"), true); return@submit }
+            // Back on this page after choosing another service: a Ling key means Ling again.
+            app.setAiProvider("ling", check = false)
             app.key.save(text)
             app.ling.keyChanged()
+            tried = true
+            checkKey = null
             status.text = L("正在检查…"); status.setTextColor(Palette.secondary)
-            app.background.execute {
-                val state = app.ling.check()
-                app.main.post {
-                    if (state == KeyState.Ok) { next(); return@post }
-                    // A key that doesn't work isn't kept: the next launch would skip this step.
-                    if (state == KeyState.Invalid) { app.key.remove(); app.ling.keyChanged() }
-                    showStatus(if (state == KeyState.Invalid) L("这个 Ling key 无效，看看有没有复制全，或换一个新的") else L("连不上 Ling，检查一下网络"), true)
-                }
-            }
+            app.background.execute { app.ling.check() }
         }
         fun stepRow(n: Int, text: String, action: View? = null) = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -206,8 +244,94 @@ class OnboardingActivity : Activity() {
             ui.logo(64),
             intro(L("接上 Ling"), L("识别、翻译和纪要都靠它，大约 1 分钟")),
             ui.group(listOf(stepRow(1, L("打开 Ling 开放平台"), open), stepRow(2, L("点“创建令牌”，复制 sk- 开头的 Ling key")), stepRow(3, L("回到这里粘贴")))),
-            ui.stack(8, ui.text(L("Ling key"), 13f, Palette.body, bold = true).apply { setPadding(ui.dp(4), 0, 0, 0); labelFor = View.generateViewId().also { box.id = it } }, field, status.apply { setPadding(ui.dp(4), 0, 0, 0) }))
+            ui.stack(8, ui.text(L("Ling key"), 13f, Palette.body, bold = true).apply { setPadding(ui.dp(4), 0, 0, 0); labelFor = View.generateViewId().also { box.id = it } }, field, status.apply { setPadding(ui.dp(4), 0, 0, 0) }, other, steps),
+            // A way out for people who can't use Ling: another service, in a sheet, saying what it lacks.
+            ui.textButton(L("用不了 Ling？"), Palette.link) { otherService() }.apply {
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            })
         return frame(content, ui.button(L("继续"), "primary") { submit() })
+    }
+
+    /// 用其他服务 (OnboardingKey.swift › otherEntry): OpenRouter or ZenMux, their key, and what they
+    /// lack. The service switches only once its key checks out; a custom address is set up in
+    /// 设置 › AI 服务.
+    private fun otherService() {
+        val app = cicada
+        var chosen = app.settings.aiProvider.takeIf { it == "openrouter" || it == "zenmux" } ?: "zenmux"
+        lateinit var dialog: android.app.Dialog
+        val sheet = ui.stack(14)
+        fun render() {
+            sheet.removeAllViews()
+            val p = Providers.named(chosen)
+            val status = ui.text(LF("加密存在这台手机上，只发给 %@", p.name), 13f, Palette.secondary)
+            lateinit var check: (String) -> Unit
+            lateinit var box: android.widget.EditText
+            box = ui.keyField { check(box.text.toString().trim()) }.apply { hint = LF("粘贴 %@ 的 key", p.name) }
+            fun problem(text: String) { status.text = text; status.setTextColor(Palette.link); status.announceForAccessibility(text) }
+            val other = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val steps = ui.stack(0)
+            // After a check that failed: the steps say why, and onboarding still goes on.
+            val goOn = ui.textButton(L("继续"), Palette.link) { checkShown = null; dialog.dismiss(); next() }.apply { visibility = View.GONE }
+            fun watch() {
+                checkKey = null
+                checkShown = {
+                    if (showCheck(steps)) { checkShown = null; dialog.dismiss(); next() }
+                    else {
+                        val c = app.ling.aiCheck
+                        if (!c.running) status.text = LF("加密存在这台手机上，只发给 %@", app.ling.serviceName)
+                        goOn.visibility = if (!c.running && c.failure != null) View.VISIBLE else View.GONE
+                    }
+                }
+            }
+            check = check@{ text ->
+                other.removeAllViews()
+                if (AiServiceActivity.keyHint(ui, text, p.id, status, other) { status.text = L("正在检查…"); watch() }) return@check
+                if (!text.startsWith("sk-")) { problem(LF("剪贴板里没有 sk- 开头的 key，请先去 %@ 复制。", p.name)); return@check }
+                // The service and key stay as chosen even if the check fails: the steps say why.
+                app.setAiProvider(p.id, check = false)
+                app.key.save(text)
+                app.aiChanged(check = false)
+                status.text = L("正在检查…"); status.setTextColor(Palette.secondary)
+                watch()
+                app.background.execute { app.ling.check() }
+            }
+            val field = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = ui.dp(56)
+                background = ui.rounded(Palette.ground, 16)
+                setPadding(ui.dp(16), 0, ui.dp(6), 0)
+                addView(box, ui.weight())
+            }
+            val open = ui.listRow(LF("打开 %@", p.name), L("注册或登录后点“创建令牌”"), trailing = ui.icon(R.drawable.i_external, 18, Palette.link), chevron = false) {
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(p.site))) } catch (_: Exception) {}
+            }.apply { background = ui.rounded(Palette.ground, 16) }
+            val gap = if (Strings.language == "zh-Hans") "" else " "
+            val lacks = ui.text(L("少了：") + gap + L("你自己的声音") + gap + L("（只有 Ling 支持）"), 13f, Palette.secondary).apply {
+                background = ui.rounded(Palette.ground, 12)
+                setPadding(ui.dp(12), ui.dp(8), ui.dp(12), ui.dp(8))
+            }
+            sheet.addView(ui.helper(L("听、纪要和翻译都能用，模型已经选好。")).apply { gravity = Gravity.CENTER })
+            sheet.addView(ui.segmented(listOf("openrouter" to "OpenRouter", "zenmux" to "ZenMux"), chosen) { chosen = it; render() })
+            sheet.addView(open)
+            sheet.addView(field)
+            sheet.addView(status.apply { setPadding(ui.dp(4), 0, ui.dp(4), 0) })
+            sheet.addView(other)
+            sheet.addView(steps.apply { background = ui.rounded(Palette.ground, 16) })
+            sheet.addView(goOn.apply { layoutParams = LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL } })
+            sheet.addView(ui.button(L("粘贴并检查"), "primary", R.drawable.i_clipboard) {
+                SettingsActivity.paste(box)
+                check(box.text.toString().trim())
+            })
+            sheet.addView(lacks)
+            sheet.addView(ui.textButton(L("‹ 还是用 Ling"), Palette.link) { dialog.dismiss() }.apply {
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.CENTER_HORIZONTAL }
+            })
+        }
+        render()
+        dialog = ui.sheet(this, L("用其他服务"), android.widget.ScrollView(this).apply { addView(sheet) })
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        dialog.show()
     }
 
     private fun hearStep(): View {
@@ -218,7 +342,7 @@ class OnboardingActivity : Activity() {
         val sources = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(source(R.drawable.i_speaker, L("手机里的声音"), L("视频、直播、网课")), LinearLayout.LayoutParams(0, -1, 1f))
-            addView(source(R.drawable.i_mic, L("面对面"), L("线下开会、会议 app 开外放")), LinearLayout.LayoutParams(0, -1, 1f).apply { leftMargin = ui.dp(10) })
+            addView(source(R.drawable.i_mic, L("面对面"), L("线下开会；有人在线上就把会议 app 开外放")), LinearLayout.LayoutParams(0, -1, 1f).apply { leftMargin = ui.dp(10) })
         }
         val limit = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -285,7 +409,7 @@ class OnboardingActivity : Activity() {
             // apart, and showing only the newest made the first one flash by.
             lines.dropLast(1).takeLast(2).forEachIndexed { i, l ->
                 val row = ui.stack(2, ui.text(NotesViews.said(l), 13f, Palette.secondary))
-                if (!l.dst.isNullOrEmpty() && l.dst != l.src) row.addView(ui.text(l.dst!!, 15f, Palette.ink))
+                if (!l.dst.isNullOrEmpty() && l.dst != l.shown) row.addView(ui.text(l.dst!!, 15f, Palette.ink))
                 card.addView(row, 1 + i, ui.lp(top = 10))
             }
             content.addView(card, ui.lp(top = 12))

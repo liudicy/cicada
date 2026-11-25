@@ -117,16 +117,18 @@ object Json {
         }
     }
 
-    fun write(value: Any?, pretty: Boolean = true): String {
+    /// `slashes = false` writes "/" as it is, like JSONEncoder's .withoutEscapingSlashes (the share
+    /// document, ShareProjection.swift).
+    fun write(value: Any?, pretty: Boolean = true, slashes: Boolean = true): String {
         val b = StringBuilder()
-        emit(b, value, pretty, 0)
+        emit(b, value, pretty, 0, slashes)
         return b.toString()
     }
 
-    private fun emit(b: StringBuilder, v: Any?, pretty: Boolean, depth: Int) {
+    private fun emit(b: StringBuilder, v: Any?, pretty: Boolean, depth: Int, slashes: Boolean) {
         when (v) {
             null -> b.append("null")
-            is String -> quote(b, v)
+            is String -> quote(b, v, slashes)
             is Boolean -> b.append(if (v) "true" else "false")
             is Int, is Long -> b.append(v.toString())
             is Double -> b.append(number(v))
@@ -139,9 +141,9 @@ object Json {
                 entries.forEachIndexed { n, e ->
                     if (n > 0) b.append(',')
                     if (pretty) b.append('\n').append("  ".repeat(depth + 1))
-                    quote(b, e.key as String)
+                    quote(b, e.key as String, slashes)
                     b.append(if (pretty) " : " else ":")
-                    emit(b, e.value, pretty, depth + 1)
+                    emit(b, e.value, pretty, depth + 1, slashes)
                 }
                 if (pretty) b.append('\n').append("  ".repeat(depth))
                 b.append('}')
@@ -152,12 +154,12 @@ object Json {
                 v.forEachIndexed { n, x ->
                     if (n > 0) b.append(',')
                     if (pretty) b.append('\n').append("  ".repeat(depth + 1))
-                    emit(b, x, pretty, depth + 1)
+                    emit(b, x, pretty, depth + 1, slashes)
                 }
                 if (pretty) b.append('\n').append("  ".repeat(depth))
                 b.append(']')
             }
-            else -> quote(b, v.toString())
+            else -> quote(b, v.toString(), slashes)
         }
     }
 
@@ -170,13 +172,13 @@ object Json {
         return if (s.contains('E')) BigDecimal(s).stripTrailingZeros().toPlainString() else s
     }
 
-    private fun quote(b: StringBuilder, s: String) {
+    private fun quote(b: StringBuilder, s: String, slashes: Boolean) {
         b.append('"')
         for (c in s) {
             when (c) {
                 '"' -> b.append("\\\"")
                 '\\' -> b.append("\\\\")
-                '/' -> b.append("\\/")
+                '/' -> if (slashes) b.append("\\/") else b.append('/')
                 '\n' -> b.append("\\n")
                 '\r' -> b.append("\\r")
                 '\t' -> b.append("\\t")

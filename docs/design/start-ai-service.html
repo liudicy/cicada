@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>上手页与 README 的 AI 服务</title>
+<!-- 设计稿：/start/ 和 README 怎么面对“注册不了 Ling”的人。只是稿子，不进 site/ 构建；
+     落地时改 site/start.html、site/i18n/*.json、README*.md。不按地区分人，按页面语言排先后。 -->
+<style>
+:root{--ground:#F3F4F6;--page:#F6F7F9;--card:#FFFFFF;--ink:#15171C;--ink2:#3B3F48;--grey:#5A5F6B;--grey2:#6B7080;--line:#ECEEF1;--line2:#E4E6EA;--accent:#E8552B;--accentText:#B23E17;--accentBg:#FDEDE7;--code:#F3F4F6;--ok:#1F6B3A;--okBg:#E6F4EA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.55 Inter,"Noto Sans SC",-apple-system,"PingFang SC",system-ui,sans-serif}
+a{color:var(--ink)}a:hover{color:var(--accentText)}
+code{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:13px;background:var(--code);border-radius:5px;padding:1px 5px}
+.toc{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;display:flex;flex-wrap:wrap;gap:4px 16px;padding:10px 16px;font-size:13px}
+.toc b{margin-right:8px}.toc a{color:#C4C8D0;text-decoration:none}.toc a:hover{color:#fff}
+.board{max-width:1320px;margin:32px auto;padding:0 16px}
+.board>h2{font-size:14px;font-weight:700;color:var(--grey);margin:0 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cols{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+.frame{background:var(--page);border:1px solid var(--line2);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.frame>.lbl{font-size:12px;font-weight:700;color:var(--grey);padding:10px 16px;border-bottom:1px solid var(--line2);background:#fff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.frame>.body{padding:24px;display:flex;flex-direction:column;gap:14px}
+.chg{font-size:11px;font-weight:700;color:var(--accentText);background:var(--accentBg);border-radius:4px;padding:1px 6px}
+.now{font-size:11px;font-weight:700;color:var(--grey);background:var(--code);border-radius:4px;padding:1px 6px}
+.summary{max-width:1320px;margin:28px auto 0;padding:0 16px}
+.summary .card{display:flex;flex-direction:column;gap:10px}
+.summary h1{margin:0;font-size:26px;font-weight:800}
+.summary ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:11px;font-weight:600;text-decoration:none;font-size:14px;border:1px solid transparent}
+.btn.dark{background:var(--ink);color:#fff}.btn.light{background:#fff;border-color:var(--line2);color:var(--ink)}
+.tag{font-size:12px;font-weight:600;color:var(--accentText);background:var(--accentBg);border-radius:999px;padding:2px 9px;white-space:nowrap}
+.tag.grey{color:var(--ink2);background:var(--code)}
+.muted{color:var(--grey);font-size:14px}.muted2{color:var(--grey2);font-size:13px}
+.num{width:34px;height:34px;border-radius:50%;background:var(--ink);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.sh{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sh h3{margin:0;font-size:22px;font-weight:800}
+.svc{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.svc .card{padding:18px;display:flex;flex-direction:column;gap:10px;border-radius:16px}
+.svc .card.pick{border:1.5px solid var(--ink)}
+.svc h4{margin:0;font-size:17px;font-weight:800;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.svc p{margin:0;font-size:14px;color:var(--grey)}
+.quiet{font-size:13px;color:var(--grey);background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.quiet b{color:var(--ink)}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-top:1px solid var(--line);font-size:14px}
+thead th{border-top:0;font-size:12px;color:var(--grey)}
+td:first-child{white-space:nowrap}td:first-child code{font-size:12px}
+.scroll{overflow-x:auto}
+/* GitHub README 样子 */
+.gh{background:#fff;font:15px/1.6 -apple-system,"Segoe UI",system-ui,sans-serif;color:#1f2328}
+.gh h2{font-size:22px;border-bottom:1px solid #d1d9e0;padding-bottom:6px;margin:8px 0 4px}
+.gh blockquote{margin:0;border-left:4px solid #d1d9e0;padding:0 14px;color:#59636e}
+.gh ol{margin:0;padding-left:22px}
+.gh p{margin:0}
+</style>
+</head>
+<body>
+<nav class="toc"><b>AI 服务稿</b><a href="#mac">上手页 · Mac</a><a href="#ports">上手页 · Windows / Linux / Android</a><a href="#copy">文案清单</a><a href="#readme">README</a></nav>
+
+<section class="summary"><div class="card">
+  <h1>要考虑，但只在能换的地方给出换法</h1>
+  <ul>
+    <li><b>Mac 能换</b>：第 2 步从“准备一个 Ling key”改成“接上 AI 服务”，Ling 和 OpenRouter 并排两张卡。</li>
+    <li><b>不按地区分人</b>：按页面语言排先后。中文页 Ling 在前（每月送 ¥10、一个 key 全部功能）；英日韩页 OpenRouter 在前标“推荐”。两张卡都看得见，谁都不用被归类。</li>
+    <li><b>Windows / Linux / Android 换不了</b>：识别靠 Ling 的 Ming，第 2 步照旧“必需”，只在下面加一行安静的“注册不了 Ling？”，指向 Mac 版并收集需求。</li>
+    <li><b>README 同理</b>：英日韩顶部的提醒改成讲服务、不讲地区；中文 README 只把“注册不了 Ling”那段提前到步骤旁边。</li>
+  </ul>
+</div></section>
+
+<section class="board" id="mac">
+  <h2>上手页 /start/ · Mac 标签 · 第 2 步</h2>
+  <div class="cols">
+    <div class="frame"><div class="lbl"><span class="now">现在</span>中文</div><div class="body">
+      <div class="sh"><span class="num">2</span><h3>准备一个 Ling API key</h3><span class="tag grey">完整体验必备 · 约 1 分钟</span></div>
+      <p class="muted" style="margin:0">知了的 AI 能力来自 Ling（蚂蚁集团的大模型服务）。在开放平台注册，点“创建令牌”，复制以 <code>sk-</code> 开头的那串，下一步粘贴到知了里。</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><a class="btn dark" href="#">获取 Ling key ↗</a><span class="tag">Ling 每月赠送 ¥10 额度</span></div>
+      <p class="muted2" style="margin:0">注册不了 Ling 的人在这一步没有下一步可走。</p>
+    </div></div>
+
+    <div class="frame"><div class="lbl"><span class="chg">建议</span>中文：Ling 在前</div><div class="body">
+      <div class="sh"><span class="num">2</span><h3>接上 AI 服务</h3><span class="tag grey">完整体验必备 · 约 1 分钟</span></div>
+      <p class="muted" style="margin:0">实时纪要和自然人声用你自己的 key。两家都行，选你能注册的那家。</p>
+      <div class="svc">
+        <div class="card pick">
+          <h4>Ling <span class="tag">每月送 ¥10</span></h4>
+          <p>蚂蚁集团的大模型服务。一个 key 全部功能，包括用你自己的声音。</p>
+          <a class="btn dark" href="#">获取 Ling key ↗</a>
+        </div>
+        <div class="card">
+          <h4>OpenRouter</h4>
+          <p>注册不了 Ling 时用它：纪要、翻译和自然人声都有，少了“用你自己的声音”。</p>
+          <a class="btn light" href="#">获取 OpenRouter key ↗</a>
+        </div>
+      </div>
+      <p class="muted2" style="margin:0">也能用 ZenMux、OpenAI 或任何 OpenAI 兼容服务，在设置 › AI 服务右上角切换。</p>
+    </div></div>
+
+    <div class="frame"><div class="lbl"><span class="chg">建议</span>English / 日本語 / 한국어：OpenRouter 在前</div><div class="body">
+      <div class="sh"><span class="num">2</span><h3>Connect an AI service</h3><span class="tag grey">For the full experience · about 1 minute</span></div>
+      <p class="muted" style="margin:0">Live notes and natural voices use your own key. Either service works; pick the one you can sign up for.</p>
+      <div class="svc">
+        <div class="card pick">
+          <h4>OpenRouter <span class="tag">Recommended</span></h4>
+          <p>One key for many models, including Ling’s, plus natural Gemini voices.</p>
+          <a class="btn dark" href="#">Get an OpenRouter key ↗</a>
+        </div>
+        <div class="card">
+          <h4>Ling</h4>
+          <p>Ant Group’s model service. Every feature, including your own voice; ¥10 of credit every month.</p>
+          <a class="btn light" href="#">Get a Ling key ↗</a>
+        </div>
+      </div>
+      <p class="muted2" style="margin:0">ZenMux, OpenAI or any OpenAI-compatible service work too: Settings › AI Service, top right.</p>
+    </div></div>
+  </div>
+</section>
+
+<section class="board" id="ports">
+  <h2>上手页 /start/ · Windows、Linux、Android 标签 · 第 2 步（必需）</h2>
+  <div class="cols">
+    <div class="frame"><div class="lbl"><span class="now">现在</span>中文</div><div class="body">
+      <div class="sh"><span class="num">2</span><h3>准备一个 Ling API key</h3><span class="tag">必需 · 约 1 分钟</span></div>
+      <div class="card" style="padding:16px;border-radius:14px"><b>在这个平台上必需</b><p class="muted" style="margin:4px 0 0">识别、翻译和纪要都靠它，没有 key 用不了。key 只存在这台设备上，只发给 Ling。</p></div>
+      <a class="btn dark" href="#" style="align-self:flex-start">获取 Ling key ↗</a>
+    </div></div>
+
+    <div class="frame"><div class="lbl"><span class="chg">建议</span>中文：内容不变，底下加一行</div><div class="body">
+      <div class="sh"><span class="num">2</span><h3>准备一个 Ling API key</h3><span class="tag">必需 · 约 1 分钟</span></div>
+      <div class="card" style="padding:16px;border-radius:14px"><b>在这个平台上必需</b><p class="muted" style="margin:4px 0 0">识别、翻译和纪要都靠它，没有 key 用不了。key 只存在这台设备上，只发给 Ling。</p></div>
+      <a class="btn dark" href="#" style="align-self:flex-start">获取 Ling key ↗</a>
+      <div class="quiet"><b>注册不了 Ling？</b> 这个平台暂时只能用 Ling；Mac 版可以换成 OpenRouter。<a href="#">告诉我们你想用哪家 →</a></div>
+    </div></div>
+
+    <div class="frame"><div class="lbl"><span class="chg">建议</span>English</div><div class="body">
+      <div class="sh"><span class="num">2</span><h3>Get a Ling API key</h3><span class="tag">Required · about 1 minute</span></div>
+      <div class="card" style="padding:16px;border-radius:14px"><b>Required on this platform</b><p class="muted" style="margin:4px 0 0">Recognition, translation and notes all run on it; without a key the app can’t work. The key stays on this device and only goes to Ling.</p></div>
+      <a class="btn dark" href="#" style="align-self:flex-start">Get a Ling key ↗</a>
+      <div class="quiet"><b>Can’t sign up for Ling?</b> This app works with Ling only for now; Cicada for Mac also works with OpenRouter. <a href="#">Tell us which service you’d like →</a></div>
+    </div></div>
+  </div>
+</section>
+
+<section class="board" id="copy">
+  <h2>文案清单 · site/i18n（中文与英文，日韩照英文）</h2>
+  <div class="card scroll"><table>
+    <thead><tr><th>key</th><th>现在</th><th>建议 · 中文</th><th>建议 · English</th></tr></thead>
+    <tbody>
+      <tr><td><code>start_lead</code></td><td>选你的平台，装好知了，准备一个 Ling key，再跟着 App 里的引导走一遍。</td><td>选你的平台，装好知了，接上一个 AI 服务，再跟着 App 里的引导走一遍。</td><td>Pick your platform, install Cicada, connect an AI service, then follow the guide in the app.</td></tr>
+      <tr><td><code>start_title</code></td><td>…下载、Ling key 与首次引导</td><td>…下载、AI 服务与首次引导</td><td>…download, AI service, first run</td></tr>
+      <tr><td><code>start_desc</code></td><td>准备一个 Ling API key（Ling 每月赠送 ¥10 额度）</td><td>接上 Ling 或 OpenRouter（Ling 每月赠送 ¥10 额度）</td><td>connect OpenRouter or Ling (Ling gives ¥10 of credit every month)</td></tr>
+      <tr><td><code>s2_h</code>（Mac）</td><td>准备一个 Ling API key</td><td>接上 AI 服务</td><td>Connect an AI service</td></tr>
+      <tr><td><code>s3_li3</code></td><td>接上 Ling key，纪要和更准的翻译就有了</td><td>接上 AI 服务，纪要和更准的翻译就有了</td><td>Connect an AI service for notes and sharper translation</td></tr>
+      <tr><td><code>shot_key_cap</code></td><td>引导 3/4：接上 Ling key</td><td>引导 3/4：接上 AI 服务</td><td>Guide 3/4: connect an AI service</td></tr>
+      <tr><td><code>start_mob_p</code></td><td>…Ling key 可以现在就在手机上注册。</td><td>…AI 服务的 key 可以现在就在手机上注册。</td><td>…you can sign up for an AI service key on your phone right now.</td></tr>
+      <tr><td><code>offer_note</code></td><td>…key 只保存在你的 Mac 上。</td><td colspan="2">只挂在 Ling 卡上，不动</td></tr>
+    </tbody>
+  </table>
+  <p class="muted2" style="margin:12px 0 0">首次引导第 3 步的截图（<code>img/start/</code>）要等 App 的引导改完再重拍；Windows / Linux / Android 标签的文案不动，只加那一行。</p>
+  </div>
+</section>
+
+<section class="board" id="readme">
+  <h2>README · 英日韩（中文 README 把“注册不了 Ling”那段挪到步骤旁边即可）</h2>
+  <div class="cols">
+    <div class="frame"><div class="lbl"><span class="now">现在（未提交的稿）</span>README.en.md 顶部</div><div class="body gh">
+      <blockquote><p><b>Outside mainland China:</b> Ling, the AI service Cicada was built on, signs up users in mainland China. On the Mac, use OpenRouter instead (<a href="#">how</a>). The Windows, Linux and Android apps recognize speech with Ling’s Ming, so for now they need a Ling key.</p></blockquote>
+    </div></div>
+    <div class="frame"><div class="lbl"><span class="chg">建议</span>README.en.md 顶部</div><div class="body gh">
+      <blockquote><p><b>AI service:</b> on the Mac, notes and natural voices work with OpenRouter (recommended), Ling, ZenMux or OpenAI (<a href="#">set up</a>). The Windows, Linux and Android apps recognize speech with Ling’s Ming, so they need a Ling key for now; can’t sign up for Ling? <a href="#">Tell us</a>.</p></blockquote>
+    </div></div>
+  </div>
+  <div class="cols" style="margin-top:16px">
+    <div class="frame"><div class="lbl"><span class="chg">建议</span>README.en.md · Setting up an AI service key</div><div class="body gh">
+      <h2>Setting up an AI service key</h2>
+      <p><b>OpenRouter</b> (recommended) carries the same Ling text model and natural Gemini voices.</p>
+      <ol><li>Create a key on <a href="#">OpenRouter</a>.</li><li>In Cicada, open <b>Settings › AI Service</b>, pick <b>OpenRouter</b> at the top right, paste the key, and click <b>Save and check</b>.</li></ol>
+      <p><b>Ling</b> (Ant Group’s model service) has every feature, including your own voice, and gives ¥10 of credit every month.</p>
+      <ol><li>Sign up on the <a href="#">Ling open platform</a> and click <b>创建令牌</b> (create token).</li><li>Paste the <code>sk-</code> key in <b>Settings › AI Service</b> and click <b>Save and check</b>.</li></ol>
+      <p style="color:#59636e">ZenMux, OpenAI or any OpenAI-compatible address work the same way. One-step voice translation and voice cloning are Ling only.</p>
+    </div></div>
+    <div class="frame"><div class="lbl"><span class="chg">建议</span>README.md（中文）· 接上 Ling 一节</div><div class="body gh">
+      <h2>接上 Ling API key</h2>
+      <ol><li>在 <a href="#">Ling 开放平台</a>注册或登录，点<b>创建令牌</b>，复制 <code>sk-</code> 开头的 key。</li><li>在知了的<b>设置 › AI 服务</b>粘贴，点<b>保存并检查</b>。</li></ol>
+      <p><b>注册不了 Ling？</b>在同一页右上角换成 OpenRouter、ZenMux、OpenAI 或任何 OpenAI 兼容服务，纪要、翻译和自然人声都能用，少了一步语音翻译和用你自己的声音。Windows、Linux、Android 版暂时只能用 Ling。</p>
+    </div></div>
+  </div>
+</section>
+</body>
+</html>

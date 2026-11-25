@@ -1,0 +1,105 @@
+{
+  "endedAt" : "2026-11-07T08:42:41Z",
+  "hasAudio" : false,
+  "id" : "20261107-034148",
+  "lines" : [
+    {
+      "dst" : "Recently, that Curve mentioned several times that their protocol updates are slow.",
+      "dstLang" : "en",
+      "fixes" : [
+        {
+          "from" : "开布特",
+          "to" : "Curve",
+          "user" : true
+        }
+      ],
+      "id" : "h1-0",
+      "speaker" : "them",
+      "src" : "最近那个开布特提了好几次他们那个协议的更新慢。",
+      "srcLang" : "zh-CN",
+      "t" : 0.24444401264190674
+    },
+    {
+      "dst" : "This is the completed automated test.",
+      "dstLang" : "en",
+      "id" : "h2-1",
+      "speaker" : "them",
+      "src" : "这个是跑好的自动化的测试。",
+      "srcLang" : "zh-CN",
+      "t" : 4.470525026321411
+    },
+    {
+      "dst" : "It's that if you don't update it, the quantity doesn't change, but things like staking basically don't change much.",
+      "dstLang" : "en",
+      "fixes" : [
+        {
+          "from" : "质压",
+          "to" : "质押"
+        }
+      ],
+      "id" : "h3-2",
+      "speaker" : "them",
+      "src" : "就是你不更新它数量就不变但质压这种基本不怎么变。",
+      "srcLang" : "zh-CN",
+      "t" : 8.696828961372375
+    },
+    {
+      "dst" : "We ran it on our side, and the automated tests all passed.",
+      "dstLang" : "en",
+      "id" : "h4-3",
+      "speaker" : "them",
+      "src" : "我们这边跑了一下，自动化测试都通过了。",
+      "srcLang" : "zh-CN",
+      "t" : 12.926735997200012
+    }
+  ],
+  "notes" : {
+    "conclusions" : [
+      {
+        "support" : 2,
+        "t" : 0.24444401264190674,
+        "text" : "我方自动化测试已通过，协议更新慢的问题仍需关注"
+      }
+    ],
+    "covered" : 4,
+    "final" : true,
+    "summary" : "对方提出Curve协议更新缓慢的问题，并说明自动化测试已跑通。测试显示协议数量不随更新变化，质押等基本数据也基本不变，我方自动化测试全部通过。",
+    "terms" : [
+      {
+        "heard" : [
+
+        ],
+        "name" : "Curve",
+        "note" : "被讨论的协议项目"
+      }
+    ],
+    "title" : "Curve协议更新与自动化测试",
+    "todos" : [
+
+    ],
+    "topics" : [
+      {
+        "pointTimes" : [
+          0.24444401264190674,
+          4.470525026321411,
+          8.696828961372375,
+          8.696828961372375,
+          12.926735997200012
+        ],
+        "points" : [
+          "Curve协议更新缓慢被多次提出",
+          "自动化测试已跑通",
+          "不更新时数量不变",
+          "质押等基本数据基本不变",
+          "我方自动化测试全部通过"
+        ],
+        "start" : 0.24444401264190674,
+        "summary" : "对方反映Curve协议更新慢，自动化测试已通过且数据基本不变。",
+        "title" : "Curve协议更新与测试"
+      }
+    ],
+    "updatedAt" : "2026-11-07T08:42:44Z"
+  },
+  "startedAt" : "2026-11-07T08:41:48Z",
+  "title" : "会议 11月7日 03:41"
+}

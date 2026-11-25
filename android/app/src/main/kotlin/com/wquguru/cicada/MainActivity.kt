@@ -41,6 +41,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         ui = Ui(this)
         if (!cicada.settings.onboarded) startActivity(Intent(this, OnboardingActivity::class.java))
+        startFromTile = intent?.getStringExtra("start")
         top = FrameLayout(this); recent = FrameLayout(this)
         val body = ui.stack(8, top, recent).apply { setPadding(ui.dp(16), ui.dp(8), ui.dp(16), ui.dp(24)) }
         builtTitle = L("会议记录")
@@ -49,6 +50,13 @@ class MainActivity : Activity() {
     }
 
     private var builtTitle = ""
+    /// The Quick Settings tile's 开始听, held back by a known AI service failure: say why here.
+    private var startFromTile: String? = null
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        startFromTile = intent.getStringExtra("start")
+    }
 
     override fun onResume() {
         super.onResume()
@@ -60,6 +68,7 @@ class MainActivity : Activity() {
         render()
         cicada.updates.checkIfDue(UpdateChecker.STALE)
         cicada.main.postDelayed(tick, 1000)
+        startFromTile?.let { kind -> startFromTile = null; AiCheckViews.start(this, kind) }
     }
 
     override fun onPause() {
@@ -76,7 +85,7 @@ class MainActivity : Activity() {
         val app = cicada
         val file = app.importing
         val key = listOf(NotesViews.liveKey(app), app.autoEnded, app.settings.source, app.settings.target, app.canOverlay, app.settings.overlay, micDenied, app.listen.spoken,
-                         app.startProblem, file?.done?.toInt(), app.updates.available?.version).joinToString("|")
+                         app.startProblem, file?.done?.toInt(), app.updates.available?.version, AiCheckViews.cardWords(app)).joinToString("|")
         if (key == shownTop) return
         shownTop = key
         top.removeAllViews()
@@ -87,6 +96,8 @@ class MainActivity : Activity() {
             else -> startCard()
         })
         if (app.settings.overlay && !app.canOverlay && file == null) column.addView(tipCard())
+        // The AI service needs the user (a phone has no tray): where the update card goes.
+        if (file == null && !app.listen.listening) AiCheckViews.card(this, ui)?.let { column.addView(it) }
         // A new version, under the start card; never while a meeting or a file is going on.
         app.updates.available?.takeIf { file == null && !app.listen.listening }?.let { column.addView(updateCard(it)) }
         top.addView(column)
@@ -99,7 +110,7 @@ class MainActivity : Activity() {
         clockText = status
         val card = ui.card(ui.row(8, ui.dot(Palette.accent), status), gap = 12)
         card.addView(ui.helper(NotesViews.sourceLine(app)), ui.lp(top = 4))
-        NotesViews.currentLines(app).lastOrNull()?.let { l -> card.addView(ui.text(l.dst ?: l.src, 18f, Palette.ink, bold = true, lines = 3).apply { leading(1.4f) }, ui.lp(top = 12)) }
+        NotesViews.currentLines(app).lastOrNull()?.let { l -> card.addView(ui.text(l.dst ?: l.shown, 18f, Palette.ink, bold = true, lines = 3).apply { leading(1.4f) }, ui.lp(top = 12)) }
         card.addView(ui.button(L("回到正在听"), "primary", R.drawable.i_waves) { app.openLive() }, ui.lp(top = 16))
         return card
     }
@@ -140,7 +151,7 @@ class MainActivity : Activity() {
             addView(ui.logo(44))
             addView(ui.stack(2,
                 ui.text(if (pb) L("视频、直播、网课里的声音") else L("用麦克风听身边的人"), 17f, Palette.ink, bold = true),
-                ui.helper(if (pb) L("通话和会议 app 的声音系统不让录，改用“面对面”") else L("线下开会，或会议 app 开外放"))), ui.weight().apply { leftMargin = ui.dp(12) })
+                ui.helper(if (pb) L("通话和会议 app 的声音系统不让录，改用“面对面”") else L("线下开会；有人在线上就把会议 app 开外放"))), ui.weight().apply { leftMargin = ui.dp(12) })
         }
         card.addView(desc, ui.lp(top = 16))
         // The language pair: what is heard (found by itself) → what subtitles read in.
@@ -242,7 +253,8 @@ class MainActivity : Activity() {
             if (s.renamed ?: !s.title.startsWith("会议 ")) s.title else s.notes?.title?.takeIf { it.isNotEmpty() } ?: SessionStore.displayTitle(s)
 
         /// One meeting in a list: title (and 正在听), when, how long, how many lines, to-dos.
-        fun recordRow(activity: Activity, ui: Ui, s: Session, live: Boolean): LinearLayout {
+        /// `query`: found by 会议记录's search, the record opens at the lines found (#33).
+        fun recordRow(activity: Activity, ui: Ui, s: Session, live: Boolean, query: String = ""): LinearLayout {
             // The line under it says when: the title is just the meeting's name.
             val title = name(s)
             val titleView = LinearLayout(activity).apply {
@@ -254,11 +266,12 @@ class MainActivity : Activity() {
             // Under a day's heading: the time, how long, how many lines, and where it came from.
             val from = s.sourceFile?.let { L("导入") }
             val meta = if (live) "${time(s.startedAt)} · ${Languages.clock(s.durationSeconds)}"
-                       else listOfNotNull("${time(s.startedAt)}", Languages.clock(s.durationSeconds), "${s.lines.size} ${L("句")}", from).joinToString(" · ")
+                       else listOfNotNull("${time(s.startedAt)}", Languages.clock(s.durationSeconds), LF("%lld 句", s.lines.size), from).joinToString(" · ")
             val todos = s.notes?.todos?.size ?: 0
             val trailing = if (todos > 0) ui.badge(LF("%@ 个待办", todos), Palette.body, Palette.ground) else null
             return ui.listRow(title, meta, trailing = trailing, titleView = titleView) {
-                activity.startActivity(Intent(activity, if (live) ListeningActivity::class.java else RecordActivity::class.java).putExtra("id", s.id))
+                activity.startActivity(Intent(activity, if (live) ListeningActivity::class.java else RecordActivity::class.java).putExtra("id", s.id)
+                    .apply { if (query.isNotEmpty() && !live) putExtra("query", query) })
             }
         }
     }

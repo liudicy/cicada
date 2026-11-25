@@ -4,6 +4,8 @@ android/core that is in neither the Mac's Resources/<lang>.lproj/Localizable.str
 android/app/src/main/strings/<lang>.lproj/Android.strings. --write appends the missing keys to
 Android.strings as TODO lines (value = the Chinese)."""
 import re, sys, pathlib
+# The Windows console is cp1252: Chinese keys would crash the report itself.
+sys.stdout.reconfigure(encoding="utf-8")
 here = pathlib.Path(__file__).resolve().parent.parent
 root = here.parent
 keys = []

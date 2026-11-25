@@ -1,0 +1,100 @@
+{
+  "endedAt" : "2026-11-06T06:48:12Z",
+  "hasAudio" : true,
+  "id" : "20261106-140000",
+  "lines" : [
+    {
+      "dst" : "我们把发布挪到 20 号。",
+      "dstLang" : "zh",
+      "id" : "l1",
+      "speaker" : "them",
+      "src" : "Let's move the launch to the 20th.",
+      "srcLang" : "en",
+      "t" : 521.34,
+      "voice" : 3
+    },
+    {
+      "dst" : "离线模式重连时还是会丢最后一句。",
+      "dstLang" : "zh",
+      "id" : "l2",
+      "speaker" : "them",
+      "src" : "Offline mode still drops the last sentence on reconnect.",
+      "srcLang" : "en",
+      "t" : 605,
+      "voice" : 7
+    },
+    {
+      "dst" : "OK, I'll look into it.",
+      "dstLang" : "en",
+      "id" : "l3",
+      "speaker" : "me",
+      "src" : "好，我来看一下。",
+      "srcLang" : "zh",
+      "t" : 612.5
+    },
+    {
+      "dst" : "staging 的 key 先别用了。",
+      "dstLang" : "zh",
+      "id" : "l4",
+      "speaker" : "them",
+      "src" : "Stop using the staging key for now.",
+      "srcLang" : "en",
+      "t" : 640.2,
+      "voice" : 3
+    }
+  ],
+  "notes" : {
+    "conclusions" : [
+      {
+        "support" : 2,
+        "t" : 521.34,
+        "text" : "发布挪到 11 月 20 日"
+      }
+    ],
+    "covered" : 4,
+    "final" : true,
+    "summary" : "发布推迟到 20 日，先修完离线模式。",
+    "terms" : [
+      {
+        "heard" : [
+          "Emmer"
+        ],
+        "name" : "Emma",
+        "note" : "测试负责人"
+      }
+    ],
+    "title" : "产品路线评审",
+    "todos" : [
+      {
+        "owner" : "Emma",
+        "support" : 1,
+        "t" : 605,
+        "text" : "周五前给出离线模式测试结果"
+      }
+    ],
+    "topics" : [
+      {
+        "points" : [
+          "重连时丢最后一句"
+        ],
+        "start" : 600,
+        "summary" : "离线模式还有一个问题。",
+        "title" : "离线模式"
+      }
+    ]
+  },
+  "renamed" : true,
+  "room" : true,
+  "sourcePath" : "/Users/someone/Movies/review.mp4",
+  "startedAt" : "2026-11-06T06:00:00Z",
+  "title" : "产品路线评审",
+  "voiceGuesses" : {
+    "3" : {
+      "evidence" : "08:41 “Sure, Emma…”",
+      "name" : "Emma"
+    }
+  },
+  "voiceNames" : {
+    "7" : "Kenji"
+  }
+}

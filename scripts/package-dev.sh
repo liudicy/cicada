@@ -69,7 +69,7 @@ ICONSET=build/AppIcon-mod.iconset
 rm -rf "$MODAPP" "$ICONSET"
 cp -R "$APP" "$MODAPP"
 BIN=$(swift build -c release --show-bin-path)
-"$BIN/LiveSubsIcon" --band MOD "$ICONSET"
+"$BIN/CicadaIcon" --band MOD "$ICONSET"
 iconutil -c icns "$ICONSET" -o "$MODAPP/Contents/Resources/AppIcon.icns"
 /usr/libexec/PlistBuddy -c "Set :CFBundleName Cicada MOD" -c "Set :CFBundleDisplayName Cicada MOD" "$MODAPP/Contents/Info.plist"
 sed -i '' -E 's/ Dev";/ MOD";/' "$MODAPP"/Contents/Resources/*.lproj/InfoPlist.strings
@@ -109,7 +109,7 @@ git push origin main
 NOTES=$(cat <<EOF
 ## 这是什么
 
-个人 fork 的打包版，基于上游 v$VERSION，额外包含：云端语音识别校对（预置小米 MiMo）、纪要编辑与重新整理、删除录音与存储空间页、侧栏「开始听」三入口布局。现场会议、导入录音、自定义模型服务商已并入上游官方实现。
+个人 fork 的打包版，基于上游 v$VERSION，额外包含：云端语音识别校对（预置小米 MiMo）、纪要一键重新整理、删除录音与存储空间页、侧栏「开始听」三入口布局。现场会议、导入录音、自定义模型服务商、纪要原地编辑已并入上游官方实现。
 
 ## 安装
 

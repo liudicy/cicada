@@ -10,8 +10,7 @@ import java.util.zip.ZipOutputStream
 /// What the transcript shows for the other side's lines (the Mac's SpeakerLabels, SpeakerID.swift).
 /// A voice gets a number only once it has `SHOWN_AFTER` substantive lines, and only when at least
 /// two voices have, so a one-to-one call stays 对方. Numbers follow the order voices got there.
-/// Android doesn't tell voices apart itself yet (no voiceprint runtime in the framework): the
-/// voices come from records made on the Mac or Windows, and the names the user gives here.
+/// The voices come from SpeakerTagger (Speakers.kt) or records made on another platform.
 object SpeakerLabels {
     const val SHOWN_AFTER = 5
 
@@ -67,9 +66,32 @@ object SpeakerLabels {
 
     fun label(number: Int, names: Map<Int, String>): String = names[number] ?: Strings.LF("说话人 %lld", number)
 
-    /// Who said a line: 你, a speaker's name or number, else 对方 (未识别 once others have numbers).
+    /// The notes with names: Ling wrote "说话人 6" before anyone named them (SpeakerLabels.named on
+    /// the Mac). A copy; the record keeps what Ling wrote.
+    fun named(notes: MeetingNotes, names: Map<Int, String>): MeetingNotes {
+        val n = MeetingNotes.from(notes.toJson())
+        if (names.isEmpty()) return n
+        fun swap(text: String): String {
+            if (!text.contains("说话人") && !text.contains("Speaker")) return text
+            var out = text
+            for ((k, name) in names.entries.sortedByDescending { it.key }) // 说话人 12 before 说话人 1
+                for (form in listOf("说话人 $k", "说话人$k", "Speaker $k")) out = out.replace(form, name)
+            return out
+        }
+        n.summary = swap(n.summary)
+        for (t in n.topics) { t.title = swap(t.title); t.summary = swap(t.summary); t.points = t.points.map(::swap).toMutableList() }
+        for (i in n.conclusions + n.todos) { i.text = swap(i.text); i.owner = i.owner?.let(::swap) }
+        return n
+    }
+
+    /// Whether lines say who spoke. An imported file has no "other side" to call 对方: its lines
+    /// are named only once its voices are told apart.
+    fun saysWho(s: Session, numbers: Map<String, Int>): Boolean = s.sourceFile == null || numbers.isNotEmpty()
+
+    /// Who said a line: 你 · 同传 (said with 我说, so the other side heard its translation), a
+    /// speaker's name or number, else 对方 (未识别 once others have numbers).
     fun speakerName(l: TranscriptLine, numbers: Map<String, Int>, names: Map<Int, String>): String {
-        if (l.speaker == "me") return Strings.L("你")
+        if (l.speaker == "me") return Strings.L("你 · 同传")
         numbers[l.id]?.let { return label(it, names) }
         return if (numbers.isEmpty()) Strings.L("对方") else Strings.L("未识别")
     }
@@ -99,7 +121,7 @@ object TranscriptExport {
             b.append("\n")
         }
         if (n.conclusions.isNotEmpty()) b.append("### ${Strings.L("结论")}\n\n").append(n.conclusions.joinToString("") { "- ${it.text}\n" }).append("\n")
-        if (n.todos.isNotEmpty()) b.append("### ${Strings.L("待办")}\n\n").append(n.todos.joinToString("") { "- [ ] ${it.text}" + (it.owner?.let { o -> "（$o）" } ?: "") + "\n" }).append("\n")
+        if (n.todos.isNotEmpty()) b.append("### ${Strings.L("待办")}\n\n").append(n.todos.joinToString("") { "- [ ] ${it.withOwner}\n" }).append("\n")
         if (n.terms.isNotEmpty()) b.append("### ${Strings.L("人名和术语")}\n\n").append(n.terms.joinToString("") { "- **${it.name}** ${it.note}\n" }).append("\n")
         return b.toString()
     }
@@ -110,10 +132,9 @@ object TranscriptExport {
         if (notes.isNotEmpty()) b.append(notes).append("## ${Strings.L("文字记录")}\n\n")
         val numbers = SpeakerLabels.numbers(s.lines); val names = SpeakerLabels.names(s)
         for (l in s.lines) {
-            // An imported file has no "other side" to name.
-            val who = if (s.sourceFile == null) " ${SpeakerLabels.speakerName(l, numbers, names)}" else ""
-            b.append("**[${Languages.clock(l.t)}]$who**  \n${l.src}\n")
-            l.dst?.takeIf { it != l.src && it.isNotEmpty() }?.let { b.append("> $it\n") }
+            val who = if (SpeakerLabels.saysWho(s, numbers)) " ${SpeakerLabels.speakerName(l, numbers, names)}" else ""
+            b.append("**[${Languages.clock(l.t)}]$who**  \n${l.shown}\n")
+            l.dst?.takeIf { it != l.shown && it.isNotEmpty() }?.let { b.append("> $it\n") }
             b.append("\n")
         }
         return b.toString()
@@ -128,8 +149,10 @@ object TranscriptExport {
         s.lines.forEachIndexed { i, l ->
             val next = if (i + 1 < s.lines.size) s.lines[i + 1].t else l.t + 4
             val end = maxOf(l.t + 1, minOf(next, l.t + 8))
-            b.append("${i + 1}\n${ts(l.t)} --> ${ts(end)}\n${l.src}\n")
-            l.dst?.takeIf { it != l.src && it.isNotEmpty() }?.let { b.append("$it\n") }
+            // Your own lines (我说) say so, as the record does.
+            val tag = if (l.speaker == "me") "[${Strings.L("同传")}] " else ""
+            b.append("${i + 1}\n${ts(l.t)} --> ${ts(end)}\n$tag${l.shown}\n")
+            l.dst?.takeIf { it != l.shown && it.isNotEmpty() }?.let { b.append("$it\n") }
             b.append("\n")
         }
         return b.toString()
@@ -162,14 +185,14 @@ object TranscriptExport {
                 add("", 6.0, after = 4.0)
             }
             if (n.conclusions.isNotEmpty()) { add(Strings.L("结论"), 12.0, bold = true, after = 3.0); for (c in n.conclusions) add("• ${c.text}", 11.0, after = 2.0) }
-            if (n.todos.isNotEmpty()) { add(Strings.L("待办"), 12.0, bold = true, after = 3.0); for (t in n.todos) add("☐ ${t.text}" + (t.owner?.let { "（$it）" } ?: ""), 11.0, after = 2.0) }
+            if (n.todos.isNotEmpty()) { add(Strings.L("待办"), 12.0, bold = true, after = 3.0); for (t in n.todos) add("☐ ${t.withOwner}", 11.0, after = 2.0) }
             add(Strings.L("文字记录"), 15.0, bold = true, after = 6.0)
         }
         val numbers = SpeakerLabels.numbers(s.lines); val names = SpeakerLabels.names(s)
         for (l in s.lines) {
-            add("[${Languages.clock(l.t)}]" + if (s.sourceFile == null) " ${SpeakerLabels.speakerName(l, numbers, names)}" else "", 9.0, bold = true, color = "555555", after = 2.0)
-            add(l.src, 11.0, after = 2.0)
-            l.dst?.takeIf { it != l.src && it.isNotEmpty() }?.let { add(it, 11.0, color = "4D4D4D", after = 10.0) }
+            add("[${Languages.clock(l.t)}]" + if (SpeakerLabels.saysWho(s, numbers)) " ${SpeakerLabels.speakerName(l, numbers, names)}" else "", 9.0, bold = true, color = "555555", after = 2.0)
+            add(l.shown, 11.0, after = 2.0)
+            l.dst?.takeIf { it != l.shown && it.isNotEmpty() }?.let { add(it, 11.0, color = "4D4D4D", after = 10.0) }
         }
         val doc = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
             "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>$body" +

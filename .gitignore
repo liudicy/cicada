@@ -21,12 +21,17 @@ tools/*
 !tools/*.swift
 !tools/README.md
 !tools/macos-vm/
+!tools/audio-probe/
 
 # Windows: build output, spike results and clips (windows/spike/make-clips.sh, ming_asr.py)
 windows/**/bin/
 windows/**/obj/
 windows/spike/out/
 windows/spike/clips/*.wav
+
+# Share server: local state and secrets (server/.dev.vars holds the ZenMux key for wrangler dev)
+server/.wrangler/
+server/.dev.vars
 
 # Signing keys never enter the repo (android/scripts/keystore.sh keeps them in ~/.cicada-android)
 *.jks

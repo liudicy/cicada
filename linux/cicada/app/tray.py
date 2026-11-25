@@ -50,7 +50,7 @@ class Tray:
         lib.app_indicator_set_icon_full.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
         self.lib = lib
         self.icon = icon or "cicada"
-        self.badged = False
+        self.badged = (False, None)
         # An absolute path works as the icon "name", so no icon theme install is needed.
         self.ind = lib.app_indicator_new(b"cicada", (icon or "cicada").encode(), self.CATEGORY_APPLICATION_STATUS)
         lib.app_indicator_set_status(self.ind, self.STATUS_ACTIVE)
@@ -71,7 +71,15 @@ class Tray:
             i.set_sensitive(sensitive)
             menu.append(i)
             return i
-        # A new version first, with the accent dot the Mac's panel gives it; greyed while it downloads.
+        # The AI service when only the user can fix it (AIServiceStrip.swift, the panel's top): what's
+        # wrong, and a click opens 设置 › AI 服务. One that stays until the user changes something also
+        # puts the dot on the icon (below).
+        from .aicheck_view import blocking, strip_words
+        broken = strip_words(self.app)
+        if broken:
+            item("⚠ " + broken[0].rstrip("。.") + " · " + L("打开设置"), lambda: self.app.show_settings(ai=True))
+            menu.append(Gtk.SeparatorMenuItem())
+        # A new version, with the accent dot the Mac's panel gives it; greyed while it downloads.
         upd = self.app.updates.menu_label()
         if upd:
             item("● " + upd, self.app.updates.install, sensitive=self.app.updates.progress is None
@@ -85,6 +93,13 @@ class Tray:
             self.detail_item = None
         menu.append(Gtk.SeparatorMenuItem())
         item(L("结束") if listening else L("开始听"), self.app.request_stop)
+        # 麦克风, the Mac panel's 打开麦克风: on mid-meeting, the room joins the same meeting.
+        if self.app.listen.source_kind != "file" or not listening:
+            mic = Gtk.CheckMenuItem.new_with_label(L("麦克风"))
+            mic.set_active(self.app.mic_on)
+            mic.connect("toggled", lambda w: self.app.set_mic(w.get_active()))
+            menu.append(mic)
+            menu.append(Gtk.SeparatorMenuItem())
         if self.app.settings.speakEnabled:
             item(L("停止说") if self.app.speak.active else L("开始说"), self.app.toggle_speaking)
         item(L("显示实时纪要"), self.app.show_notes)
@@ -97,19 +112,22 @@ class Tray:
         self.lib.app_indicator_set_menu(self.ind, _gpointer(menu))
         self.menu = menu  # the indicator holds a ref too; keep ours so Python doesn't free it early
         self.lib.app_indicator_set_label(self.ind, (self._clock() if listening else "").encode(), b"")
-        self._badge(self.app.updates.update)
+        self._badge(self.app.updates.update, blocking(self.app))
 
-    def _badge(self, update) -> None:
-        """The Mac's update dot on the top-bar icon: the same icon with an orange dot top right."""
-        on = update is not None
-        if on == self.badged:
+    def _badge(self, update, problem) -> None:
+        """The Mac's menu bar dot on the top-bar icon: the same icon with an orange dot top right, for
+        something only the user can fix or else a new version. The icon's description says which (the
+        Mac's tooltip; screen readers and the indicator read it)."""
+        on = problem is not None or update is not None
+        desc = L("知了") + (" · " + problem if problem else " · " + LF("有新版本 %@", update.version) if update else "")
+        if (on, desc) == self.badged:
             return
         path = badged_icon(self.icon) if on else self.icon
         if path is None:
             return
-        desc = L("知了") + (" · " + LF("有新版本 %@", update.version) if on else "")
         self.lib.app_indicator_set_icon_full(self.ind, path.encode(), desc.encode())
-        self.badged = on
+        self.badged = (on, desc)
+        Log.d("tray: badge=%s %s" % ("problem" if problem else "update" if update else "none", desc))
 
     def _clock(self) -> str:
         from datetime import datetime, timezone
@@ -125,7 +143,7 @@ class Tray:
         s = self.app.store.get(self.app.listen.session_id) if self.app.listen.session_id else None
         if s is None:
             return ""
-        return "%s · %d %s" % (session_store.display_title(s), len(s.lines), L("句"))
+        return LF("%@ · %lld 句", session_store.display_title(s), len(s.lines))
 
     def tick(self) -> None:
         """Once a second while listening: the clock in the top bar and the menu's header."""

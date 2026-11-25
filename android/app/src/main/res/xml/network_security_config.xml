@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain http is allowed so a custom AI service on this phone or the local network (Ollama,
+     vLLM on a box at home or work, a Tailscale address) can be reached. This file can't name IP
+     ranges, so the real gate is Providers.customBase: it builds an http address only for such
+     hosts (isNearby), and every other address the app calls is https. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

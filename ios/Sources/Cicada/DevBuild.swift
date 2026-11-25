@@ -1,6 +1,6 @@
 import Foundation
 
-/// The iOS counterpart of the Mac's `DevBuild` and `debugLog` (`Sources/LiveSubs/DevBuild.swift`,
+/// The iOS counterpart of the Mac's `DevBuild` and `debugLog` (`Sources/Cicada/DevBuild.swift`,
 /// `Settings.swift`): the shared sources call them by the same names. No /tmp on iOS, so the log
 /// lives in the app container, where `xcrun simctl get_app_container booted <id> data` finds it.
 enum DevBuild {

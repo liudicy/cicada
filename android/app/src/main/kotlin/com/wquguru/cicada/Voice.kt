@@ -2,16 +2,20 @@ package com.wquguru.cicada
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import cicada.LingClient
 import cicada.Log
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/// The system's text-to-speech, for saying my translated words to the person in front of me.
-/// Only ever given a translation (ListenEngine.said checks that): never what I said myself.
+/// The system's text-to-speech, or the AI service's voice, for saying my translated words to the
+/// person in front of me. Only ever given a translation (ListenEngine.said checks that): never what
+/// I said myself.
 class Voice(private val context: Context) {
     enum class Result { Spoken, NoVoice, Failed }
 
@@ -63,5 +67,59 @@ class Voice(private val context: Context) {
         return if (r == TextToSpeech.SUCCESS) Result.Spoken else Result.Failed
     }
 
-    fun stop() { tts?.stop() }
+    private class Stopped : RuntimeException()
+    @Volatile private var track: AudioTrack? = null
+
+    /// Reads `text` in the AI service's `voiceName` (Ming's with `language`, Ming's language_id), or
+    /// in the user's own voice cloned from `reference`: its 24 kHz PCM goes into an AudioTrack as it
+    /// arrives, so the first words play before the rest has come. Blocks until it has played (or
+    /// `stop`). `onStart` comes with the first sound; `onEnd` always comes. Failed lets the caller
+    /// fall back to the phone's voice.
+    fun speakCloud(ling: LingClient, text: String, voiceName: String?, language: String?,
+                   onStart: () -> Unit, onEnd: () -> Unit, reference: Pair<String, String>? = null): Result {
+        val rate = LingClient.TTS_RATE
+        val t = try {
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .setBufferSizeInBytes(maxOf(AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), rate))
+                .build()
+        } catch (e: Exception) { Log.d("voice: no audio track ${e.javaClass.simpleName}"); return Result.Failed }
+        track = t
+        speaking = true
+        var frames = 0L
+        try {
+            ling.speech(text, voiceName, language, reference = reference) { pcm ->
+                if (track !== t) throw Stopped()
+                if (frames == 0L) { t.play(); Log.d("voice: cloud start"); onStart() }
+                t.write(pcm, 0, pcm.size)
+                frames += pcm.size / 2
+            }
+            if (frames == 0L) return Result.Failed
+            // What was written plays out before the track goes (a few seconds at most).
+            val until = System.currentTimeMillis() + frames * 1000 / rate + 2000
+            while (track === t && t.playbackHeadPosition < frames && System.currentTimeMillis() < until) Thread.sleep(40)
+            Log.d("voice: cloud done")
+            return Result.Spoken
+        } catch (_: Stopped) {
+            return Result.Spoken
+        } catch (e: Exception) {
+            Log.d("voice: cloud failed ${e.message ?: e.javaClass.simpleName}")
+            return if (frames > 0) Result.Spoken else Result.Failed
+        } finally {
+            if (track === t) track = null
+            try { t.stop() } catch (_: Exception) {}
+            t.release()
+            speaking = false
+            onEnd()
+        }
+    }
+
+    fun stop() {
+        tts?.stop()
+        track?.let { track = null; try { it.pause(); it.flush() } catch (_: Exception) {} }
+    }
 }

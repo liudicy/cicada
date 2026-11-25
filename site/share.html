@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="{{t.html_lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{t.share_og_title}} · {{t.brand_name}}</title>
+<meta name="description" content="{{t.share_og_desc}}">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.png">
+<meta name="theme-color" content="#FFFFFF">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="知了 Cicada">
+<meta property="og:title" content="{{t.share_og_title}}">
+<meta property="og:description" content="{{t.share_og_desc}}">
+<meta property="og:url" content="{{SITE}}">
+<meta property="og:image" content="{{OG_IMAGE}}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="{{t.og_locale}}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{t.share_og_title}}">
+<meta name="twitter:description" content="{{t.share_og_desc}}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="{{FONTS}}">
+<link rel="stylesheet" href="/style.css?v={{REV}}">
+<script type="application/json" id="share-text">{{SHARE_TEXT}}</script>
+<script src="/share.js?v={{REV}}" defer></script>
+</head>
+<body class="sh-body">
+<header class="sh-bar">
+  <a class="sh-brand" href="{{HOME}}?ref=share"><img src="/icon.svg" alt="" width="26" height="26"><b>{{t.brand_name}}</b></a>
+  <div class="sh-tools" id="sh-tools" hidden>
+    <button class="sh-icon" type="button" id="sh-search-btn" aria-label="{{t.share_search}}" aria-expanded="false" aria-controls="sh-search-row"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+    <div class="sh-share">
+      <button class="sh-pill" type="button" id="sh-share-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="sh-menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v12M7 8l5-5 5 5"/></svg><span>{{t.share_share}}</span></button>
+      <div class="sh-menu" id="sh-menu" role="menu" hidden>
+        <button type="button" role="menuitem" id="sh-copy-link">{{t.share_copy_link}}</button>
+        <button type="button" role="menuitem" id="sh-copy">{{t.share_copy_notes}}</button>
+        <button type="button" role="menuitem" id="sh-send" hidden>{{t.share_send}}</button>
+      </div>
+    </div>
+  </div>
+  <a class="sh-get" href="{{DOWNLOAD_PAGE}}?ref=share">{{t.share_get}}</a>
+</header>
+<div class="sh-search-row" id="sh-search-row" hidden>
+  <label class="sh-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span class="sr">{{t.share_search}}</span><input id="sh-search" type="search" placeholder="{{t.share_search}}" autocomplete="off"></label>
+</div>
+
+<main class="share" id="share">
+  <p class="sh-status" id="sh-loading">{{t.share_loading}}</p>
+
+  <section class="sh-gate" id="sh-password" hidden>
+    <span class="sh-mark" aria-hidden="true"><img src="/icon.svg" alt="" width="88" height="88"><span class="badge"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></span></span>
+    <h1>{{t.share_pw_h}}</h1>
+    <form id="sh-pw-form" class="sh-pw" novalidate>
+      <label class="sr" for="sh-pw">{{t.share_pw_label}}</label>
+      <input id="sh-pw" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="{{t.share_pw_ph}}" aria-describedby="sh-pw-msg">
+      <button class="sh-pw-eye" type="button" id="sh-pw-eye" aria-label="{{t.share_pw_show}}" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M4 4l16 16"/></svg></button>
+      <button class="sh-pw-go" type="submit" aria-label="{{t.share_pw_btn}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="spin" aria-hidden="true"></span></button>
+    </form>
+    <p class="sh-pw-msg" id="sh-pw-msg" role="status"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/></svg><span id="sh-pw-text">{{t.share_pw_note}}</span></p>
+    <a class="sh-brandline" href="{{DOWNLOAD_PAGE}}?ref=share-lock"><img src="/icon.svg" alt="" width="20" height="20"><span>{{t.kicker}}</span><b>{{t.share_get}} ›</b></a>
+  </section>
+
+  <section class="sh-gate" id="sh-gone" data-kind="missing" hidden>
+    <span class="sh-mark" aria-hidden="true"><img src="/icon.svg" alt="" width="88" height="88"><span class="badge">
+      <svg class="k-missing" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9.5 14.5l5-5"/><path d="M11 6.5l1.2-1.2a4 4 0 0 1 5.6 5.6L16.5 12"/><path d="M13 17.5l-1.2 1.2a4 4 0 0 1-5.6-5.6L7.5 12"/></svg>
+      <svg class="k-expired" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+      <svg class="k-locked" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg>
+    </span></span>
+    <h1 id="sh-gone-h"></h1>
+    <p id="sh-gone-p"></p>
+    <a class="sh-get" href="{{DOWNLOAD_PAGE}}?ref=share-gone">{{t.share_gone_btn}}</a>
+  </section>
+
+  <article id="sh-doc" class="sh-doc" hidden>
+    <header class="sh-head">
+      <p class="sh-meta" id="sh-meta"></p>
+      <h1 id="sh-title"></h1>
+      <button class="sh-people-btn" type="button" id="sh-people-btn" aria-expanded="false" aria-controls="sh-people" hidden>
+        <span class="sh-stack" id="sh-stack" aria-hidden="true"></span><span id="sh-people-label"></span>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <ul class="sh-people" id="sh-people" hidden></ul>
+    </header>
+
+    <p class="sh-summary" id="sh-summary" hidden></p>
+    <section class="sh-block" id="sh-conclusions" hidden><h2>{{t.share_conclusions}}</h2><ol></ol></section>
+    <section class="sh-block" id="sh-todos" hidden><h2>{{t.share_todos}}</h2><ul class="sh-checks"></ul></section>
+
+    <section class="sh-block sh-chapters" id="sh-chapters" hidden>
+      <div class="sh-chapters-head">
+        <h2 id="sh-chapters-h"></h2>
+        <button class="sh-chip" type="button" id="sh-filter" hidden></button>
+        <button class="sh-link" type="button" id="sh-all" hidden></button>
+      </div>
+      <div id="sh-chapter-list"></div>
+      <p class="sh-none" id="sh-none" hidden></p>
+    </section>
+
+    <section class="sh-block" id="sh-terms" hidden><h2>{{t.share_terms}}</h2><ul class="sh-terms"></ul></section>
+
+    <p class="sh-foot"><span id="sh-hidden"></span> <a href="{{DOWNLOAD_PAGE}}?ref=share">{{t.share_cta_h}}</a></p>
+  </article>
+</main>
+</body>
+</html>

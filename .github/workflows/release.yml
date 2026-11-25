@@ -63,10 +63,41 @@ jobs:
           ref: ${{ env.TAG }}
       - name: Unit tests
         run: scripts/test.sh
-      - name: Build and package
+      # Developer ID signing and notarization: a throwaway keychain holds the certificate and the
+      # notary key is written to the runner's temp folder; both go with the runner.
+      - name: Signing identity
+        env:
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+        run: |
+          [[ -n "$MAC_CERT_P12_BASE64" && -n "$NOTARY_KEY_P8_BASE64" ]] || { echo "::error::missing Mac signing secrets"; exit 1; }
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          base64 --decode <<< "$MAC_CERT_P12_BASE64" > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          curl -fsSL -o "$RUNNER_TEMP/devidg2.der" http://certs.apple.com/devidg2.der
+          security import "$RUNNER_TEMP/devidg2.der" -k "$KEYCHAIN" || true
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -nE 's/.*"(Developer ID Application: .*)"/\1/p' | head -1)
+          [[ -n "$IDENTITY" ]] || { echo "::error::no Developer ID Application identity in MAC_CERT_P12_BASE64"; exit 1; }
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          base64 --decode <<< "$NOTARY_KEY_P8_BASE64" > "$RUNNER_TEMP/notary.p8"
+          echo "NOTARY_KEY=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+      - name: Build, sign, notarize and package
         run: scripts/package.sh
         env:
           BUILD_NUMBER: ${{ github.run_number }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER_ID }}
+      - name: Check Gatekeeper accepts the packages
+        run: |
+          for f in build/Cicada-*.dmg; do spctl -a -t open --context context:primary-signature -v "$f"; done
       - uses: actions/upload-artifact@v4
         with:
           name: mac
@@ -91,7 +122,7 @@ jobs:
           windows/build/tests/Cicada.Tests.exe
       - name: Translations
         run: python windows/scripts/strings.py
-      - name: Build and zip
+      - name: Build
         shell: pwsh
         run: |
           $v = "$env:TAG".TrimStart("v")
@@ -100,17 +131,16 @@ jobs:
             $out = "windows/build/Cicada-$($pair[0])"
             dotnet publish windows/src/Cicada -c Release -r $pair[0] -o $out -p:DebugType=embedded
             if ($LASTEXITCODE -ne 0) { exit 1 }
-            # The zip stays: older Cicadas only look for it when checking for updates.
-            Compress-Archive -Path "$out/*" -DestinationPath "dist/Cicada-$v-Windows-$($pair[1]).zip"
-            # The download for people: the same exe, which installs itself (Install.cs).
+            # The download: the app's exe, which installs itself (Install.cs) and is what updates fetch.
+            Copy-Item "$out/Cicada.exe" "dist/Cicada-$v-Windows-$($pair[1]).exe"
+            # The same exe under 1.1.0's names: Cicada 1.1.0 only looks for these when checking for
+            # updates. Drop once few people are left on 1.1.0.
             Copy-Item "$out/Cicada.exe" "dist/Cicada-Setup$(if ($pair[1] -eq 'ARM64') { '-arm64' }).exe"
           }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: |
-            dist/*.zip
-            dist/*.exe
+          path: dist/*.exe
 
   # The voiceprint library (说话人识别) for each architecture, on 22.04 so it loads on 22.04 and 24.04.
   linux-native:
@@ -200,6 +230,9 @@ jobs:
           gradle --console=plain -q :cli:installDist
           JAVA_OPTS="-Dcicada.resources=$PWD/../Resources -Dcicada.androidStrings=$PWD/app/src/main/strings" cli/build/install/cicada-cli/bin/cicada-cli test
           python3 scripts/strings.py
+      # 说话人识别's voiceprint library: the NDK app/build.gradle.kts pins (sdkmanager checks it).
+      - name: NDK
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;29.0.14206865" > /dev/null
       - name: Build and sign
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

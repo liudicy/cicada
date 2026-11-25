@@ -10,6 +10,9 @@ import android.os.Looper
 import android.provider.Settings
 import cicada.AIKey
 import cicada.AppSettings
+import cicada.Correction
+import cicada.LiveFixes
+import cicada.Vocabulary
 import cicada.AudioSource
 import cicada.LingClient
 import cicada.ListenEngine
@@ -18,10 +21,16 @@ import cicada.MeetingEndWatch
 import cicada.NotesEngine
 import cicada.Paths
 import cicada.PcmAudioSource
+import cicada.Providers
 import cicada.SessionStore
+import cicada.ShareClient
 import cicada.SpeakerLabels
+import cicada.SpeakerNamer
+import cicada.SpeakerTagger
 import cicada.Strings
 import cicada.Translator
+import cicada.VoiceCatalog
+import cicada.VoiceReference
 import cicada.Wav
 import java.io.File
 import java.util.Locale
@@ -38,9 +47,18 @@ class CicadaApp : Application() {
     lateinit var notes: NotesEngine
     lateinit var translator: Translator
     lateinit var listen: ListenEngine
+    lateinit var vocabulary: Vocabulary
+    lateinit var fixes: LiveFixes
+    lateinit var namer: SpeakerNamer
     lateinit var overlay: Overlay
     lateinit var voice: Voice
     lateinit var updates: AppUpdates
+    /// 存到文件夹 (设置 › 会后存一份).
+    lateinit var folderExport: FolderExporter
+    /// 分享…: the share service on cicada.indaloop.app (Share.kt). Its version without "-dev".
+    val share by lazy {
+        ShareClient("android", (packageManager.getPackageInfo(packageName, 0).versionName ?: "0.0.0").substringBefore('-'))
+    }
     val main = Handler(Looper.getMainLooper())
     val background = Executors.newCachedThreadPool { r -> Thread(r, "App").apply { isDaemon = true } }
     private val observers = LinkedHashSet<() -> Unit>()
@@ -79,13 +97,31 @@ class CicadaApp : Application() {
             (0 until list.size()).map { list[it].toLanguageTag() }
         }
         loadStrings()
-        key = AIKey(KeystoreProtector)
-        ling = LingClient(key).apply { model = settings.model }
+        // The AI service in use (设置 › AI 服务): its key file, address and models, read on every call.
+        key = AIKey(KeystoreProtector, service = { settings.aiProvider })
+        ling = LingClient(key, config = { settings.aiConfig() })
+        ling.proxyHint = { AiCheckViews.proxyHint(this) }
+        watchNetwork()
         store = SessionStore(loadNow = false)
+        folderExport = FolderExporter(this)
         background.execute { val t = System.currentTimeMillis(); store.load(); Log.d("store: loaded ${store.all().size} in ${System.currentTimeMillis() - t} ms") }
         notes = NotesEngine(ling, store)
         translator = Translator(ling)
+        translator.googleOff = settings.customOnly
         listen = ListenEngine(ling, translator, store, notes, settings)
+        // 改正听错的词: the phone's ICU gives the pinyin the sound check compares, as the Mac's system transform does.
+        Correction.pinyinOf = Pinyin::of
+        vocabulary = Vocabulary()
+        fixes = LiveFixes(store, vocabulary, settings)
+        listen.fixes = fixes
+        translator.fixContext = { fixes.context(it) }
+        translator.onFixes = { text, edits -> fixes.received(text, edits) }
+        fixes.onChange(::changed)
+        vocabulary.onChange(::changed)
+        // 说话人识别: voiceprints on the phone, names from Ling once two voices are on show.
+        listen.speakers = SpeakerTagger(NativeVoiceprints.create(this))
+        namer = SpeakerNamer(ling, store)
+        listen.onVoice = { namer.guess(it) }
         listen.encoder = { pcm ->
             val t = System.currentTimeMillis()
             AacEncoder.encode(pcm)?.also { Log.d("listen: ${pcm.size * 2 / 1024} KB PCM → ${it.bytes.size / 1024} KB ${it.type} in ${System.currentTimeMillis() - t} ms") }
@@ -97,6 +133,14 @@ class CicadaApp : Application() {
         listen.onChange(::changed)
         notes.onChange(::changed)
         store.onChange { changed() }
+        // 存到文件夹: written once a record is settled, rewritten when it changes, forgotten (not
+        // deleted) with it. "" is the records read at launch: try what was waiting.
+        store.onChange { id -> main.post {
+            if (id.isEmpty()) folderExport.retry()
+            else if (store.get(id) == null) folderExport.deleted(id) else folderExport.saved(id)
+        } }
+        notes.finalDone = { id -> main.post { folderExport.settled(id) } }
+        main.post { folderExport.retry() }  // the records may have been read before the listener was in
         ling.onChange(::changed)
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             // Meetings are private: the recent-apps preview shows a blank card, not the transcript
@@ -104,7 +148,11 @@ class CicadaApp : Application() {
             override fun onActivityPreCreated(a: android.app.Activity, b: android.os.Bundle?) {
                 if (Build.VERSION.SDK_INT >= 33 && a !is ProjectionActivity) a.setRecentsScreenshotEnabled(false)
             }
-            override fun onActivityResumed(a: android.app.Activity) { resumed++; updateOverlay() }
+            override fun onActivityResumed(a: android.app.Activity) {
+                // Coming back from elsewhere (a grant fixed, storage back): 存到文件夹 tries again.
+                if (resumed++ == 0) folderExport.retry()
+                updateOverlay()
+            }
             // Moving between Cicada's own screens pauses one before resuming the next: wait a beat.
             override fun onActivityPaused(a: android.app.Activity) { resumed--; main.postDelayed(::updateOverlay, 400) }
             override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
@@ -155,17 +203,22 @@ class CicadaApp : Application() {
     /// Between 开始听 and the service starting (permissions, the consent dialog): further taps wait.
     @Volatile var starting = 0L
 
-    fun startListening(context: Context, kind: String) {
-        startIntent(context, kind)?.let { context.startActivity(it) }
+    /// From a screen, a known AI service failure first gets its sheet (AiCheckViews.start).
+    fun startListening(context: Context, kind: String, gate: Boolean = true) {
+        if (gate && context is android.app.Activity && !listen.listening && ling.hasKey) { AiCheckViews.start(context, kind); return }
+        startIntent(context, kind, gate = false)?.let { context.startActivity(it) }
     }
 
     /// What starting takes: the permissions and consent screen, or onboarding without a key. Null
-    /// while already listening or starting (a second tap). The Quick Settings tile opens it itself.
-    fun startIntent(context: Context, kind: String): Intent? {
+    /// while already listening or starting (a second tap). The Quick Settings tile opens it itself;
+    /// a known failure sends it to the home screen, which says why (`gate`).
+    fun startIntent(context: Context, kind: String, gate: Boolean = true): Intent? {
         if (listen.listening) return null
         if (System.currentTimeMillis() - starting < 60_000) return null
         startProblem = null
         if (!ling.hasKey) return Intent(context, OnboardingActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (gate && AiCheckViews.blocks(this))
+            return Intent(context, MainActivity::class.java).putExtra("start", kind).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         starting = System.currentTimeMillis()
         return Intent(context, ProjectionActivity::class.java).putExtra("kind", kind).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
@@ -202,11 +255,90 @@ class CicadaApp : Application() {
 
     fun releaseToSay() = listen.release()
 
+    /// 读出来的声音 for a language: the one chosen in settings, or its default (VoiceCatalog.chosen).
+    fun voiceId(lang: String): String =
+        VoiceCatalog.chosen(settings.speakVoices, lang, ling.config(), ling.speaks, ling.clones && VoiceReference.exists)
+
+    /// 用这个声音: keeps the recording and uses it for `lang` (the language the picker was on).
+    fun saveVoiceReference(pcm: ShortArray, text: String, lang: String): Boolean = try {
+        VoiceReference.save(pcm, text)
+        Log.d("voice clone saved ${pcm.size / 16000} s")
+        settings.speakVoices[VoiceCatalog.key(lang)] = VoiceCatalog.CLONE
+        saveSettings()
+        true
+    } catch (e: Exception) { Log.d("voice clone save failed ${e.javaClass.simpleName}"); false }
+
+    /// 删除: the recording goes, and every language that used it is back on its default.
+    fun removeVoiceReference() {
+        VoiceReference.remove()
+        settings.speakVoices.entries.removeAll { it.value == VoiceCatalog.CLONE }
+        saveSettings()
+        Log.d("voice clone removed")
+    }
+
+    /// Reads `text` in a service voice id (not the phone's): Ming's or Gemini's by name, or the
+    /// user's own cloned from the saved recording. Failed when it can't (the caller falls back).
+    private fun speakIn(id: String, text: String, lang: String, onStart: () -> Unit, onEnd: () -> Unit,
+                        draft: Pair<String, String>? = null): Voice.Result {
+        if (id == VoiceCatalog.CLONE) {
+            val ref = draft ?: VoiceReference.reference()
+            if (ref == null || !ling.clones) { onEnd(); return Voice.Result.Failed }
+            return voice.speakCloud(ling, text, null, VoiceCatalog.mingLanguage(lang), onStart, onEnd, reference = ref)
+        }
+        return if (id.startsWith(VoiceCatalog.MING)) voice.speakCloud(ling, text, id.removePrefix(VoiceCatalog.MING), VoiceCatalog.mingLanguage(lang), onStart, onEnd)
+               else voice.speakCloud(ling, text, id.removePrefix(VoiceCatalog.CLOUD), null, onStart, onEnd)
+    }
+
     /// My words in their language, out of the phone's speaker. The mic is muted for the segmenter
     /// meanwhile (and a beat after, for the room's echo) so the phone doesn't hear itself as them.
+    /// The voice chosen for their language reads them (Ming's on Ling, Gemini's on OpenRouter and
+    /// ZenMux); the phone's reads them when that is the choice, and when a service's voice fails.
     private fun speakAloud(text: String, lang: String) {
         listen.muted = true
         changed()
+        val id = voiceId(lang)
+        Log.d("voice: $lang in $id")
+        if (id != VoiceCatalog.PHONE) {
+            background.execute {
+                val r = speakIn(id, text, lang, onStart = { changed() }, onEnd = {})
+                if (r == Voice.Result.Spoken) main.postDelayed({ if (!voice.speaking) { listen.muted = false; changed() } }, 400)
+                else speakWithPhone(text, lang)
+            }
+            return
+        }
+        speakWithPhone(text, lang)
+    }
+
+    /// The voice being tried (试听 / 试一句), shown as a spinner on its row.
+    @Volatile var previewing: String? = null; private set
+
+    /// Plays a voice on the speaker with a line in `lang` (the Mac's previewVoice); not a meeting
+    /// line, so nothing is muted. `draft`: a recording not saved yet, for the clone (录好了).
+    /// `failed` comes on the main thread with why nothing played.
+    fun previewVoice(id: String, lang: String, text: String = VoiceCatalog.sample(lang), draft: Pair<String, String>? = null,
+                     failed: (String) -> Unit = {}) {
+        voice.stop()
+        previewing = id
+        changed()
+        fun done() = main.post { if (previewing == id) previewing = null; changed() }
+        if (id == VoiceCatalog.PHONE) {
+            background.execute {
+                val r = voice.speak(text, lang, onStart = {}, onEnd = { done() })
+                if (r != Voice.Result.Spoken) {
+                    done()
+                    main.post { failed(Strings.L(if (r == Voice.Result.NoVoice) "手机不会读这个语言" else "没能读出来")) }
+                }
+            }
+            return
+        }
+        background.execute {
+            val r = speakIn(id, text, lang, onStart = {}, onEnd = { done() }, draft = draft)
+            Log.d("voice: preview $id $lang ${r.name}")
+            if (r != Voice.Result.Spoken) main.post { failed(Strings.L("没能读出来")) }
+        }
+    }
+
+    private fun speakWithPhone(text: String, lang: String) {
         val r = voice.speak(text, lang, onStart = { changed() }, onEnd = {
             main.postDelayed({ if (!voice.speaking) { listen.muted = false; changed() } }, 400)
         })
@@ -313,7 +445,11 @@ class CicadaApp : Application() {
         val imported = importing; importing = null
         background.execute {
             listen.stop(endedAt)
+            // The whole meeting read once more for names.
+            recId?.let { namer.guess(it, force = true) }
             if (imported != null && recId != null) store.update(recId) { it.importing = null }
+            // A meeting or an imported file is over: 存到文件夹 writes it once its notes are.
+            recId?.let { id -> main.post { folderExport.ended(id) } }
             rec?.finish { ok -> if (ok && recId != null && store.get(recId) != null) store.update(recId) { it.hasAudio = true } }
             main.post {
                 starting = 0
@@ -329,7 +465,7 @@ class CicadaApp : Application() {
     /// A WAV (16 kHz or any PCM16) heard as if it were playing: the sample meeting and `feed`.
     fun listenToFile(file: File?, play: Boolean, showLive: Boolean = !play) {
         if (listen.listening) return
-        if (!ling.hasKey) { startProblem = Strings.L("需要 Ling key 才能听"); changed(); return }
+        if (!ling.hasKey) { startProblem = noKeyText(); changed(); return }
         val source = if (file != null) PcmAudioSource(file) else PcmAudioSource({ assets.open("sample.wav").use { Wav.read(it) } })
         source.onEnded = { reason ->
             // A file that finished: give the last segment's reply a moment, then end the meeting.
@@ -367,7 +503,125 @@ class CicadaApp : Application() {
         changed()
     }
 
-    fun saveSettings() { settings.save(); ling.model = settings.model; SpeakerLabels.voices = settings.speakerVoices; changed() }
+    fun saveSettings() { settings.save(); SpeakerLabels.voices = settings.speakerVoices; changed() }
+
+    // MARK: AI 服务
+
+    /// "需要 Ling key 才能听", or the service in use named.
+    fun noKeyText(): String = ling.provider.let { p ->
+        if (p.id == "ling") Strings.L("需要 Ling key 才能听") else Strings.LF("需要 %@ 的 key 才能听", Strings.L(p.name))
+    }
+
+    /// 设置 › AI 服务: another service, with its own key file and models; checked again (`check`).
+    fun setAiProvider(id: String, check: Boolean = true) {
+        if (Providers.named(id).id != id || id == settings.aiProvider) return
+        settings.aiProvider = id
+        settings.save()
+        Log.d("ai: provider $id")
+        aiChanged(check)
+    }
+
+    /// "改用 Ling" where another service is out of reach: only when a Ling key is already saved,
+    /// so the one tap works without a trip to the settings.
+    val canSwitchToLing: Boolean get() = settings.aiProvider != "ling" && Paths.keyFile("ling").isFile
+
+    fun switchToLing() {
+        if (!canSwitchToLing) return
+        setAiProvider("ling")
+    }
+
+    /// A model chosen over the recommended one ("text", "hear" or "voice"; "" goes back to it).
+    fun setAiModel(kind: String, model: String) {
+        val s = settings
+        val p = s.aiProvider
+        if (kind == "text" && p == "ling") s.model = model.ifEmpty { LingClient.DEFAULT_MODEL }
+        else if (kind == "notes") {
+            // The custom service's notes model; empty: the translation model.
+            if (model.isNotEmpty()) s.aiModels[Providers.NOTES_MODEL] = model else s.aiModels.remove(Providers.NOTES_MODEL)
+        } else {
+            val table = when (kind) { "text" -> s.aiModels; "hear" -> s.aiHearModels; "voice" -> s.aiVoiceModels; else -> return }
+            if (model.isNotEmpty()) table[p] = model else table.remove(p)
+        }
+        s.save()
+        aiChanged()
+    }
+
+    /// 纪要 › 同一个服务 / 另一个服务 (the custom service): off keeps the typed address.
+    fun setNotesOwn(on: Boolean) {
+        settings.aiCustomNotesOwn = on
+        settings.save()
+        aiChanged()
+    }
+
+    fun setNotesBase(raw: String) {
+        settings.aiCustomNotesBase = raw.trim()
+        settings.save()
+        aiChanged()
+    }
+
+    /// Notes' own key (另一个服务), sealed like the others; null removes it (back to the key above).
+    fun setNotesKey(raw: String?): Boolean {
+        val ok = if (raw == null) { ling.removeNotesKey(); true } else ling.setNotesKey(raw)
+        if (ok) aiChanged()
+        return ok
+    }
+
+    /// The service, its address, models or key changed: forget the old check and check again.
+    fun aiChanged(check: Boolean = true) {
+        // 语音和文字只发给你的服务 acts on the custom service only: another service brings Google back.
+        translator.googleOff = settings.customOnly
+        ling.keyChanged()
+        if (check && ling.hasKey) background.execute { ling.check() }
+        changed()
+    }
+
+    /// 语音和文字只发给你的服务: kept for every service, in effect for the custom one. The service is
+    /// the same, so its check stays (not aiChanged, which forgets it).
+    fun setCustomOnly(on: Boolean) {
+        settings.aiCustomOnly = on
+        settings.save()
+        translator.googleOff = settings.customOnly
+        Log.d("ai: custom only ${if (on) "on" else "off"}")
+        changed()
+    }
+
+    /// 重新检查.
+    fun recheck() { if (ling.hasKey && !ling.aiCheck.running) background.execute { ling.check() } }
+
+    /// One tap on 换成推荐的 ("text" or "hear"): the service's first recommended model, then a
+    /// fresh check. Never done without that tap.
+    fun useRecommended(kind: String) {
+        val p = ling.provider
+        val first = (if (kind == "hear") p.hearModels else p.textModels).firstOrNull()?.id ?: return
+        Log.d("ai: recommended $kind model chosen")
+        setAiModel(kind, if (p.id == "ling") first else "")
+    }
+
+    /// A key pasted for one service that belongs to another (改用 OpenRouter): switch, save it
+    /// there (the key file follows the service), check.
+    fun switchService(id: String, key: String) {
+        settings.aiProvider = id
+        settings.save()
+        translator.googleOff = settings.customOnly
+        Log.d("ai: provider $id (the key's own)")
+        if (!this.key.save(key)) return
+        aiChanged()
+    }
+
+    /// Any change of route (Wi-Fi back, a VPN or proxy turned on) waits 3 s for the network to
+    /// settle, then the client looks again if the service was unreachable. No timer: nothing is
+    /// checked while the network stays the same.
+    private fun watchNetwork() {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        val recheck = Runnable { background.execute { ling.networkChanged() } }
+        fun later() { main.removeCallbacks(recheck); main.postDelayed(recheck, 3000) }
+        try {
+            cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) = later()
+                override fun onLinkPropertiesChanged(network: android.net.Network, lp: android.net.LinkProperties) = later()
+            })
+        } catch (e: Exception) { Log.d("ai: no network callback ${e.javaClass.simpleName}") }
+    }
 
     /// 保存会议录音: what is heard goes to system.m4a as it comes (the Mac keeps it the same way).
     private fun startRecording() {

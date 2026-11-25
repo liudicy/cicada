@@ -107,6 +107,34 @@ class Ui(val context: Context) {
         setPadding(dp(padding), dp(padding), dp(padding), dp(padding))
     }
 
+    /// A row with a switch; the whole row toggles it.
+    fun switchRow(label: String, helper: String?, on: Boolean, titleLines: Int = 1, changed: (Boolean) -> Unit): LinearLayout {
+        val sw = android.widget.Switch(context).apply {
+            isChecked = on
+            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            thumbTintList = ColorStateList(states, intArrayOf(android.graphics.Color.WHITE, Palette.secondary))
+            trackTintList = ColorStateList(states, intArrayOf(Palette.ink, Palette.outline))
+            // The framework track is drawn faded; SRC paints the tint at full strength.
+            trackTintMode = android.graphics.PorterDuff.Mode.SRC
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            isClickable = false
+        }
+        lateinit var row: LinearLayout
+        row = listRow(label, helper, trailing = sw, chevron = false, titleView = text(label, 16f, Palette.ink, lines = titleLines)) {
+            sw.isChecked = !sw.isChecked
+            changed(sw.isChecked)
+            row.stateDescription = if (sw.isChecked) cicada.Strings.L("已开启") else cicada.Strings.L("已关闭")
+        }
+        row.stateDescription = if (on) cicada.Strings.L("已开启") else cicada.Strings.L("已关闭")
+        row.accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = "android.widget.Switch"; info.isCheckable = true; info.isChecked = sw.isChecked
+            }
+        }
+        return row
+    }
+
     /// A white group of rows with thin dividers (lists, settings).
     fun group(rows: List<View>, radius: Int = 22) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -500,8 +528,9 @@ class Ui(val context: Context) {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 minimumHeight = dp(52)
-                setPadding(dp(16), 0, dp(12), 0)
-                addView(text(label, 16f, Palette.ink, bold = on, lines = 1), weight())
+                setPadding(dp(16), dp(6), dp(12), dp(6))
+                // Two lines: a model with why it's recommended runs long, more so in English.
+                addView(text(label, 16f, Palette.ink, bold = on, lines = 2), weight())
                 if (on) addView(icon(R.drawable.i_check, 20, Palette.ink), LinearLayout.LayoutParams(dp(20), dp(20)))
                 contentDescription = label
                 isSelected = on
@@ -531,16 +560,20 @@ class Ui(val context: Context) {
     }
 
     /// A text to type (rename): the field, 取消 and 保存. The keyboard comes up with the sheet.
-    fun input(activity: Activity, title: String, initial: String, helper: String? = null, hint: String? = null, onSave: (String) -> Unit) {
+    /// `type`: an InputType for the field (an address or a model id wants the URL keyboard: a pinyin
+    /// keyboard types "192。168" and "：").
+    fun input(activity: Activity, title: String, initial: String, helper: String? = null, hint: String? = null, type: Int? = null, onSave: (String) -> Unit) {
         lateinit var d: android.app.Dialog
         val box = android.widget.EditText(activity).apply {
             setText(initial); setSelectAllOnFocus(true); setSingleLine()
+            type?.let { inputType = it; imeHintLocales = android.os.LocaleList(java.util.Locale.US) }
             this.hint = hint
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             background = rounded(Palette.ground, 16)
             setPadding(dp(16), 0, dp(16), 0)
             minHeight = dp(52)
-            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE or
+                (if (type != null) android.view.inputmethod.EditorInfo.IME_FLAG_FORCE_ASCII else 0)
             setOnEditorActionListener { _, a, _ -> if (a == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) { d.dismiss(); onSave(text.toString().trim()); true } else false }
         }
         val body = stack(0, box)

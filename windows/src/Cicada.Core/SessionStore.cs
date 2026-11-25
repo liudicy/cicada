@@ -16,6 +16,11 @@ public sealed class SessionStore
     /// The moment recognised words land in a record: a new line (theirs or mine) or a half sentence
     /// that grew. What 结束会议 counts as someone speaking (MeetingEndWatch.Heard).
     public event Action<string>? Words;
+    /// A record was written to disk (存到文件夹 follows its changes); on the saving thread.
+    public event Action<string>? Saved;
+    /// The app's audio encoder (Media Foundation); null where there is none (the Mac CLI, tests
+    /// that don't set one): meetings are then kept without a recording.
+    public IAudioFiles? Audio { get; set; }
 
     public SessionStore() { Load(); }
 
@@ -92,12 +97,34 @@ public sealed class SessionStore
             int i = s.Lines.FindIndex(l => l.Id == line.Id);
             if (i < 0) return;
             grew = line.Src.Length > s.Lines[i].Src.Length; // a half sentence joined, not a retranslation
+            // The listening engine keeps its own copy of the line and knows nothing of its fixes
+            // (SetFixes): a retranslation or a join keeps them.
+            line.Fixes ??= s.Lines[i].Fixes;
             s.Lines[i] = line;
         });
         if (grew) Words?.Invoke(id);
     }
 
+    /// A line's fixes (Correction): what the AI service proposed and the user decided.
+    public void SetFixes(string id, string lineId, IReadOnlyList<LineFix> fixes)
+    {
+        Mutate(id, s =>
+        {
+            int i = s.Lines.FindIndex(l => l.Id == lineId);
+            if (i < 0) return;
+            var line = s.Lines[i].Copy();
+            line.Fixes = fixes.Count == 0 ? null : [.. fixes];
+            s.Lines[i] = line;
+        });
+    }
+
     public void SetNotes(string id, MeetingNotes notes) => Mutate(id, s => s.Notes = notes);
+
+    /// Heard through a microphone in the room for some or all of it (SessionStore.swift › markLiveInRoom).
+    public void MarkRoom(string id)
+    {
+        if (Get(id) is { Room: not true }) Mutate(id, s => s.Room = true);
+    }
 
     /// An empty title, or the one shown already, goes back to / stays on the automatic one
     /// (SessionStore.swift › rename): saving the dialog unchanged mustn't freeze the notes' name.
@@ -114,17 +141,64 @@ public sealed class SessionStore
 
     /// The meeting ended (at `endedAt` when it ended by itself a while ago): kept if anything was
     /// said, removed otherwise.
+    /// The meeting's recording, if any, is closed by then (ListenEngine.Stop): it is rewrapped into
+    /// system.m4a in the background, cut at `endedAt` when the meeting ended by itself a while ago
+    /// (its silent tail), as SessionStore.swift › end does.
     public void End(string id, DateTimeOffset? endedAt = null)
     {
         bool empty;
+        double? until = null;
         lock (gate)
         {
             if (!sessions.TryGetValue(id, out var s)) return;
             s.EndedAt = endedAt is { } at ? (at > s.StartedAt ? at : s.StartedAt) : DateTimeOffset.Now;
             empty = s.Lines.Count == 0;
+            var m4a = Recording.SystemAudio(id);
+            s.HasAudio = File.Exists(m4a) || File.Exists(Recording.Partial(m4a));
+            if (endedAt is not null) until = s.Duration.TotalSeconds;
         }
-        if (empty) Delete(id);
-        else { MarkDirty(id); Flush(); }
+        if (empty) { Delete(id); return; }
+        MarkDirty(id); Flush();
+        _ = Task.Run(() => FinishAudio(id, until));
+    }
+
+    /// Recordings a meeting didn't get to close (the app was killed or the PC went off): the
+    /// partial file is rewrapped now, as SessionStore.swift › load does. Call once Audio is set.
+    public void FinishLeftovers(string? live = null)
+    {
+        List<string> left;
+        lock (gate) left = sessions.Keys.Where(id => id != live && File.Exists(Recording.Partial(Recording.SystemAudio(id)))).ToList();
+        foreach (var id in left)
+        {
+            Mutate(id, s => s.HasAudio = true);
+            _ = Task.Run(() => FinishAudio(id, null));
+        }
+    }
+
+    /// system.aac into system.m4a. A partial file beside an .m4a means the last rewrap was cut
+    /// short: it is done again. One that fails leaves the partial file for the next launch.
+    void FinishAudio(string id, double? until)
+    {
+        var m4a = Recording.SystemAudio(id);
+        var partial = Recording.Partial(m4a);
+        if (Audio is not { } audio || !File.Exists(partial)) return;
+        try
+        {
+            if (File.Exists(m4a)) File.Delete(m4a);
+            var started = DateTime.UtcNow;
+            if (audio.Rewrap(partial, m4a, until))
+            {
+                File.Delete(partial);
+                Log.Debug($"store: recording {id} finished in {(DateTime.UtcNow - started).TotalMilliseconds:F0} ms");
+            }
+            else
+            {
+                try { File.Delete(m4a); } catch { }
+                Log.Debug($"store: recording {id} rewrap failed");
+            }
+        }
+        catch (Exception e) { Log.Debug($"store: recording {id} rewrap failed {e.GetType().Name}"); }
+        Changed?.Invoke(id);
     }
 
     public void Delete(string id)
@@ -172,6 +246,7 @@ public sealed class SessionStore
                 var tmp = FileOf(id) + ".tmp";
                 File.WriteAllText(tmp, json, new UTF8Encoding(false));
                 File.Move(tmp, FileOf(id), overwrite: true);
+                Saved?.Invoke(id);
             }
             catch (Exception e) { Log.Debug($"store: save failed {e.GetType().Name}"); }
         }
@@ -191,9 +266,10 @@ public sealed class SessionStore
         var names = SpeakerLabels.Names(s);
         foreach (var l in s.Lines.OrderBy(x => x.T))
         {
-            var who = l.Speaker == "me" ? Strings.L("你") : numbers.TryGetValue(l.Id, out var num) ? names.GetValueOrDefault(num) ?? Strings.LF("说话人 %lld", num) : null;
-            b.AppendLine($"**{Languages.Clock(l.T)}**{(who is null ? "" : $" {who}：")} {l.Src}  ");
-            if (!string.IsNullOrEmpty(l.Dst) && l.Dst != l.Src) b.AppendLine($"{l.Dst}");
+            // Your own lines (the talk key) say so: what the meeting heard was their translation (同传).
+            var who = l.Speaker == "me" ? Strings.L("你 · 同传") : numbers.TryGetValue(l.Id, out var num) ? names.GetValueOrDefault(num) ?? Strings.LF("说话人 %lld", num) : null;
+            b.AppendLine($"**{Languages.Clock(l.T)}**{(who is null ? "" : $" {who}：")} {l.Shown}  ");
+            if (!string.IsNullOrEmpty(l.Dst) && l.Dst != l.Src && l.Dst != l.Shown) b.AppendLine($"{l.Dst}");
             b.AppendLine();
         }
         return b.ToString();
@@ -223,7 +299,7 @@ public sealed class SessionStore
         if (n.Todos.Count > 0)
         {
             b.AppendLine($"### {Strings.L("待办")}").AppendLine();
-            foreach (var t in n.Todos) b.AppendLine($"- [ ] {t.Text}{(t.Owner is null ? "" : $"（{t.Owner}）")}");
+            foreach (var t in n.Todos) b.AppendLine($"- [ ] {t.WithOwner}");
             b.AppendLine();
         }
         return b.ToString();

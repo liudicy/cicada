@@ -2,14 +2,11 @@
 "等有人说话" = "Waiting for someone to speak";
 "识别、翻译和纪要都靠它，约 1 分钟。" = "Recognition, translation and notes all run on it. About a minute.";
 "播放示例" = "Play sample";
-"句" = "lines";
 "重命名" = "Rename";
 "保存失败" = "Couldn't save";
-"Ling key" = "Ling key";
 "只存在这台电脑上（只有你的账户能读），只发给 Ling（ant-ling.com）" = "Stored only on this computer (readable only by your account) and sent only to Ling (ant-ling.com)";
 "界面语言" = "App language";
 "关于" = "About";
-"可以用" = "Works";
 "需要 Ling key 才能听" = "Listening needs a Ling key";
 "Ling key 无效" = "The Ling key is invalid";
 "Ling 太忙，稍后再试" = "Ling is busy; trying again shortly";
@@ -49,8 +46,6 @@
 "正在听时" = "While listening";
 "悬浮窗" = "Floating window";
 "登录后在顶栏待命" = "Stand by in top bar after login";
-"翻译与纪要模型" = "Translation & notes model";
-"Ming（云端）" = "Ming (cloud)";
 "打开记录文件夹" = "Open meetings folder";
 "打开会议记录" = "Open meetings";
 "没能开始听" = "Couldn't start listening";
@@ -63,24 +58,24 @@
 "没能建好知了麦克风" = "Couldn't set up the Cicada microphone";
 "停止说" = "Stop speaking";
 "开始说" = "Start speaking";
-"正在听你说…" = "Listening to you…";
 "知了 · 给会议的声音" = "Cicada · Voice for the meeting";
 "知了 麦克风" = "Cicada Microphone";
 "开始 / 停止说的快捷键" = "Start / stop speaking shortcut";
-"你说的话翻译后，用“知了 麦克风”传给对方" = "What you say is translated and sent to them through “Cicada Microphone”";
+"你说的话翻译后，用“知了 麦克风”传给线上的人" = "What you say is translated and sent to people online through “Cicada Microphone”";
 "和字幕一样（%@）" = "Same as subtitles (%@)";
 "在会议软件里把麦克风选成“知了 麦克风”（或“默认”），并戴上耳机：外放时对方的声音会被当成你说的。" = "In your meeting app, choose “Cicada Microphone” (or “Default”) as the microphone, and wear headphones: on speakers, their voice is taken for yours.";
 "这种语言还没有可用的声音" = "No voice is available for this language yet";
 "对方在说话时说的，没有说出去" = "Said while they were talking, so not sent";
 "你说：%@" = "You said: %@";
-"对方听到：%@" = "They hear: %@";
+"线上听到：%@" = "People online hear: %@";
+"同声传译时说的，对方听到的是译文" = "Said while interpreting; they heard the translation";
 "戴着耳机" = "Wearing headphones";
 "和对方同时说的话也会传出去" = "What you say while they talk goes out too";
 "按声音标出说话人 1、2…，只在这台电脑上处理" = "Labels lines Speaker 1, 2… by voice, on this computer only";
 "这个版本缺少声纹组件，暂时用不了" = "This build lacks the voiceprint component, so this is unavailable";
 /* Onboarding and 结束会议 (canvas 知了 Linux · 补齐 Mac); the last two override the Mac's, which say Mac. */
 "接上 Ling" = "Connect Ling";
-"点一下“开始说”或按快捷键说%@，对方听到翻译后的语音。" = "Click “Start speaking” or press the shortcut and speak %@; they hear it translated.";
+"点一下“开始说”或按快捷键说%@，线上的人听到翻译后的语音。" = "Click “Start speaking” or press the shortcut and speak %@; people online hear it translated.";
 "约 1 分钟，会建一个“知了 麦克风”，不用装驱动" = "About a minute; adds a “Cicada Microphone”, no driver to install";
 "已建好" = "Ready";
 "已添加" = "Added";
@@ -121,7 +116,7 @@
 "知了：字幕和纪要" = "Cicada: subtitles and notes";
 "你的声音 · 麦克风" = "Your voice · microphone";
 "第 4 步再用" = "Used in step 4";
-"对方听到译文" = "They hear the translation";
+"线上的人听到译文" = "People online hear the translation";
 "%@ · 只听声音，不录屏幕画面" = "%@ · Sound only, never the screen";
 "测试声音放了，但知了没听到" = "The test sound played, but Cicada didn't hear it";
 "看看声音是不是从别的设备出来（比如 HDMI 显示器），或被静音了。" = "Check whether the sound is going to another device (an HDMI monitor, say) or is muted.";
@@ -130,8 +125,8 @@
 "继续设置" = "Continue setup";
 "还差 %@ 步就能用" = "Almost ready: %@ to go";
 "知了把电脑里放出来的会议声音变成字幕和纪要。" = "Cicada turns the meeting audio your computer plays into subtitles and notes.";
-"按 %@ 说话，对方听到翻译后的声音" = "Press %@ to speak; the room hears you translated";
-"点纪要窗的麦克风说话，对方听到翻译后的声音" = "Click the mic in the notes window to speak; the room hears you translated";
+"按 %@ 说话，线上的人听到翻译后的声音" = "Press %@ to speak; people online hear you translated";
+"点纪要窗的麦克风说话，线上的人听到翻译后的声音" = "Click the mic in the notes window to speak; people online hear you translated";
 "只存在这台电脑上（只有你的账户能读）" = "Kept only on this computer (only your account can read it)";
 "识别、翻译和纪要都靠它，约 1 分钟" = "Transcription, translation and notes need it. About a minute.";
 "听一下电脑里的声音" = "Check your computer's sound";
@@ -141,3 +136,81 @@
 "可选" = "Optional";
 "以后再说" = "Not now";
 "关掉窗口后，知了在顶栏右上角" = "After you close this, Cicada stays in the top bar";
+
+/* AI 服务: other services than Ling */
+"连不上 %@" = "Can't connect to %@";
+"在 设置 › AI 服务 里换一个" = "Change it in Settings › AI Service";
+"接 AI 服务" = "AI service";
+"注册或登录后点“创建令牌”" = "Sign up or log in, then click “Create token”";
+"听、纪要和翻译都能用，模型已经选好。" = "Listening, notes and translation all work, with the models already chosen.";
+"仅保存在本机当前账户下，仅发送至 %@" = "Stored only for this account on this computer, sent only to %@";
+"接上 %@" = "Connect %@";
+"同声传译的声音" = "Interpreter voice";
+"例如 qwen3-omni" = "e.g. qwen3-omni";
+"听的模型" = "Listening model";
+"要能输入音频：听对方和“我说”都用它" = "Must take audio in: used for Listen and for Speak";
+"Ming 一次识别并翻译" = "Ming recognizes and translates in one step";
+"比 Ling 晚 1–2 秒出字" = "Text appears 1–2 s later than with Ling";
+"用不了" = "Unavailable";
+"这个服务不能出声音" = "This service can't speak";
+"需支持 /audio/speech；不填则同声传译用不了" = "Must support /audio/speech; without one, interpreting won't work";
+"听对方和“我说”都用它" = "Used for Listen and for Speak";
+"本机服务，不用 key" = "Local service, no key needed";
+"听的时候，电脑里的声音会发给 %@。" = "While listening, your computer's audio is sent to %@.";
+"按所选模型计费。" = "Billed by the models you choose. ";
+"需要 %@ 的 key 才能听" = "Needs a %@ key to listen";
+"%@ 的 key 无效" = "%@ key is invalid";
+"%@ 太忙，稍后再试" = "%@ is busy. Try again shortly";
+"仅保存在本机当前账户下，仅发送至 %@（%@）" = "Stored only for this account on this computer, sent only to %1$@ (%2$@)";
+/* AI 服务检查 (aicheck.py): the steps, 开始听 when a check failed. */
+"%@ 听不了声音。" = "%@ can't hear audio.";
+"%@ 现在听不了声音" = "%@ can't hear audio right now";
+"%@ 只收文字。换成推荐的模型就能开始听。" = "%@ only takes text. Switch to the recommended model to start listening.";
+"换成推荐的并开始" = "Use Recommended and Start";
+"重新检查并开始" = "Check Again and Start";
+"去修" = "Fix";
+"上次同传没出声" = "Silent last time it interpreted";
+"仅保存在本机当前账户下，仅发送至 Ling（ant-ling.com）" = "Stored only for this account on this computer, sent only to Ling (ant-ling.com)";
+"这台电脑访问不到 %@。" = "This computer can't reach %@.";
+"刚刚开会时用过" = "used in a meeting just now";
+"%lld 分钟前开会时用过" = "used in a meeting %lld min ago";
+"%lld 小时前开会时用过" = "used in a meeting %lld h ago";
+"%lld 天前开会时用过" = "used in a meeting %lld days ago";
+"文字 %@ 秒" = "text %@ s";
+"听 %@ 秒" = "hearing %@ s";
+"知了 · 会议室" = "Cicada · Room";
+"正在用麦克风听会议室，有人说话后约 3 秒出字幕" = "Listening to the room through the microphone. Subtitles appear about 3 s after someone speaks";
+"戴着蓝牙耳机时，自动用电脑自带的麦克风" = "With a Bluetooth headset on, Auto uses the computer's own mic";
+"知了 · 防回声" = "Cicada · Echo Cancellation";
+"电脑和会议室" = "Computer + Room";
+"电脑里放出来的" = "Played by the computer";
+/* The proxy hint for GNOME's proxy (proxy.py). */
+"代理 %@ 没有回应。打开代理软件，或在 设置 › 网络 › 网络代理 里改正。" = "The proxy %@ doesn’t answer. Open your proxy app, or fix it in Settings › Network › Network Proxy.";
+"系统代理设成了“自动”，知了用不了。在 设置 › 网络 › 网络代理 里改成“手动”。" = "The system proxy is set to Automatic, which Cicada can’t use. Set it to Manual in Settings › Network › Network Proxy.";
+/* An update that failed and couldn't open the browser either (updater.py): the address to open. */
+"没能自动更新：%@。请在浏览器里打开 %@ 下载" = "Couldn’t update automatically: %@. Open %@ in a browser to download it";
+/* The Mac's 改用%@重新整理 with spaces around the language (notes_window.py); same translations. */
+"改用 %@ 重新整理" = "Rewrite in %@";
+/* 其他（兼容 OpenAI）on the local network and its per-use rows (settings_window.py › _custom_page): the Mac's say "this Mac". */
+"地址要用 https；这台电脑和局域网里的服务可以用 http。" = "The address must use https; services on this computer or your local network can use http.";
+"每样可以接不同的机器；这台电脑和局域网里的服务可以用 http。" = "Each can use a different machine; services on this computer or your local network can use http.";
+"没填，同声传译用不了" = "Not set: no voice for interpreting";
+"填上听的模型" = "Add a listening model";
+"本机和局域网服务可不填" = "Optional on this computer or your local network";
+/* 保存会议录音 and the recording's player (media.py, records_window.py). */
+"会议结束后可以回放录音" = "The recording plays back once the meeting ends";
+"找不到录音，没法播放" = "Can't find the recording to play";
+"这场会议没存录音 ·" = "No recording of this meeting ·";
+"只存在这台电脑上" = "Kept only on this computer";
+"这台电脑缺少 AAC 编码器，装上“第三方媒体格式”后可用" = "This computer has no AAC encoder. Available once third-party media formats are installed";
+/* The mic row under the notes window header (notes_window.py › _fill_source): the Mac's says Mac. */
+"关着 · 只听电脑声音" = "Off · computer audio only";
+/* 改正听错的词: Linux-only wording (a computer, not a Mac; one more text request per line) */
+"最多 %lld 个，满了优先用最近的。只存在这台电脑上" = "Up to %lld, recent ones first. Stored only on this computer";
+"每句多发一次文字请求" = "One more text request per sentence";
+/* 在 Dock 中显示: the top bar, not a menu bar */
+"关掉后只在顶栏，打开窗口时才出现" = "Off: top bar only, in the Dock just while a window is open";
+"改一下这个文件夹的权限，或换个文件夹" = "Change this folder's permissions, or pick another folder";
+
+/* 我自己的声音 (voice_clone.py): the recording stays on this computer, not "this Mac". */
+"听起来不像或有杂音？换个安静的地方重录一次。录音仅保存在本机，可随时删除。" = "Doesn't sound like you, or noisy? Record again somewhere quiet. The recording stays on this computer and can be deleted anytime.";

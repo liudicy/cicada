@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds the installable tree build/cicada-linux/ and build/cicada-linux-<version>.tar.gz: the Python
-# package, the strings tables (the Mac's Localizable.strings plus Linux.strings), the sample meeting
-# as 16 kHz WAV, the menu entry, the icon and install.sh. Runs on the Mac or on Linux.
+# package, the strings tables (the Mac's Localizable.strings and .stringsdict, plus Linux.strings),
+# the sample meeting as 16 kHz WAV, the menu entry, the icon and install.sh. Runs on the Mac or on Linux.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 root="$(dirname "$here")"
@@ -12,6 +12,7 @@ rsync -a --exclude __pycache__ "$here/cicada" "$out/"
 for lang in zh-Hans en ja ko; do
   mkdir -p "$out/lproj/$lang.lproj"
   cp "$root/Resources/$lang.lproj/Localizable.strings" "$out/lproj/$lang.lproj/"
+  [ -f "$root/Resources/$lang.lproj/Localizable.stringsdict" ] && cp "$root/Resources/$lang.lproj/Localizable.stringsdict" "$out/lproj/$lang.lproj/"
   [ -f "$here/strings/$lang.lproj/Linux.strings" ] && cp "$here/strings/$lang.lproj/Linux.strings" "$out/lproj/$lang.lproj/"
 done
 mkdir -p "$out/bin" && cp "$here/bin/cicada" "$out/bin/"

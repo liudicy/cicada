@@ -48,8 +48,9 @@ class Paths:
         return os.path.join(cls.config(), "settings.json")
 
     @classmethod
-    def key_file(cls) -> str:
-        return os.path.join(cls.config(), "ling-api-key")
+    def key_file(cls, service: str = "ling") -> str:
+        """One key file per AI service, named as on the Mac."""
+        return os.path.join(cls.config(), "ling-api-key" if service == "ling" else "ai-key-" + service)
 
     log_override: str | None = None
 

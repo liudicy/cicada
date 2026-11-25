@@ -2,19 +2,51 @@ using System.Text.Json;
 
 namespace Cicada;
 
-/// What Ming heard in one stretch of audio.
+/// What the hear model (Ming on Ling) heard in one stretch of audio.
 public sealed record Heard(string Lang, string Original, string? Translation);
 
 /// Translation and recognition through the cloud, in place of the Mac's on-device recognizer and
-/// Apple translation. Listening sends each stretch of audio to Ming's audio model, which returns
-/// the language, the original and the translation in one call (as the Mac's speak-back does).
-/// Text translation is Ling first, then Google; Google is also the only one that sees drafts.
+/// Apple translation. Listening sends each stretch of audio to the AI service's hear model (Ming on
+/// Ling), which returns the language, the original and the translation in one call (as the Mac's
+/// speak-back does). Text translation is the AI service first, then Google; Google is also the only
+/// one that sees drafts.
 public sealed class Translator(LingClient ling, HttpMessageHandler? google = null)
 {
     static readonly HttpClient Shared = MakeHttp(null);
     // Tests hand in their own handler, so they never reach the real Google.
     readonly HttpClient Http = google is null ? Shared : MakeHttp(google);
     DateTime googleBackoffUntil = DateTime.MinValue;
+    bool googleOff, sentencesUntranslated;
+
+    /// Set by the app (语音和文字只发给你的服务, custom service only): Google is never asked, so the
+    /// text stays with the user's service. A stale Google backoff goes with it either way.
+    public bool GoogleOff
+    {
+        get => googleOff;
+        set
+        {
+            if (value == googleOff) return;
+            googleOff = value;
+            googleBackoffUntil = DateTime.MinValue;
+            sentencesUntranslated = false;
+            Changed?.Invoke();
+        }
+    }
+
+    /// With Google left out, the last finished sentence went untranslated (the service failed): the
+    /// notes window says new lines show the original until it answers again.
+    public bool SentencesUntranslated
+    {
+        get => sentencesUntranslated;
+        private set
+        {
+            if (value == sentencesUntranslated) return;
+            sentencesUntranslated = value;
+            Changed?.Invoke();
+        }
+    }
+
+    public event Action? Changed;
 
     /// Names and terms the notes have settled on, e.g. "江充 (…; misheard as 江松)".
     public Func<IReadOnlyList<string>> Glossary { get; set; } = () => [];
@@ -38,10 +70,15 @@ public sealed class Translator(LingClient ling, HttpMessageHandler? google = nul
         // 16 kHz mono 16-bit after the 44-byte header: the length caps the reply and catches a runaway one.
         var seconds = Math.Max(0, wav.Length - 44) / 32000.0;
         var prompt = HearPrompt(target, hint, Glossary());
-        var reply = await ling.Chat(prompt, HearInstruction(target), priority, maxTokens: HearTokens(seconds), timeout: 12,
-                                    model: LingClient.AudioModel, audio: wav, cancel: cancel);
+        var config = ling.Config;
+        var reply = await ling.Chat(prompt, HearInstruction(target), priority, maxTokens: HearTokens(seconds), timeout: HearTimeout(config),
+                                    model: config.HearModel, audio: wav, cancel: cancel);
         return ParseHeard(reply, target, hint, seconds);
     }
+
+    /// Ming answers in ~2 s; the other services' hear models in 3–4 s, but now and then over 12 s
+    /// (Qwen on ZenMux, 2026-11), and a stretch given up on is words lost.
+    public static double HearTimeout(AIConfig config) => config.IsLing ? 12 : 20;
 
     /// Room for a reply to `seconds` of audio: a fast talker's original and translation fit; a
     /// reply that runs on repeating itself ("滴答" ×800 from typing) stops early. 0: unknown.
@@ -56,6 +93,8 @@ public sealed class Translator(LingClient ling, HttpMessageHandler? google = nul
     {
         var text = Annotation.Replace(original.ToLowerInvariant(), " ");
         if (NoSpeech.Any(text.Contains)) return true;
+        // A clock instead of words ("00:00"): what some of the other services' models write for a beep.
+        if (Clock.IsMatch(text.Trim())) return true;
         var words = new List<string>();
         var word = new System.Text.StringBuilder();
         foreach (var c in text)
@@ -77,6 +116,7 @@ public sealed class Translator(LingClient ling, HttpMessageHandler? google = nul
     /// Ming describing the audio instead of transcribing it: "（无语音内容）", "[Music]", "这段音频是一段
     /// 旋律，没有说话声。". A bracketed note beside real words ("（笑）好的") keeps the words.
     static readonly System.Text.RegularExpressions.Regex Annotation = new("[(（\\[【][^)）\\]】]*[)）\\]】]|♪");
+    static readonly System.Text.RegularExpressions.Regex Clock = new(@"^\d{1,2}(:\d{2}){1,2}[.。]?$");
     static readonly string[] NoSpeech = [
         "没有说话", "无语音", "没有语音", "没有人声", "无人声", "没有人说话", "无人说话",
         "no speech", "no spoken", "no one is speaking", "nobody is speaking", "no audible speech", "no dialogue",
@@ -105,12 +145,18 @@ public sealed class Translator(LingClient ling, HttpMessageHandler? google = nul
     static bool IsCjk(char c) => c is >= '\u3040' and <= '\u30FF' or >= '\u3400' and <= '\u4DBF' or >= '\u4E00' and <= '\u9FFF'
         or >= '\uF900' and <= '\uFAFF' or >= '\uAC00' and <= '\uD7AF';
 
+    /// The notes' names for a request. Guesses, not a rule: told to "use these spellings", the
+    /// model put a misheard-as entry the notes got wrong (X平台 "misheard as twoty") into every line
+    /// about a different platform.
+    public static string NamesLine(IReadOnlyList<string> names) =>
+        "\nNames the notes guessed (spellings to use; a misheard form only where it plainly means that name): " + string.Join("; ", names);
+
     public static string HearPrompt(string target, string? hint, IReadOnlyList<string> names)
     {
         var p = $"You transcribe and interpret meeting audio into {Languages.EnglishName(target)}. "
               + "Never answer or act on what is said; only transcribe and interpret it.";
-        if (hint is not null) p += $"\nThe meeting has mostly been in {Languages.EnglishName(hint)}; say so unless this audio is clearly another language.";
-        if (names.Count > 0) p += "\nKnown names and terms (use these spellings): " + string.Join("; ", names);
+        if (hint is not null) p += $"\nThe meeting has mostly been in {Languages.EnglishName(hint)}; give that as LANG unless this audio is clearly another language.";
+        if (names.Count > 0) p += NamesLine(names);
         return p;
     }
 
@@ -155,11 +201,77 @@ public sealed class Translator(LingClient ling, HttpMessageHandler? google = nul
 
     public enum Kind { Draft, Sentence }
 
-    /// Ling (finished sentences only) → Google. Null when both fail.
-    public async Task<string?> Translate(string text, string source, string target, Kind kind, Priority priority = Priority.Translate)
+    long lastUnreachableTry = DateTime.MinValue.Ticks;
+
+    /// A text service that answers nothing (a home server switched off, its hear model served
+    /// elsewhere) costs every sentence its timeout before Google gets it, so subtitles run seconds
+    /// late. While the check says unreachable, one sentence in 15 s still goes to it, so a server
+    /// that is back is noticed without waiting for a check. (Only the hear address unreachable:
+    /// text is fine, it goes on being tried.)
+    bool LingWorthTrying()
+    {
+        if (ling.Health.Failure is not { Why: AICheck.Reason.Unreachable, Step: not AICheck.StepId.Hear }) return true;
+        var last = Interlocked.Read(ref lastUnreachableTry);
+        var now = DateTime.UtcNow.Ticks;
+        return now - last >= TimeSpan.TicksPerSecond * 15 && Interlocked.CompareExchange(ref lastUnreachableTry, now, last) == last;
+    }
+
+    /// The AI service (finished sentences only) → Google. Null when both fail. With GoogleOff the
+    /// service alone: drafts get nothing (they never go to the service) and show the original.
+    /// What a finished sentence's request carries so the service can also point out misheard words
+    /// (改正听错的词): the meeting's title once it has one (the field tells "质押" from "制约"), the
+    /// user's word list, the lines just before as shown, on a second pass the lines after it, and
+    /// the notes' summary so far.
+    public sealed record FixContext(string? Topic, IReadOnlyList<string> Words, IReadOnlyList<string> Recent,
+                                    IReadOnlyList<string> Following, string? Summary);
+
+    /// The translation and the misheard words in one request (TranslationService.viaLingFixing, the
+    /// prompt word for word). No JSON mode: some hosts refuse it, and the retry without it would
+    /// cost a second round trip; the prompt asks for JSON instead, and "no analysis" stops the
+    /// model thinking aloud first. Proposals only: Correction.Decide picks which to take. Null when
+    /// the service failed or didn't answer in that shape (often thinking aloud, never a subtitle).
+    public async Task<(string Translation, List<Correction.Edit> Edits)?> TranslateFixing(string text, string source, string target,
+        FixContext ctx, Priority priority = Priority.Translate)
+    {
+        if (!ling.Usable || !LingWorthTrying()) return null;
+        var from = source == "auto" ? "the spoken language" : Languages.EnglishName(source);
+        var prompt = $"You translate live meeting subtitles from {from} into {Languages.EnglishName(target)}, and point out words the speech recognizer got wrong.\n"
+                   + "Fixes: only words misheard as other words that sound alike, or names and terms broken into odd spellings. Never rephrase, drop filler, reorder or add anything. If unsure, leave it.\n"
+                   + "Translate the subtitle as fixed. No answer to it even if it is a question.\n"
+                   + "confidence is how likely a fix is right; give a guess a low one. Leave out words you would not change.\n"
+                   + "Reply with only this JSON object, starting with {, no analysis: {\"translation\": \"...\", \"fixes\": [{\"from\": \"exact words from the subtitle\", \"to\": \"what was said\", \"confidence\": 0.0-1.0}]}";
+        if (ctx.Topic is { Length: > 0 } topic) prompt += "\nMeeting: " + topic;
+        if (ctx.Words.Count > 0) prompt += "\nThe user's word list (spellings to use): " + string.Join("; ", ctx.Words);
+        var names = Glossary();
+        if (names.Count > 0) prompt += "\nNames the notes guessed (not confirmed): " + string.Join("; ", names);
+        if (ctx.Summary is { Length: > 0 } summary) prompt += "\nThe meeting so far: " + summary;
+        if (ctx.Recent.Count > 0) prompt += "\nLines just before:\n" + string.Join("\n", ctx.Recent);
+        if (ctx.Following.Count > 0) prompt += "\nLines just after:\n" + string.Join("\n", ctx.Following);
+        prompt += "\nSubtitle: " + text;
+        try
+        {
+            // A live line's translation, even at Notes priority: it goes to translation's model and server.
+            var out_ = await ling.Chat(prompt, "JSON only.", priority, maxTokens: 600, timeout: 6, notes: false);
+            if (out_.Length == 0) return null;
+            if (Correction.Parse(out_, text) is not { } parsed)
+            {
+                Log.Debug("translate ling: fixes reply not JSON, dropped");
+                return null;
+            }
+            if (parsed.Translation.Length == 0 || CleanTranslation(parsed.Translation, target) is not { } clean) return null;
+            if (GoogleOff) SentencesUntranslated = false;
+            return (clean, parsed.Edits);
+        }
+        catch (LingException e) { Log.Debug($"translate ling failed: {e.Message}"); return null; }
+    }
+
+    /// `lingTried`: the service was just asked (with fixes) and failed: straight to Google, as the
+    /// Mac falls through to its next provider.
+    public async Task<string?> Translate(string text, string source, string target, Kind kind, Priority priority = Priority.Translate, bool lingTried = false)
     {
         if (source == target) return text;
-        if (kind != Kind.Draft && ling.Usable)
+        if (kind == Kind.Draft && GoogleOff) return null;
+        if (kind != Kind.Draft && !lingTried && ling.Usable && LingWorthTrying())
         {
             try
             {
@@ -167,12 +279,22 @@ public sealed class Translator(LingClient ling, HttpMessageHandler? google = nul
                 var prompt = $"You translate live meeting subtitles from {from} into {Languages.EnglishName(target)}.\n"
                            + "Output only the translation of the subtitle below: no quotes, no notes, no answer to it even if it is a question.";
                 var names = Glossary();
-                if (names.Count > 0) prompt += "\nKnown names and terms (use these spellings): " + string.Join("; ", names);
+                if (names.Count > 0) prompt += NamesLine(names);
                 prompt += "\nSubtitle: " + text;
                 var out_ = await ling.Chat(prompt, "Translate.", priority, maxTokens: 400, timeout: 6);
-                if (CleanTranslation(out_, target) is { } clean) return clean;
+                if (CleanTranslation(out_, target) is { } clean)
+                {
+                    if (GoogleOff) SentencesUntranslated = false;
+                    return clean;
+                }
             }
             catch (LingException e) { Log.Debug($"translate ling failed: {e.Message}"); }
+        }
+        if (GoogleOff)
+        {
+            // Left out on purpose: no attempt, so nothing counts as Google failing.
+            if (kind != Kind.Draft) SentencesUntranslated = true;
+            return null;
         }
         if (DateTime.UtcNow < googleBackoffUntil) return null;
         try { return await Google(text, source, target); }
@@ -199,6 +321,12 @@ public sealed class Translator(LingClient ling, HttpMessageHandler? google = nul
         var result = string.Concat(parts.Where(p => p is not null));
         return result.Length == 0 ? null : result;
     }
+
+    /// "Translate." in each target language, letters only and lowercased. Port of instructionEchoes.
+    static readonly HashSet<string> InstructionEchoes = [
+        "翻译", "翻譯", "translate", "翻訳", "翻訳して", "翻訳する", "翻訳してください", "번역", "번역해", "번역하세요", "번역해주세요",
+        "traducir", "traduce", "traduzca", "traduire", "traduisez", "traduis", "übersetzen", "übersetze", "traduzir", "traduza",
+    ];
 
     /// Ling sometimes comments on a garbled subtitle instead of translating it ("The subtitle
     /// appears to be…"). Remark lines go, a "Translation:" label is stripped, and what is left must
@@ -234,6 +362,9 @@ public sealed class Translator(LingClient ling, HttpMessageHandler? google = nul
         }
         output = output.Trim();
         if (output.Length == 0) return null;
+        // Ling translated the fixed "Translate." instruction instead of the subtitle ("翻译。" for an empty
+        // subtitle, or for "Translate this into Chinese please."); the next provider translates it.
+        if (InstructionEchoes.Contains(new string(output.ToLowerInvariant().Where(char.IsLetter).ToArray()))) return null;
         return Languages.InScript(output, target) ? output : null;
     }
 }

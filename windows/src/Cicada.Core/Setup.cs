@@ -1,6 +1,6 @@
 namespace Cicada;
 
-/// What a launch of the release exe should do. Cicada-Setup.exe is Cicada.exe under another name:
+/// What a launch of the release exe should do. The downloaded installer is Cicada.exe under another name:
 /// a copy that isn't the installed one installs itself into the user's folder (no admin), so
 /// autostart, the Start menu and updates always point at one place.
 public static class SetupPlan

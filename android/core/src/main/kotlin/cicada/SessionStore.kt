@@ -76,10 +76,34 @@ class SessionStore(loadNow: Boolean = true) {
 
     fun append(id: String, line: TranscriptLine) = mutate(id) { it.lines.add(line) }
 
+    /// Listening's newer text or translation for a line. Its fixes stay the store's own (LiveFixes
+    /// sets them with setFixes): a fix whose words are no longer in the line is simply not shown.
     fun replace(id: String, line: TranscriptLine) = mutate(id) { s ->
         val i = s.lines.indexOfFirst { it.id == line.id }
-        if (i >= 0) s.lines[i] = line
+        if (i >= 0) { line.fixes = s.lines[i].fixes; s.lines[i] = line }
     }
+
+    /// A line's fixes (Correction): what the AI service proposed and the user decided; none is null.
+    fun setFixes(id: String, lineId: String, fixes: List<LineFix>) {
+        val changed = synchronized(gate) {
+            val l = sessions[id]?.lines?.firstOrNull { it.id == lineId } ?: return
+            if ((l.fixes ?: emptyList<LineFix>()) == fixes) return
+            l.fixes = if (fixes.isEmpty()) null else fixes.map { it.copy() }.toMutableList()
+            true
+        }
+        if (changed) { markDirty(id); fire(id) }
+    }
+
+    /// The line a reply was for, by its text as heard: the newest such line in the live meeting,
+    /// else in a file being imported. Older meetings never: "好的。" is in all of them.
+    fun lineHeard(text: String): Pair<String, TranscriptLine>? {
+        val ids = listOfNotNull(liveId) + synchronized(gate) { sessions.values.filter { it.importing == true }.map { it.id } }
+        for (id in ids) synchronized(gate) { sessions[id]?.lines?.lastOrNull { it.src == text }?.copy() }?.let { return id to it }
+        return null
+    }
+
+    /// A copy of one line, or null.
+    fun line(id: String, lineId: String): TranscriptLine? = synchronized(gate) { sessions[id]?.lines?.firstOrNull { it.id == lineId }?.copy() }
 
     fun setNotes(id: String, notes: MeetingNotes) = mutate(id) { it.notes = notes }
 
@@ -98,6 +122,18 @@ class SessionStore(loadNow: Boolean = true) {
         val names = (s.voiceNames ?: emptyMap()).toMutableMap()
         if (name == null) names.remove(voice.toString()) else names[voice.toString()] = name.trim()
         s.voiceNames = names
+    }
+
+    /// Ling's latest guesses (SpeakerNamer); earlier ones stay for voices it no longer mentions,
+    /// unless it now named them without evidence (refuted, voice → name): then that earlier name goes too.
+    fun setVoiceGuesses(id: String, guesses: Map<Int, VoiceGuess>, refuted: Map<Int, String> = emptyMap()) {
+        if (guesses.isEmpty() && refuted.isEmpty()) return
+        mutate(id) { s ->
+            val all = (s.voiceGuesses ?: emptyMap()).toMutableMap()
+            for ((v, name) in refuted) if (v !in guesses && all[v.toString()]?.name == name) all.remove(v.toString())
+            for ((v, g) in guesses) all[v.toString()] = g
+            s.voiceGuesses = all.ifEmpty { null }
+        }
     }
 
     /// Fields set once around a meeting (its recording, an imported file's name and progress).

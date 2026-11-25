@@ -93,9 +93,12 @@ class Onboarding(Gtk.Window):
         self.resize(860, 640)  # back to the fixed size if a step's content asked for more
 
     def refresh(self) -> None:
-        """Engine changes (the sample being heard, 知了 麦克风 made): only the step that shows them."""
+        """Engine changes (the sample being heard, 知了 麦克风 made, the key checked): only the step
+        that shows them."""
         if self.step == SAMPLE:
             GLib.idle_add(lambda: self._fill_sample() and False)
+        elif self.step == KEY:
+            GLib.idle_add(lambda: self._fill_key_steps() and False)
 
     # Frame
 
@@ -103,7 +106,7 @@ class Onboarding(Gtk.Window):
         self.head.pack_start(self.app_logo(34), False, False, 0)
         if self.step == DONE:
             return
-        names = [L("接 Ling"), L("听声音"), L("看效果"), L("同声传译")]
+        names = [L("接 Ling") if self.app.settings.aiProvider == "ling" else L("接 AI 服务"), L("听声音"), L("看效果"), L("同声传译")]
         bars = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, homogeneous=True)
         for i, name in enumerate(names):
             cap = ui.panel(Gtk.Box(), "stepbar", "on" if i <= self.step else "")
@@ -182,6 +185,9 @@ class Onboarding(Gtk.Window):
     # 1. Ling key
 
     def _key_step(self) -> None:
+        if self.app.settings.aiProvider != "ling":
+            self._other_step()
+            return
         self._title(L("接上 Ling"), L("识别、翻译和纪要都靠它，约 1 分钟。"))
         entry = Gtk.Entry()
         entry.set_visibility(False)
@@ -203,8 +209,9 @@ class Onboarding(Gtk.Window):
         n.get_child().set_halign(Gtk.Align.CENTER)
         n.set_valign(Gtk.Align.START)
         second.pack_start(n, False, False, 0)
-        second.pack_start(ui.vbox(10, ui.text(L("复制 sk- 开头的 key，回来粘贴"), 15, "ink", bold=True, width_chars=34), field, self.key_status),
-                          True, True, 0)
+        self._key_extras(36)
+        second.pack_start(ui.vbox(10, ui.text(L("复制 sk- 开头的 key，回来粘贴"), 15, "ink", bold=True, width_chars=34), field, self.key_status,
+                                  self.key_hint, self.key_steps), True, True, 0)
         steps = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         steps.pack_start(self._row(None, L("在 Ling 开放平台创建 key"), L("注册或登录后点“创建令牌”"), platform, number=1), False, False, 0)
         sep = ui.panel(Gtk.Box(), "hair")
@@ -228,12 +235,112 @@ class Onboarding(Gtk.Window):
         row.pack_start(right, False, False, 0)
         self.page.pack_start(ui.gap(row, 24), False, False, 0)
         entry.connect("activate", lambda *_: self._save_key(entry.get_text()))
-        if self.app.ling.has_key and self.app.ling.key_state == lingmod.OK:
-            self._key_ok()
+        self._fill_key_steps()
         hint = ui.text(L("只存在这台电脑上（只有你的账户能读），只发给 Ling（ant-ling.com）"), 13, "secondary", wrap=False)
         self.footer.pack_start(hint, True, True, 0)
         self.footer.pack_end(self._primary(L("继续"), self._key_next), False, False, 0)
+        # A way out for people who can't use Ling: another service, saying what it lacks.
+        self.footer.pack_end(ui.link(L("用不了 Ling？"), lambda: self._switch("openrouter")), False, False, 0)
         GLib.idle_add(lambda: entry.grab_focus() and False)
+
+    OTHERS = ("openrouter", "zenmux")
+
+    def _switch(self, provider: str) -> None:
+        self.app.set_ai_provider(provider)
+        self.render()
+
+    def _other_step(self) -> None:
+        """用其他服务 (OnboardingKey.swift › otherEntry): OpenRouter or ZenMux, their key, and what
+        they lack. A custom address is set up in 设置 › AI 服务."""
+        from ..core import providers
+        p = providers.named(self.app.settings.aiProvider)
+        self._title(L("用其他服务"), L("听、纪要和翻译都能用，模型已经选好。"))
+        entry = Gtk.Entry()
+        entry.set_visibility(False)
+        entry.set_placeholder_text(LF("粘贴 %@ 的 key", p.name))
+        ui.classes(entry, "keyentry")
+        entry.set_icon_from_icon_name(Gtk.EntryIconPosition.SECONDARY, "view-reveal-symbolic")
+        entry.set_icon_tooltip_text(Gtk.EntryIconPosition.SECONDARY, L("显示 key"))
+        entry.connect("icon-press", lambda e, *_: e.set_visibility(not e.get_visibility()))
+        entry.connect("activate", lambda *_: self._save_key(entry.get_text()))
+        self.key_entry = entry
+        self.key_status = ui.text("", 13, "secondary", width_chars=40)
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        choices = ui.segmented([(i, providers.named(i).name) for i in self.OTHERS], p.id if p.id in self.OTHERS else self.OTHERS[0],
+                               lambda v: v != self.app.settings.aiProvider and self._switch(v))
+        top.pack_start(choices, False, False, 0)
+        if p.site:
+            top.pack_end(ui.button(LF("打开 %@", p.name) + " ↗", lambda: open_uri(p.site), "outline midbtn"), False, False, 0)
+        field = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        field.pack_start(entry, True, True, 0)
+        field.pack_start(ui.button(L("粘贴并检查"), self._paste, "darkbtn midbtn"), False, False, 0)
+        lacks = ui.hbox(4, ui.text(L("少了："), 12, "secondary", wrap=False),
+                        ui.text(L("用你自己的声音"), 12, "ink", bold=True, wrap=False),
+                        ui.text(L("（只有 Ling 支持）"), 12, "secondary", wrap=False))
+        lacks = ui.panel(ui.pad(lacks, 8, 10), "raised")
+        self._key_extras(60)
+        card = ui.panel(ui.pad(ui.vbox(14, top, field, self.key_status, self.key_hint, self.key_steps, lacks), 22), "bigcard")
+        self.page.pack_start(ui.gap(card, 24), False, False, 0)
+        self._fill_key_steps()
+        self.footer.pack_start(ui.link(L("‹ 还是用 Ling"), lambda: self._switch("ling")), False, False, 0)
+        self.footer.pack_start(ui.text(LF("仅保存在本机当前账户下，仅发送至 %@", p.name), 13, "secondary", wrap=False), True, True, 0)
+        self.footer.pack_end(self._primary(L("继续"), self._key_next), False, False, 0)
+        GLib.idle_add(lambda: entry.grab_focus() and False)
+
+    def _key_extras(self, width: int) -> None:
+        """Under the key field: a pasted key that belongs elsewhere, and the check step by step."""
+        self.key_hint = ui.hbox(8)
+        self.key_hint.set_no_show_all(True)  # no gap while empty
+        self.key_status.set_no_show_all(True)  # shown when it has something to say
+        self.key_status.set_visible(False)
+        self.key_steps = ui.vbox(0)
+        self.key_steps_width = width
+        self._steps_shown = None
+
+    def _fill_key_steps(self) -> None:
+        """Where it broke and the one thing that fixes it, as in the settings; 继续 stays open."""
+        from . import aicheck_view
+        ling = self.app.ling
+        r = ling.check_result
+        if getattr(self, "key_steps", None) is None or self.key_steps.get_parent() is None:
+            return
+        shown = (r.summary(), ling.has_key, ling.config().hear_model, ling.config().text_model)
+        if shown == self._steps_shown:
+            return
+        self._steps_shown = shown
+        ui.clear(self.key_steps)
+        if ling.has_key and (r.running or r.failure is not None):
+            ui.retext(self.key_status, "")
+            self.key_status.set_visible(False)
+
+            def again():
+                self.key_entry.set_text("")
+                self.key_entry.grab_focus()
+            self.key_steps.pack_start(aicheck_view.steps_widget(self.app, again, width_chars=self.key_steps_width), False, False, 0)
+            self.key_steps.show_all()
+        elif ling.has_key and ling.key_state == lingmod.OK and r.passed:
+            self.key_status.set_visible(True)
+            self._key_ok()
+
+    def _key_hint(self, hint, key: str) -> None:
+        ui.clear(self.key_hint)
+        self.key_hint.set_visible(hint is not None)
+        if hint is None:
+            return
+        words, service = hint
+        self.key_hint.pack_start(ui.text(words, 13, "stepwhy", width_chars=36), True, True, 0)
+        if service:
+            from ..core.providers import named
+
+            def switch():
+                ui.clear(self.key_hint)
+                self.app.switch_service(service, key)
+                self.render()
+            b = ui.button(LF("改用 %@", named(service).name), switch, "darkbtn midbtn")
+            b.set_valign(Gtk.Align.CENTER)
+            self.key_hint.pack_end(b, False, False, 0)
+        for w in self.key_hint.get_children():
+            w.show_all()
 
     def _key_next(self) -> None:
         text = self.key_entry.get_text().strip()
@@ -247,18 +354,22 @@ class Onboarding(Gtk.Window):
     def _paste(self) -> None:
         text = (Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text() or "").strip()
         if not text.startswith("sk-"):
-            self._key_problem(L("剪贴板里没有 sk- 开头的 key，先在 Ling 开放平台复制。"))
+            name = self.app.ling.provider.name
+            self._key_problem(L("剪贴板里没有 sk- 开头的 key，先在 Ling 开放平台复制。") if name == "Ling"
+                              else LF("剪贴板里没有 sk- 开头的 key，请先去 %@ 复制。", name))
             return
         self.key_entry.set_text(text)
         self._save_key(text)
 
     def _key_problem(self, text: str) -> None:
+        self.key_status.set_visible(True)
         ctx = self.key_status.get_style_context()
         ctx.remove_class("secondary")
         ctx.add_class("warn")
         ui.retext(self.key_status, text)
 
     def _key_ok(self) -> None:
+        self.key_status.set_visible(True)
         ctx = self.key_status.get_style_context()
         ctx.remove_class("warn")
         ctx.add_class("ok")
@@ -269,24 +380,30 @@ class Onboarding(Gtk.Window):
         if not text.startswith("sk-"):
             self._key_problem(L("复制 sk- 开头的 key，回来粘贴"))
             return
+        # The prefix says whose key it is (AISettingsView.save does the same): never a silent switch.
+        from . import aicheck_view
+        hint = aicheck_view.key_hint(self.app, text)
+        self._key_hint(hint, text)
+        if hint is not None:
+            ui.retext(self.key_status, "")
+            return
         self.app.key.save(text)
         self.app.ling.key_changed()
         ctx = self.key_status.get_style_context()
         ctx.remove_class("warn")
+        self.key_status.set_visible(True)
         ui.retext(self.key_status, L("正在检查…"))
 
         def check():
-            state = self.app.ling.check()
+            self.app.ling.check()
 
             def done():
                 if self.step != KEY:
                     return False
-                if state == lingmod.OK:
-                    self._key_ok()
+                self._fill_key_steps()
+                ling = self.app.ling
+                if ling.key_state == lingmod.OK and ling.check_result.failure is None:
                     GLib.timeout_add(700, lambda: (self.step == KEY and self.go(AUDIO)) and False)
-                else:
-                    self._key_problem(L("这个 key 无效，请检查是否复制完整，或重新创建一个") if state == lingmod.INVALID
-                                      else L("连不上 Ling，检查网络或代理"))
                 return False
             GLib.idle_add(done)
         threading.Thread(target=check, daemon=True).start()
@@ -333,7 +450,7 @@ class Onboarding(Gtk.Window):
         # The two sounds side by side: people try speaking first, but this step hears the computer.
         sources = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, homogeneous=True)
         sources.pack_start(self._source(L("对方的声音"), L("这一步"), [L("会议软件"), L("扬声器"), L("知了：字幕和纪要")], True), True, True, 0)
-        sources.pack_start(self._source(L("你的声音 · 麦克风"), L("第 4 步再用"), [L("麦克风"), L("同声传译"), L("对方听到译文")], False), True, True, 0)
+        sources.pack_start(self._source(L("你的声音 · 麦克风"), L("第 4 步再用"), [L("麦克风"), L("同声传译"), L("线上的人听到译文")], False), True, True, 0)
         self.page.pack_start(ui.gap(sources, 12), False, False, 0)
         self.sources = sources
         sources.set_no_show_all(True)  # _fill_silent decides, not the window's show_all
@@ -536,12 +653,12 @@ class Onboarding(Gtk.Window):
         playing = listen.listening and listen.source_kind == "file"
         ui.clear(self.stage)
         if line is not None:
-            if line.dst and line.dst != line.src:
-                src = ui.text(line.src, 12, "stage-dim", width_chars=60, lang=line.srcLang)
+            if line.dst and line.dst != line.shown:
+                src = ui.text(line.shown, 12, "stage-dim", width_chars=60, lang=line.srcLang)
                 src.set_justify(Gtk.Justification.CENTER)
                 src.set_xalign(0.5)
                 self.stage.pack_start(src, False, False, 0)
-            dst = ui.text(line.dst or line.src, 17, "stage-ink", bold=True, width_chars=50, lang=line.dstLang)
+            dst = ui.text(line.dst or line.shown, 17, "stage-ink", bold=True, width_chars=50, lang=line.dstLang)
             dst.set_justify(Gtk.Justification.CENTER)
             dst.set_xalign(0.5)
             self.stage.pack_start(dst, False, False, 0)
@@ -576,8 +693,8 @@ class Onboarding(Gtk.Window):
         on = self.speak_setup if self.speak_setup is not None else app.settings.speakEnabled
         lang = dict((c, n) for n, c in TARGETS).get(app.settings.speak_from_code, app.settings.speak_from_code)
         head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
-        texts = ui.vbox(8, ui.text(L("开会时要说外语吗？"), 26, "heading", bold=True, width_chars=24),
-                        ui.text(LF("点一下“开始说”或按快捷键说%@，对方听到翻译后的语音。", lang), 14, "secondary", width_chars=50))
+        texts = ui.vbox(8, ui.text(L("线上开会时要说外语吗？"), 26, "heading", bold=True, width_chars=24),
+                        ui.text(LF("点一下“开始说”或按快捷键说%@，线上的人听到翻译后的语音。", lang), 14, "secondary", width_chars=50))
         head.pack_start(texts, True, True, 0)
         if on:
             head.pack_end(self._keycaps(), False, False, 0)

@@ -3,13 +3,17 @@ from a file:// feed, the way the app installs one."""
 from __future__ import annotations
 
 import hashlib
+import http.server
 import io
 import json
 import os
 import sys
 import tarfile
 import tempfile
+import threading
+import time
 import unittest
+import urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -194,6 +198,88 @@ class Notify(unittest.TestCase):
         updates._remember(NOW + 1)
         self.assertEqual(updates.notified(), "1.1.0")
         self.assertEqual(updates.last_checked(), NOW + 1)
+
+
+class _Flaky(http.server.BaseHTTPRequestHandler):
+    """Serves BODY with Range; the first request is cut off halfway, or stalls when `stall`."""
+    protocol_version = "HTTP/1.1"
+    requests: list = []
+    stall = False
+
+    def do_GET(self):
+        _Flaky.requests.append(self.headers.get("Range"))
+        start = int(self.headers["Range"][6:-1]) if self.headers.get("Range") else 0
+        part = BODY[start:]
+        self.send_response(206 if start else 200)
+        self.send_header("Content-Length", str(len(part)))
+        self.end_headers()
+        if len(_Flaky.requests) == 1:
+            self.wfile.write(part[:len(part) // 2])
+            self.wfile.flush()
+            if _Flaky.stall:
+                time.sleep(1.5)
+            self.close_connection = True
+            return
+        self.wfile.write(part)
+
+    def log_message(self, *a):
+        pass
+
+
+BODY = bytes(range(256)) * 4000
+
+
+class Download(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        Paths.home_override = os.path.join(self.dir, "home")
+        os.makedirs(Paths.data(), exist_ok=True)
+        self.addCleanup(setattr, Paths, "home_override", None)
+        # A proxy in the shell running the tests would carry these local requests off through it.
+        for k in ("http_proxy", "https_proxy", "all_proxy", "no_proxy"):
+            for name in (k, k.upper()):
+                if name in os.environ:
+                    self.addCleanup(os.environ.__setitem__, name, os.environ.pop(name))
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Flaky)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.url = "http://127.0.0.1:%d/Cicada.tar.gz" % server.server_address[1]
+        _Flaky.requests, _Flaky.stall = [], False
+
+    def log(self) -> str:
+        with open(Paths.log(), encoding="utf-8") as f:
+            return f.read()
+
+    def test_a_cut_off_download_picks_up_where_it_stopped(self):
+        to = os.path.join(self.dir, "t")
+        updates._download(self.url, to, None)
+        with open(to, "rb") as f:
+            self.assertEqual(BODY, f.read())
+        self.assertEqual([None, "bytes=%d-" % (len(BODY) // 2)], _Flaky.requests)
+        self.assertIn("stopped at %d of %d bytes, try 1 of 3 (IncompleteRead" % (len(BODY) // 2, len(BODY)), self.log())
+        self.assertNotIn("http://", self.log())  # the host only
+
+    def test_a_stall_is_a_timeout_per_read_not_for_the_whole_file(self):
+        _Flaky.stall = True
+        old = updates.STALL
+        updates.STALL = 0.5
+        self.addCleanup(setattr, updates, "STALL", old)
+        to = os.path.join(self.dir, "t")
+        updates._download(self.url, to, None)
+        with open(to, "rb") as f:
+            self.assertEqual(BODY, f.read())
+        self.assertRegex(self.log(), r"try 1 of 3 \((timeout|TimeoutError): timed out\)")  # socket.timeout's name varies
+
+    def test_giving_up_says_why(self):
+        with self.assertRaises(OSError):
+            updates._download("http://127.0.0.1:9/x", os.path.join(self.dir, "t"), None, attempts=2)
+        self.assertIn("try 2 of 2 (ConnectionRefusedError", self.log())
+
+    def test_why_leaves_urls_out(self):
+        e = urllib.error.URLError(OSError("bad https://x.example/a?token=s3cret"))
+        self.assertEqual("OSError: bad <url>", updates.why(e))
+        self.assertEqual("HTTP 404", updates.why(urllib.error.HTTPError("https://x/?k=1", 404, "nf", {}, None)))
 
 
 if __name__ == "__main__":

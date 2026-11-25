@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import os
+import subprocess
 import threading
 import time
 from array import array
@@ -90,10 +92,28 @@ def _libpulse():
 
 def default_sink() -> str | None:
     """The sound server's default output, or None when it can't be asked (a few ms, blocking)."""
+    return _server_info().get("sink")
+
+
+def default_source() -> str | None:
+    """The sound server's default input, or None when it can't be asked."""
+    return _server_info().get("source")
+
+
+def sources_text() -> str:
+    """`pactl list sources` in English (roommic.parse_sources reads it); empty without pactl."""
+    try:
+        return subprocess.run(["pactl", "list", "sources"], env={**os.environ, "LC_ALL": "C"}, capture_output=True,
+                              text=True, timeout=3).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _server_info() -> dict:
     try:
         l = _libpulse()
     except OSError:
-        return None
+        return {}
     loop = l.pa_mainloop_new()
     ctx = l.pa_context_new(l.pa_mainloop_get_api(loop), b"Cicada")
     found = {}
@@ -102,23 +122,25 @@ def default_sink() -> str | None:
     def got(_c, info, _u):
         if info and info.contents.default_sink_name:
             found["sink"] = info.contents.default_sink_name.decode()
+        if info and info.contents.default_source_name:
+            found["source"] = info.contents.default_source_name.decode()
     try:
         if l.pa_context_connect(ctx, None, 0, None) < 0:
-            return None
+            return {}
         deadline = time.monotonic() + 1.0
         op = None
         while time.monotonic() < deadline:
             l.pa_mainloop_iterate(loop, 0, None)
             state = l.pa_context_get_state(ctx)
             if state in (5, 6):  # FAILED, TERMINATED
-                return None
+                return {}
             if state == 4 and op is None:  # READY
                 op = l.pa_context_get_server_info(ctx, got, None)
             if op is not None and l.pa_operation_get_state(op) != 0:  # no longer RUNNING
                 l.pa_operation_unref(op)
                 break
             time.sleep(0.005)
-        return found.get("sink")
+        return found
     finally:
         l.pa_context_disconnect(ctx)
         l.pa_context_unref(ctx)
@@ -134,10 +156,12 @@ def available() -> bool:
 
 
 class SystemAudio(AudioSource):
-    """16 kHz mono from "@DEFAULT_MONITOR@": the server resamples and downmixes for us."""
+    """16 kHz mono from "@DEFAULT_MONITOR@" (or a microphone, `device`): the server resamples and
+    downmixes for us. `name` is what the sound settings and GNOME's privacy menu show."""
 
-    def __init__(self, device: str = "@DEFAULT_MONITOR@"):
+    def __init__(self, device: str = "@DEFAULT_MONITOR@", name: str | None = None):
         self.device = device
+        self.name = name
         self._stop = threading.Event()
         self._thread = None
 
@@ -155,7 +179,7 @@ class SystemAudio(AudioSource):
         attr = _Attr(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, CHUNK * 2)
         err = ctypes.c_int(0)
         # The stream's name is what the sound settings and GNOME's privacy menu show.
-        s = lib.pa_simple_new(None, b"Cicada", PA_STREAM_RECORD, self.device.encode(), L("知了 · 系统声音").encode(),
+        s = lib.pa_simple_new(None, b"Cicada", PA_STREAM_RECORD, self.device.encode(), (self.name or L("知了 · 系统声音")).encode(),
                               ctypes.byref(spec), None, ctypes.byref(attr), ctypes.byref(err))
         return s, (None if s else lib.strerror(err.value).decode())
 

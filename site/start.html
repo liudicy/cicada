@@ -66,7 +66,6 @@
       <div class="step-aside gate">
         <b>{{t.gate_h}}</b>
         <p>{{t.gate_p}}</p>
-        <div class="path"><span>{{t.gate_1}}</span><i aria-hidden="true">›</i><span>{{t.gate_2}}</span><i aria-hidden="true">›</i><span class="last">{{t.gate_3}}</span></div>
         <div class="trust">
           <b>{{t.trust_h}}</b>
           <ul>
@@ -81,15 +80,22 @@
     <li class="step key">
       <div class="step-text">
         <div class="num-row"><span class="num accent" aria-hidden="true">2</span><span class="badge">{{t.s2_badge}}</span></div>
-        <h2>{{t.s2_h}}</h2>
-        <p>{{t.s2_p}}</p>
-        <a class="btn btn-orange" href="https://chat.ant-ling.com/platform/api" target="_blank" rel="noopener">
-          {{t.s2_btn}}
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>
-          <span class="sr">{{t.new_tab}}</span>
-        </a>
-        <div class="offer"><span class="tag">{{t.offer_tag}}</span></div>
-        <p class="hint">{{t.offer_note}}</p>
+        <h2>{{t.m2_h}}</h2>
+        <p>{{t.m2_p}}</p>
+        <!-- Both services, side by side; the page's language picks which comes first (svc_first), never the reader's region. -->
+        <div class="svc" data-first="{{t.svc_first}}">
+          <div class="svc-card svc-ling">
+            <h3>Ling <span class="tag">{{t.svc_ling_tag}}</span></h3>
+            <p>{{t.svc_ling_p}}</p>
+            <a class="btn" href="https://chat.ant-ling.com/platform/api" target="_blank" rel="noopener">{{t.s2_btn}} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="sr">{{t.new_tab}}</span></a>
+          </div>
+          <div class="svc-card svc-or">
+            <h3>OpenRouter <span class="tag">{{t.svc_or_tag}}</span></h3>
+            <p>{{t.svc_or_p}}</p>
+            <a class="btn" href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">{{t.svc_or_btn}} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg><span class="sr">{{t.new_tab_or}}</span></a>
+          </div>
+        </div>
+        <p class="hint">{{t.svc_more}}</p>
       </div>
       <div class="step-aside gains">
         <b>{{t.gain_h}}</b>
@@ -111,6 +117,7 @@
           <li>{{t.s3_li1}}</li>
           <li>{{t.s3_li2}}</li>
           <li>{{t.s3_li3}}</li>
+          <li>{{t.s3_li4}}</li>
         </ol>
         <p class="hint">{{t.s3_after}}</p>
       </div>
@@ -165,6 +172,7 @@
         </a>
         <div class="offer"><span class="tag">{{t.offer_tag}}</span></div>
         <p class="hint">{{t.w_key_note}}</p>
+        <p class="alt-svc">{{t.s2_req_alt}}</p>
       </div>
       <div class="step-aside gate">
         <b>{{t.s2_req_h}}</b>
@@ -220,6 +228,7 @@
         </a>
         <div class="offer"><span class="tag">{{t.offer_tag}}</span></div>
         <p class="hint">{{t.l_key_note}}</p>
+        <p class="alt-svc">{{t.s2_req_alt}}</p>
       </div>
       <div class="step-aside gate">
         <b>{{t.s2_req_h}}</b>
@@ -274,6 +283,7 @@
         </a>
         <div class="offer"><span class="tag">{{t.offer_tag}}</span></div>
         <p class="hint">{{t.a_key_note}}</p>
+        <p class="alt-svc">{{t.s2_req_alt}}</p>
       </div>
       <div class="step-aside gate">
         <b>{{t.s2_req_h}}</b>
@@ -311,6 +321,17 @@
     </div>
   </section>
   </div>
+  <!-- The app's "怎么设置代理" links here (#proxy): the three cases it names when translation, OpenRouter or ZenMux can't be reached. -->
+  <section class="wrap later aguide" id="proxy" aria-labelledby="proxy-t">
+    <h2 id="proxy-t">{{t.proxy_h}}</h2>
+    <p class="more">{{t.proxy_p}}</p>
+    <div class="rows">
+      <div class="card"><small>{{t.proxy1_small}}</small><h3>{{t.proxy1_h}}</h3><p>{{t.proxy1_p}}</p></div>
+      <div class="card"><small>{{t.proxy2_small}}</small><h3>{{t.proxy2_h}}</h3><p>{{t.proxy2_p}}</p></div>
+      <div class="card"><small>{{t.proxy3_small}}</small><h3>{{t.proxy3_h}}</h3><p>{{t.proxy3_p}}</p></div>
+      <div class="card"><small>{{t.proxy4_small}}</small><h3>{{t.proxy4_h}}</h3><p>{{t.proxy4_p}}</p></div>
+    </div>
+  </section>
 </main>
 {{FOOTER}}
 <script>

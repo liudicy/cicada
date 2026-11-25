@@ -10,6 +10,8 @@ struct ListenActivity: ActivityAttributes {
         var source: String
         /// Distinct voices so far.
         var people: Int
+        /// 暂停 on the lock screen: the microphone is off until 继续.
+        var paused = false
     }
 
     var startedAt: Date

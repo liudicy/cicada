@@ -8,7 +8,7 @@ import shutil
 import threading
 from datetime import datetime, timezone
 
-from . import speakers, strings
+from . import aac, speakers, strings
 from .models import Session, now
 from .support import Log, Paths, clock
 
@@ -21,6 +21,7 @@ class SessionStore:
         self._timer = None
         self._listeners = []
         self._word_listeners = []
+        self._save_listeners = []
         self.live: str | None = None  # the meeting being listened to (the Mac's liveID)
         self._load()
 
@@ -32,6 +33,11 @@ class SessionStore:
         or a half sentence that grew. What 结束会议 counts as someone speaking (MeetingEndWatch.heard)."""
         self._word_listeners.append(listener)
 
+    def on_save(self, listener) -> None:
+        """`listener(sid)` after a record was written to disk (存到文件夹 follows its changes). Fires on
+        the thread that saved it."""
+        self._save_listeners.append(listener)
+
     def _words(self, sid: str) -> None:
         for l in list(getattr(self, "_word_listeners", [])):
             l(sid)
@@ -42,6 +48,28 @@ class SessionStore:
 
     def _folder(self, sid: str) -> str:
         return os.path.join(Paths.sessions(), sid)
+
+    def audio_path(self, sid: str) -> str:
+        """What was heard, as on the Mac: system.m4a in the meeting's folder (system.aac while it is
+        being recorded, see aac.py)."""
+        return os.path.join(self._folder(sid), "system.m4a")
+
+    def unfinished_audio(self) -> list:
+        """Meetings whose recording is still the partial file (the app quit mid-meeting, or before
+        rewrapping it): their ids, to finish at launch as the Mac's load() does."""
+        with self._gate:
+            out = []
+            for s in self._sessions.values():
+                if s.id != self.live and os.path.isfile(aac.partial(self.audio_path(s.id))):
+                    out.append(s.id)
+            return out
+
+    def set_has_audio(self, sid: str) -> None:
+        with self._gate:
+            s = self._sessions.get(sid)
+            if s is None or s.hasAudio:
+                return
+        self._mutate(sid, lambda s: setattr(s, "hasAudio", True))
 
     def _load(self) -> None:
         root = Paths.sessions()
@@ -67,6 +95,12 @@ class SessionStore:
     def get(self, sid: str) -> Session | None:
         with self._gate:
             return self._sessions.get(sid)
+
+    def snapshot(self, sid: str) -> Session | None:
+        """A copy of a record no other thread changes while it is read (a file being written from it)."""
+        with self._gate:
+            s = self._sessions.get(sid)
+            return Session.read(s.write()) if s else None
 
     def lines(self, sid: str) -> list:
         """A copy of a record's lines, safe to read while listening adds to them."""
@@ -97,6 +131,8 @@ class SessionStore:
                     # Whose line it is stays as stored: a joined half sentence keeps the earlier
                     # line's voice, and the user's 这句是谁说的 isn't undone by a retranslation.
                     line.voice = l.voice
+                    # Its fixes too (改正听错的词): the engine's copy of a line never carries them.
+                    line.fixes = l.fixes
                     if len(line.src) > len(l.src):
                         grew.append(True)  # a half sentence joined: new words, not a retranslation
                     s.lines[i] = line
@@ -104,6 +140,34 @@ class SessionStore:
         self._mutate(sid, change)
         if grew:
             self._words(sid)
+
+    # 改正听错的词 (SessionStore.swift)
+
+    def set_fixes(self, sid: str, line_id: str, fixes: list) -> None:
+        """A line's fixes: what the AI service proposed and the user decided. None when empty."""
+        with self._gate:
+            s = self._sessions.get(sid)
+            l = next((x for x in s.lines if x.id == line_id), None) if s else None
+            if l is None or (l.fixes or []) == fixes:
+                return
+        self._mutate(sid, lambda s: [setattr(x, "fixes", [f.copy() for f in fixes] or None) for x in s.lines if x.id == line_id])
+
+    def line(self, sid: str, line_id: str):
+        """A copy of one line, or None."""
+        with self._gate:
+            s = self._sessions.get(sid)
+            l = next((x for x in s.lines if x.id == line_id), None) if s else None
+            return l.copy() if l else None
+
+    def line_heard(self, text: str):
+        """The line a reply was for, by its text as heard: (meeting id, a copy of the line), the newest
+        such line in the live meeting. Older meetings never: "好的。" is in all of them."""
+        with self._gate:
+            s = self._sessions.get(self.live) if self.live else None
+            if s is None:
+                return None
+            l = next((x for x in reversed(s.lines) if x.src == text), None)
+            return (s.id, l.copy()) if l else None
 
     # Voices (说话人识别, SessionStore.swift)
 
@@ -186,6 +250,14 @@ class SessionStore:
                 s.voiceGuesses = vg or None
         self._mutate(sid, change)
 
+    def mark_room(self, sid: str) -> None:
+        """The meeting is (now) heard in the room: its record says 会议室 (the Mac's markLiveInRoom)."""
+        with self._gate:
+            s = self._sessions.get(sid)
+            if s is None or s.room:
+                return
+        self._mutate(sid, lambda s: setattr(s, "room", True))
+
     def set_notes(self, sid: str, notes) -> None:
         self._mutate(sid, lambda s: setattr(s, "notes", notes))
 
@@ -216,6 +288,9 @@ class SessionStore:
                 return
             s.endedAt = max(ended_at, s.startedAt) if ended_at is not None else now()
             empty = not s.lines
+            # The recording is rewrapped into system.m4a afterwards: either file means it has one.
+            path = self.audio_path(sid)
+            s.hasAudio = os.path.isfile(path) or (os.path.isfile(aac.partial(path)) and os.path.getsize(aac.partial(path)) > 0)
         if empty:
             self.delete(sid)
         else:
@@ -275,6 +350,9 @@ class SessionStore:
                 os.replace(tmp, os.path.join(folder, "session.json"))
             except OSError as e:
                 Log.d("store: save failed %s" % type(e).__name__)
+                continue
+            for l in list(self._save_listeners):
+                l(sid)
 
 
 def default_title(at: datetime) -> str:
@@ -364,7 +442,7 @@ def notes_markdown(n) -> str:
     if n.conclusions:
         b.append("### %s\n\n" % L("结论") + "".join("- %s\n" % c.text for c in n.conclusions) + "\n")
     if n.todos:
-        b.append("### %s\n\n" % L("待办") + "".join("- [ ] %s%s\n" % (t.text, "（%s）" % t.owner if t.owner else "") for t in n.todos) + "\n")
+        b.append("### %s\n\n" % L("待办") + "".join("- [ ] %s\n" % t.with_owner for t in n.todos) + "\n")
     if n.terms:
         b.append("### %s\n\n" % L("人名和术语") + "".join("- **%s** %s\n" % (t.name, t.note) for t in n.terms) + "\n")
     return "".join(b)
@@ -381,10 +459,9 @@ def markdown(s: Session, voices: bool = False) -> str:
     if notes:
         out.append(notes + "## %s\n\n" % strings.L("文字记录"))
     for l in s.lines:
-        # An imported file has no "other side" to name.
-        who = (" " + speakers.speaker_name(l, nums, shown)) if s.sourceFile is None else ""
-        out.append("**[%s]%s**  \n%s\n" % (clock(l.t), who, l.src))
-        if l.dst and l.dst != l.src:
+        who = (" " + speakers.speaker_name(l, nums, shown)) if speakers.says_who(s, nums) else ""
+        out.append("**[%s]%s**  \n%s\n" % (clock(l.t), who, l.shown))
+        if l.dst and l.dst != l.shown:
             out.append("> %s\n" % l.dst)
         out.append("\n")
     return "".join(out)

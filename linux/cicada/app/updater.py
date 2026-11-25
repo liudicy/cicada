@@ -6,6 +6,7 @@ the update waits for it to end (会后安装) instead of ending it."""
 from __future__ import annotations
 
 import os
+import subprocess
 import threading
 import time
 
@@ -17,6 +18,49 @@ from ..core.strings import L, LF
 from ..core.support import Log, Paths
 
 
+def open_uri(url: str, done=None) -> None:
+    """Opens `url` in the browser, then calls done(opened) on the main thread: True only when
+    something said it took it: the browser GIO names for the scheme, else xdg-open exiting cleanly
+    (waited for on a thread, up to 10 s: it can take a while to try its fallbacks and fail). Logged: a page
+    that doesn't open leaves no other trace."""
+    def tell(opened):
+        if done is not None:
+            GLib.idle_add(lambda: done(opened) and False)
+
+    def xdg_open():
+        try:
+            p = subprocess.Popen(["xdg-open", url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as e:
+            Log.d("open: no xdg-open (%s)" % type(e).__name__)
+            return tell(False)
+        try:
+            code = p.wait(10)
+        except subprocess.TimeoutExpired:
+            Log.d("open: xdg-open still running after 10 s")
+            tell(False)  # unconfirmed: say where the page is rather than claim it opened
+            p.wait()  # reaped whenever it ends
+            return
+        if code != 0:
+            Log.d("open: xdg-open exited %d" % code)
+        tell(code == 0)
+
+    # The scheme's handler, asked for by name: launch_default_for_uri, without one, reads the page
+    # through gvfs to guess its type, which blocked the main loop for minutes behind a bad network.
+    scheme = url.split(":", 1)[0]
+    browser = Gio.AppInfo.get_default_for_uri_scheme(scheme)
+    if browser is None:
+        Log.d("open: no handler for %s" % scheme)
+    else:
+        try:
+            if browser.launch_uris([url], None):
+                return tell(True)
+            Log.d("open: %s didn't start" % browser.get_id())
+        except GLib.Error as e:
+            Log.d("open: %s failed (%s)" % (browser.get_id(), e.message))
+    threading.Thread(target=xdg_open, name="OpenPage", daemon=True).start()
+
+
 class Updates:
     def __init__(self, app):
         self.app = app
@@ -24,6 +68,7 @@ class Updates:
         self.check = "idle"          # idle | checking | upToDate | failed (the last manual check)
         self.progress: float | None = None  # 0…1 while downloading; the app quits and reopens when done
         self.failure: str | None = None     # why the last in-place update failed
+        self.opened = False                 # and whether the release page opened then
         self.after_meeting = False   # 会后安装: install once this meeting ends
         self.installing = False
         self.started = False
@@ -131,13 +176,12 @@ class Updates:
         self.app.quit()
 
     def _fail(self, why: str, u) -> None:
-        self.installing, self.progress, self.failure = False, None, why
-        Log.d("update: in place failed, opening the release page")
-        self.app.changed()
-        try:
-            Gio.AppInfo.launch_default_for_uri(u.url, None)
-        except GLib.Error:
-            pass
+        """Opens the release page, then says why, and whether the page really opened."""
+        def done(opened):
+            self.installing, self.progress, self.failure, self.opened = False, None, why, opened
+            Log.d("update: in place failed; release page %s" % ("opened" if opened else "didn't open"))
+            self.app.changed()
+        open_uri(u.url, done)
 
     def notify_if_due(self) -> None:
         """One desktop notification per version, for people who never open the tray menu; a click
@@ -160,10 +204,7 @@ class Updates:
 
     def open_notes(self) -> None:
         if self.update is not None:
-            try:
-                Gio.AppInfo.launch_default_for_uri(self.update.url, None)
-            except GLib.Error:
-                pass
+            open_uri(self.update.url)
 
     def meeting_ended(self) -> None:
         self.notify_if_due()
@@ -202,8 +243,11 @@ class Updates:
         if u is not None:
             if self.progress is not None:
                 return LF("正在下载 %@：%lld%%", u.version, int(self.progress * 100))
-            if self.failure:
+            if self.failure and self.opened:
                 return LF("没能自动更新：%@。已打开下载页", self.failure)
+            if self.failure:
+                # No browser came up: the address to type, selectable in 设置 › 关于.
+                return LF("没能自动更新：%@。请在浏览器里打开 %@ 下载", self.failure, u.url.split("://", 1)[-1])
             if self.after_meeting:
                 return LF("有新版本 %@", u.version) + " · " + L("会议结束后安装")
             size = ("%.1f MB · " % (u.size / 1e6)) if u.size else ""

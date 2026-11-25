@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerates Resources/dmg/DS_Store, the installer window layout, by letting Finder lay out a
 # scratch volume. Run it on a Mac after changing the window size, icon positions or background;
-# keep them in step with Sources/LiveSubs/DMGBackground.swift. The first run asks to let the
+# keep them in step with Sources/Cicada/DMGBackground.swift. The first run asks to let the
 # terminal control Finder (System Settings › Privacy & Security › Automation).
 set -euo pipefail
 cd "$(dirname "$0")/.."

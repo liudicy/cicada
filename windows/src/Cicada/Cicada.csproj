@@ -25,9 +25,9 @@
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
     <Using Include="System.IO" />
-    <!-- The UI text, inside the exe (Bundled.cs reads it): Cicada-Setup.exe is this one file, so it
+    <!-- The UI text, inside the exe (Bundled.cs reads it): the installer is this one file, so it
          must speak the user's language before anything is installed. -->
-    <EmbeddedResource Include="../../../Resources/**/Localizable.strings" LogicalName="strings/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../../Resources/**/Localizable.strings*" LogicalName="strings/%(RecursiveDir)%(Filename)%(Extension)" />
     <EmbeddedResource Include="Strings/**/Windows.strings" LogicalName="strings/%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- Both made by scripts/build.sh from docs/icon.png and Resources/sample/sample.m4a; committed so CI on Windows needs no Mac tools. -->
     <Resource Include="Assets/cicada.ico" Link="cicada.ico" />
